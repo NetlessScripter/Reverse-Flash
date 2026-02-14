@@ -33,6 +33,7 @@ local CharacterRef = character
 local HRP = CharacterRef:WaitForChild("HumanoidRootPart")
 local RunService = game:GetService("RunService")
 local WorkspaceRef = workspace
+local u = player.Name
 
 local lightningAttachment = Instance.new("Attachment")
 lightningAttachment.Name = "LightningAttachment"
@@ -237,8 +238,6 @@ function DisableCoolStuff()
         end
     end
 end
-
-local u = LocalPlayerRef.Name
 
 local l = game:GetService('Lighting')
 do
@@ -1340,7 +1339,7 @@ local ws0=25
 h.WalkSpeed=ws0
 local spd=false
 
-local pg=LocalPlayerRef:WaitForChild("PlayerGui")
+local pg=player:WaitForChild("PlayerGui")
 local gui=Instance.new("ScreenGui")
 gui.Parent=pg
 gui.Name="PhaseGui"
@@ -1585,7 +1584,7 @@ local function gnp()
     local np=nil
     local md=9999
     for _,pl in next,game.Players:GetPlayers() do
-        if pl~=LocalPlayerRef then
+        if pl~=player then
             local cc=pl.Character
             local hr=cc and cc:FindFirstChild("HumanoidRootPart")
             local d=hr and (HRP.Position-hr.Position).Magnitude
@@ -1620,7 +1619,7 @@ V90()
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ChosenSkibidi/VIP-SCRIPTS/refs/heads/main/useless%20notification"))()
 
-local g=LocalPlayerRef.PlayerGui.Attention.DialogueFrameAnnouncement
+local g=player.PlayerGui.Attention.DialogueFrameAnnouncement
 
 g.Message.Text="Enjoy the script, and thank you for using our work."
 g:GetChildren()[11].Text="This script was created by Infinite Studios."
@@ -1655,10 +1654,10 @@ local function onCharacterAdded(char)
     end)
 end
 
-LocalPlayerRef.CharacterAdded:Connect(onCharacterAdded)
+player.CharacterAdded:Connect(onCharacterAdded)
 
-if LocalPlayerRef.Character then
-    onCharacterAdded(LocalPlayerRef.Character)
+if player.Character then
+    onCharacterAdded(player.Character)
 end
 
 uis.InputBegan:Connect(function(input, gameProcessed)
@@ -1908,7 +1907,7 @@ spawn(function()
         elseif speedsterType == "Zoom" then
             cs = zoomCS2
             spot = Color3.fromRGB(0,120,255)
-        elseif _G.GodOfSpeed and _G.NWA then
+        elseif speedsterType == "GodOfSpeed" and speedsterType == "NWA" then
             if math.random(2) == 1 then
                 cs = godCS2
                 spot = Color3.fromRGB(255,220,0)
@@ -1989,7 +1988,7 @@ game:GetService("Players").PlayerAdded:Connect(function(Player)
 	end)
 end)
 game:GetService("RunService").RenderStepped:Connect(function()
-    local d = LocalPlayerRef.Character.Humanoid.MoveDirection
+    local d = player.Character.Humanoid.MoveDirection
     if d.Magnitude > 0 then HRP.CFrame = CFrame.new(HRP.Position, HRP.Position + d) end
 end)
 
