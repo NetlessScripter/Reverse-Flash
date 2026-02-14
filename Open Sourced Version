@@ -4,43 +4,15 @@
     FEATURES:
     - Fixed nil indexing error with _G variables
     - Added comprehensive R15 support (all R15 body parts)
-    - Supports external SetupUsers configuration
+    - Simple table-based user configuration
     
     USAGE:
-    -- Define SetupUsers BEFORE loading the script:
-    _G.SetupUsers = function(userTable)
-        if not userTable then return end
-        local playerName = game:GetService("Players").LocalPlayer.Name
-        local speedsterType = userTable[playerName] or "Regular"
-        
-        -- Reset all flags
-        _G.RF = false
-        _G.Zoom = false
-        _G.GodOfSpeed = false
-        _G.NWA = false
-        _G.KidFlash = false
-        _G.Regular = false
-        
-        -- Set the appropriate flag
-        if speedsterType == "RF" then
-            _G.RF = true
-        elseif speedsterType == "Zoom" then
-            _G.Zoom = true
-        elseif speedsterType == "GodOfSpeed" then
-            _G.GodOfSpeed = true
-        elseif speedsterType == "NWA" then
-            _G.NWA = true
-        elseif speedsterType == "KidFlash" then
-            _G.KidFlash = true
-        elseif speedsterType == "Regular" then
-            _G.Regular = true
-        end
-    end
-    
-    _G.SetupUsers({
-        ["PlayerName1"] = "RF",
-        ["PlayerName2"] = "Zoom",
-    })
+    -- Define SetupUsers as a TABLE before loading the script:
+    _G.SetupUsers = {
+        ["YourUsername"] = "RF",
+        ["FriendUsername"] = "Zoom",
+        ["AnotherFriend"] = "KidFlash"
+    }
     
     -- THEN load the script:
     loadstring(game:HttpGet("YOUR_URL_HERE"))()
@@ -55,9 +27,48 @@
     RF, Zoom, GodOfSpeed, NWA, KidFlash, Regular
 --]]
 
--- Check for pre-existing global flags, set default if none exist
-if not _G.RF and not _G.Zoom and not _G.GodOfSpeed and not _G.NWA and not _G.KidFlash and not _G.Regular then
-    _G.Regular = true
+-- Setup user configuration from _G.SetupUsers table
+if type(_G.SetupUsers) == "table" then
+    local playerName = game:GetService("Players").LocalPlayer.Name
+    local speedsterType = _G.SetupUsers[playerName] or "Regular"
+    
+    -- Reset all flags
+    _G.RF = false
+    _G.Zoom = false
+    _G.GodOfSpeed = false
+    _G.NWA = false
+    _G.KidFlash = false
+    _G.Regular = false
+    
+    -- Set the appropriate flag
+    if speedsterType == "RF" then
+        _G.RF = true
+        print("✓ Reverse Flash loaded for " .. playerName)
+    elseif speedsterType == "Zoom" then
+        _G.Zoom = true
+        print("✓ Zoom loaded for " .. playerName)
+    elseif speedsterType == "GodOfSpeed" then
+        _G.GodOfSpeed = true
+        print("✓ Godspeed loaded for " .. playerName)
+    elseif speedsterType == "NWA" then
+        _G.NWA = true
+        print("✓ Negative Speed Force loaded for " .. playerName)
+    elseif speedsterType == "KidFlash" then
+        _G.KidFlash = true
+        print("✓ Kid Flash loaded for " .. playerName)
+    elseif speedsterType == "Regular" then
+        _G.Regular = true
+        print("✓ Regular speedster loaded for " .. playerName)
+    else
+        _G.Regular = true
+        print("✓ Regular speedster (default) loaded for " .. playerName)
+    end
+else
+    -- No SetupUsers table found, check for pre-existing global flags
+    if not _G.RF and not _G.Zoom and not _G.GodOfSpeed and not _G.NWA and not _G.KidFlash and not _G.Regular then
+        _G.Regular = true
+        print("✓ Regular speedster (default) loaded for " .. game:GetService("Players").LocalPlayer.Name)
+    end
 end
 
 Players = game:GetService("Players")
