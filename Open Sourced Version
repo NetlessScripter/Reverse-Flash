@@ -1,5 +1,13 @@
--- Initialize SetupUsers function if it doesn't exist
-if not _G.SetupUsers then
+--[[
+    REVERSE FLASH SCRIPT - FIXED VERSION
+    
+    FEATURES:
+    - Fixed nil indexing error with _G variables
+    - Added comprehensive R15 support (all R15 body parts)
+    - Supports external SetupUsers configuration
+    
+    USAGE:
+    -- Define SetupUsers BEFORE loading the script:
     _G.SetupUsers = function(userTable)
         if not userTable then return end
         local playerName = game:GetService("Players").LocalPlayer.Name
@@ -12,7 +20,7 @@ if not _G.SetupUsers then
         _G.NWA = false
         _G.KidFlash = false
         
-        -- Set the appropriate flag based on speedster type
+        -- Set the appropriate flag
         if speedsterType == "RF" then
             _G.RF = true
         elseif speedsterType == "Zoom" then
@@ -25,9 +33,26 @@ if not _G.SetupUsers then
             _G.KidFlash = true
         end
     end
-end
+    
+    _G.SetupUsers({
+        ["PlayerName1"] = "RF",
+        ["PlayerName2"] = "Zoom",
+    })
+    
+    -- THEN load the script:
+    loadstring(game:HttpGet("YOUR_URL_HERE"))()
+    
+    CONTROLS:
+    - Press Q to toggle Speed Mode
+    - Press C to toggle Phase Mode
+    - Press B to toggle Angular Mirage
+    - Press X to Disable your speed
+    
+    STATE NAMES:
+    RF, Zoom, GodOfSpeed, NWA, KidFlash, Regular
+--]]
 
--- Set default if no setup was done
+-- Check for pre-existing global flags, set default if none exist
 if not _G.RF and not _G.Zoom and not _G.GodOfSpeed and not _G.NWA and not _G.KidFlash then
     _G.RF = true
 end
