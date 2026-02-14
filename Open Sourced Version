@@ -13,6 +13,8 @@
     STATES: RF, Zoom, KidFlash, GodOfSpeed, NWA, Regular
 --]]
 
+NightMode = NightMode or true  -- Set to false to disable night lighting
+
 AllowedPlayers = AllowedPlayers or {}
 
 local Players = game:GetService("Players")
@@ -108,16 +110,16 @@ else
     })
 end
 
-Running = false
+local Running = false
 
-function EnableLightningGlobal()
+local function EnableLightningGlobal()
     if Running then return end
     Running = true
     ParticleRef.Enabled = true
     ParticleRef:Emit(15)
 end
 
-function DisableLightningGlobal()
+local function DisableLightningGlobal()
     if not Running then return end
     Running = false
     ParticleRef.Enabled = false
@@ -189,7 +191,7 @@ local function createTrail(part, color, props, offsetAmount)
 
         t.Attachment0 = a0
         t.Attachment1 = a1
-        t.Enabled = true
+        t.Enabled = false
         t.Texture = props.Texture
         t.TextureLength = props.TextureLength
         t.TextureMode = props.TextureMode
@@ -222,7 +224,7 @@ local function SetupAllTrails()
     end
 end
 
-function EnableAllCoolStuff()
+local function EnableAllCoolStuff()
     SetupAllTrails()
     for _, t in pairs(allTrails) do
         if t then
@@ -231,7 +233,7 @@ function EnableAllCoolStuff()
     end
 end
 
-function DisableCoolStuff()
+local function DisableCoolStuff()
     for _, t in pairs(allTrails) do
         if t then
             t.Enabled = false
@@ -240,141 +242,249 @@ function DisableCoolStuff()
 end
 
 local l = game:GetService('Lighting')
-do
-local i = Instance.new('Sky')
-i.SkyboxBk = "rbxassetid://6444884337"
-i.SkyboxDn = "rbxassetid://6444884785"
-i.SkyboxFt = "rbxassetid://6444884337"
-i.SkyboxLf = "rbxassetid://6444884337"
-i.SkyboxRt = "rbxassetid://6444884337"
-i.SkyboxUp = "rbxassetid://6412503613"
-i.MoonAngularSize = 11
-i.MoonTextureId = "rbxassetid://6444320592"
-i.SunAngularSize = 11
-i.SunTextureId = "rbxassetid://6196665106"
-i.Parent = l
+
+if NightMode then
+    -- Night Mode Lighting
+    do
+    local i = Instance.new('Sky')
+    i.SkyboxBk = "rbxassetid://6444884337"
+    i.SkyboxDn = "rbxassetid://6444884785"
+    i.SkyboxFt = "rbxassetid://6444884337"
+    i.SkyboxLf = "rbxassetid://6444884337"
+    i.SkyboxRt = "rbxassetid://6444884337"
+    i.SkyboxUp = "rbxassetid://6412503613"
+    i.MoonAngularSize = 11
+    i.MoonTextureId = "rbxassetid://6444320592"
+    i.SunAngularSize = 11
+    i.SunTextureId = "rbxassetid://6196665106"
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('SunRaysEffect')
+    i.Intensity = 0.009999999776482582
+    i.Spread = 0.10000000149011612
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('Atmosphere')
+    i.Density = 0.30000001192092896
+    i.Offset = 0.25
+    i.Color = Color3.new(0.7803921699523926,0.7803921699523926,0.7803921699523926)
+    i.Decay = Color3.new(0.4156862795352936,0.43921568989753723,0.4901960790157318)
+    i.Glare = 0
+    i.Haze = 0
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('BloomEffect')
+    i.Intensity = 1
+    i.Size = 24
+    i.Threshold = 2
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('DepthOfFieldEffect')
+    i.FarIntensity = 0.10000000149011612
+    i.FocusDistance = 0.05000000074505806
+    i.InFocusRadius = 30
+    i.NearIntensity = 0.75
+    i.Enabled = false
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('SunRaysEffect')
+    i.Intensity = 0.16899999976158142
+    i.Spread = 1
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('Atmosphere')
+    i.Density = 0.3009999990463257
+    i.Offset = 0.32499998807907104
+    i.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
+    i.Decay = Color3.new(0.3607843220233917,0.23529411852359772,0.05098039284348488)
+    i.Glare = 0
+    i.Haze = 0
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('BloomEffect')
+    i.Intensity = 3
+    i.Size = 100
+    i.Threshold = 1.2000000476837158
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('BlurEffect')
+    i.Size = 4
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('ColorCorrectionEffect')
+    i.Brightness = 0
+    i.Contrast = 0.10000003129243851
+    i.Saturation = 0.15000000596046448
+    i.TintColor = Color3.new(1,1,1)
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('SunRaysEffect')
+    i.Intensity = 0.03200000151991844
+    i.Spread = 0.7160000205039978
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('Sky')
+    i.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
+    i.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
+    i.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
+    i.SkyboxLf = "http://www.roblox.com/asset/?id=11389739259"
+    i.SkyboxRt = "http://www.roblox.com/asset/?id=11389735910"
+    i.SkyboxUp = "http://www.roblox.com/asset/?id=11389742333"
+    i.MoonAngularSize = 7
+    i.MoonTextureId = "rbxasset://sky/moon.jpg"
+    i.SunAngularSize = 2
+    i.SunTextureId = "rbxasset://sky/sun.jpg"
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('DepthOfFieldEffect')
+    i.FarIntensity = 0.30000001192092896
+    i.FocusDistance = 250
+    i.InFocusRadius = 38.79999923706055
+    i.NearIntensity = 0
+    i.Enabled = true
+    i.Parent = l
+    end
+    l.Brightness = 1.5
+    l.ClockTime = 0
+    l.FogEnd = 100000
+    l.FogStart = 0
+    l.FogColor = Color3.new(0.7529412508010864,0.7529412508010864,0.7529412508010864)
+    l.OutdoorAmbient = Color3.new(0.29411765933036804,0.29411765933036804,0.29411765933036804)
+    l.Ambient = Color3.new(0.3921568691730499,0.3921568691730499,0.3921568691730499)
+    l.GlobalShadows = true
+    l.GeographicLatitude = -14.670236587524414
+    l.EnvironmentSpecularScale = 1
+    l.EnvironmentDiffuseScale = 1
+    l.ExposureCompensation = 0
+    l.ColorShift_Bottom = Color3.new(0,0,0)
+    l.ColorShift_Top = Color3.new(0,0,0)
+    l.Technology = Enum.Technology.Future
+    l.ShadowSoftness = 0.3199999928474426
+    l.TimeOfDay = "00:00:00"
+else
+    -- Day Mode Lighting
+    do
+    local i = Instance.new('ColorGradingEffect')
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('SunRaysEffect')
+    i.Intensity = 0.16899999976158142
+    i.Spread = 1
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('Atmosphere')
+    i.Density = 0.3009999990463257
+    i.Offset = 0.32499998807907104
+    i.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
+    i.Decay = Color3.new(0.3607843220233917,0.23529411852359772,0.05098039284348488)
+    i.Glare = 0
+    i.Haze = 0
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('BloomEffect')
+    i.Intensity = 3
+    i.Size = 100
+    i.Threshold = 1.2000000476837158
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('BlurEffect')
+    i.Size = 4
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('ColorCorrectionEffect')
+    i.Brightness = 0
+    i.Contrast = 0.10000003129243851
+    i.Saturation = 0.15000000596046448
+    i.TintColor = Color3.new(1,1,1)
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('SunRaysEffect')
+    i.Intensity = 0.03200000151991844
+    i.Spread = 0.7160000205039978
+    i.Enabled = true
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('Sky')
+    i.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
+    i.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
+    i.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
+    i.SkyboxLf = "http://www.roblox.com/asset/?id=11389739259"
+    i.SkyboxRt = "http://www.roblox.com/asset/?id=11389735910"
+    i.SkyboxUp = "http://www.roblox.com/asset/?id=11389742333"
+    i.MoonAngularSize = 7
+    i.MoonTextureId = "rbxasset://sky/moon.jpg"
+    i.SunAngularSize = 2
+    i.SunTextureId = "rbxasset://sky/sun.jpg"
+    i.Parent = l
+    end
+    do
+    local i = Instance.new('DepthOfFieldEffect')
+    i.FarIntensity = 0.30000001192092896
+    i.FocusDistance = 250
+    i.InFocusRadius = 38.79999923706055
+    i.NearIntensity = 0
+    i.Enabled = true
+    i.Parent = l
+    end
+    l.Brightness = 1.5
+    l.ClockTime = 15.109999656677246
+    l.FogEnd = 100000
+    l.FogStart = 0
+    l.FogColor = Color3.new(0.7529412508010864,0.7529412508010864,0.7529412508010864)
+    l.OutdoorAmbient = Color3.new(0.29411765933036804,0.29411765933036804,0.29411765933036804)
+    l.Ambient = Color3.new(0.3921568691730499,0.3921568691730499,0.3921568691730499)
+    l.GlobalShadows = true
+    l.GeographicLatitude = -14.670236587524414
+    l.EnvironmentSpecularScale = 1
+    l.EnvironmentDiffuseScale = 1
+    l.ExposureCompensation = 0
+    l.ColorShift_Bottom = Color3.new(0,0,0)
+    l.ColorShift_Top = Color3.new(0,0,0)
+    l.Technology = Enum.Technology.Future
+    l.ShadowSoftness = 0.3199999928474426
+    l.TimeOfDay = "15:06:36"
 end
-do
-local i = Instance.new('SunRaysEffect')
-i.Intensity = 0.009999999776482582
-i.Spread = 0.10000000149011612
-i.Enabled = true
-i.Parent = l
-end
-do
-local i = Instance.new('Atmosphere')
-i.Density = 0.30000001192092896
-i.Offset = 0.25
-i.Color = Color3.new(0.7803921699523926,0.7803921699523926,0.7803921699523926)
-i.Decay = Color3.new(0.4156862795352936,0.43921568989753723,0.4901960790157318)
-i.Glare = 0
-i.Haze = 0
-i.Parent = l
-end
-do
-local i = Instance.new('BloomEffect')
-i.Intensity = 1
-i.Size = 24
-i.Threshold = 2
-i.Enabled = true
-i.Parent = l
-end
-do
-local i = Instance.new('DepthOfFieldEffect')
-i.FarIntensity = 0.10000000149011612
-i.FocusDistance = 0.05000000074505806
-i.InFocusRadius = 30
-i.NearIntensity = 0.75
-i.Enabled = false
-i.Parent = l
-end
-do
-local i = Instance.new('SunRaysEffect')
-i.Intensity = 0.16899999976158142
-i.Spread = 1
-i.Enabled = true
-i.Parent = l
-end
-do
-local i = Instance.new('Atmosphere')
-i.Density = 0.3009999990463257
-i.Offset = 0.32499998807907104
-i.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
-i.Decay = Color3.new(0.3607843220233917,0.23529411852359772,0.05098039284348488)
-i.Glare = 0
-i.Haze = 0
-i.Parent = l
-end
-do
-local i = Instance.new('BloomEffect')
-i.Intensity = 3
-i.Size = 100
-i.Threshold = 1.2000000476837158
-i.Enabled = true
-i.Parent = l
-end
-do
-local i = Instance.new('BlurEffect')
-i.Size = 4
-i.Enabled = true
-i.Parent = l
-end
-do
-local i = Instance.new('ColorCorrectionEffect')
-i.Brightness = 0
-i.Contrast = 0.10000003129243851
-i.Saturation = 0.15000000596046448
-i.TintColor = Color3.new(1,1,1)
-i.Enabled = true
-i.Parent = l
-end
-do
-local i = Instance.new('SunRaysEffect')
-i.Intensity = 0.03200000151991844
-i.Spread = 0.7160000205039978
-i.Enabled = true
-i.Parent = l
-end
-do
-local i = Instance.new('Sky')
-i.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
-i.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
-i.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
-i.SkyboxLf = "http://www.roblox.com/asset/?id=11389739259"
-i.SkyboxRt = "http://www.roblox.com/asset/?id=11389735910"
-i.SkyboxUp = "http://www.roblox.com/asset/?id=11389742333"
-i.MoonAngularSize = 7
-i.MoonTextureId = "rbxasset://sky/moon.jpg"
-i.SunAngularSize = 2
-i.SunTextureId = "rbxasset://sky/sun.jpg"
-i.Parent = l
-end
-do
-local i = Instance.new('DepthOfFieldEffect')
-i.FarIntensity = 0.30000001192092896
-i.FocusDistance = 250
-i.InFocusRadius = 38.79999923706055
-i.NearIntensity = 0
-i.Enabled = true
-i.Parent = l
-end
-l.Brightness = 1.5
-l.ClockTime = 0
-l.FogEnd = 100000
-l.FogStart = 0
-l.FogColor = Color3.new(0.7529412508010864,0.7529412508010864,0.7529412508010864)
-l.OutdoorAmbient = Color3.new(0.29411765933036804,0.29411765933036804,0.29411765933036804)
-l.Ambient = Color3.new(0.3921568691730499,0.3921568691730499,0.3921568691730499)
-l.GlobalShadows = true
-l.GeographicLatitude = -14.670236587524414
-l.EnvironmentSpecularScale = 1
-l.EnvironmentDiffuseScale = 1
-l.ExposureCompensation = 0
-l.ColorShift_Bottom = Color3.new(0,0,0)
-l.ColorShift_Top = Color3.new(0,0,0)
-l.Technology = Enum.Technology.Future
-l.ShadowSoftness = 0.3199999928474426
-l.TimeOfDay = "00:00:00"
+
+-- Update clock time on heartbeat to maintain time of day
+RunService.Heartbeat:Connect(function()
+    if NightMode then
+        l.ClockTime = 0
+    else
+        l.ClockTime = 15.109999656677246
+    end
+end)
+
 
 local col = ColorSequence.new(Color3.new(1,0.231373,0.129412),Color3.new(1,0.231373,0.129412))
 
@@ -566,9 +676,7 @@ end
 
 loadstring(game:GetObjects("rbxassetid://10463761851")[1].Source)()
 
-if player ~= Players.LocalPlayer then
-    return
-end
+local isLocalPlayer = (player == Players.LocalPlayer)
 
 local uis = game:GetService("UserInputService")
 local cam = workspace.CurrentCamera
@@ -579,7 +687,8 @@ local i=1
 local vibrateRunning=false
 local vibrateConn
 
-function StartVibrate()
+local function StartVibrate()
+    if not isLocalPlayer then return end
     if vibrateRunning then return end
     vibrateRunning=true
     vibrateConn=RunService.RenderStepped:Connect(function()
@@ -591,7 +700,7 @@ function StartVibrate()
     end)
 end
 
-function StopVibrate()
+local function StopVibrate()
     if not vibrateRunning then return end
     vibrateRunning=false
     if vibrateConn then
@@ -668,7 +777,7 @@ local effectRunning = false
 local maxEmitters = 8
 local spawnThread
 
-function StartEffect()
+local function StartEffect()
     if effectRunning then return end
     effectRunning = true
 
@@ -693,7 +802,7 @@ function StartEffect()
     end)
 end
 
-function StopEffect()
+local function StopEffect()
     effectRunning = false
 
     if spawnThread then
@@ -726,7 +835,7 @@ local function EnableDarkAura()
             local e = Instance.new("ParticleEmitter")
             e.Parent = x
             e.Color = ColorSequence.new(Color3.new(0,0,0))
-            e.Brightness = 20
+            e.Brightness = 2
             e.LightEmission = 0.75
             e.LightInfluence = 0
             e.Size = NumberSequence.new{
@@ -1332,7 +1441,8 @@ local function disableRunEvents()
     stopFX()
 end
 
-local radius=10
+if isLocalPlayer then
+    local radius=10
 local speed=400
 local angle=0
 local ws0=25
@@ -1383,6 +1493,7 @@ local ocf=HRP.CFrame
 local occ=cam.CameraType
 
 local function circle(dt)
+    if not isLocalPlayer then return end
     if not ang then return end
 
 V88()
@@ -1830,6 +1941,7 @@ elseif key == Enum.KeyCode.X then
 end
 end
 end)
+end -- End of isLocalPlayer check
 
 local b = {
     -- R6 parts
@@ -1860,7 +1972,7 @@ local b = {
 
 local ig = lightningAttachment
 
-function mk()
+local function mk()
 end
 
 local godCS2 = ColorSequence.new({
@@ -1907,7 +2019,7 @@ spawn(function()
         elseif speedsterType == "Zoom" then
             cs = zoomCS2
             spot = Color3.fromRGB(0,120,255)
-        elseif speedsterType == "GodOfSpeed" and speedsterType == "NWA" then
+        elseif speedsterType == "GodOfSpeed" or speedsterType == "NWA" then
             if math.random(2) == 1 then
                 cs = godCS2
                 spot = Color3.fromRGB(255,220,0)
@@ -1981,36 +2093,32 @@ end)
 
 
 
+if isLocalPlayer then
+    game:GetService("RunService").RenderStepped:Connect(function()
+        local d = player.Character.Humanoid.MoveDirection
+        if d.Magnitude > 0 then HRP.CFrame = CFrame.new(HRP.Position, HRP.Position + d) end
+    end)
 
-game:GetService("Players").PlayerAdded:Connect(function(Player)
-	Player.CharacterAdded:Connect(function(Char)
-		Char:WaitForChild("HumanoidRootPart").CustomPhysicalProperties = PhysicalProperties.new(1000, 0, 0)
-	end)
-end)
-game:GetService("RunService").RenderStepped:Connect(function()
-    local d = player.Character.Humanoid.MoveDirection
-    if d.Magnitude > 0 then HRP.CFrame = CFrame.new(HRP.Position, HRP.Position + d) end
-end)
+    local snap=18
 
-local snap=18
+    RunService.RenderStepped:Connect(function(dt)
+    	if h.FloorMaterial==Enum.Material.Air then return end
 
-RunService.RenderStepped:Connect(function(dt)
-	if h.FloorMaterial==Enum.Material.Air then return end
+    	local md=h.MoveDirection
+    	if md.Magnitude==0 then return end
 
-	local md=h.MoveDirection
-	if md.Magnitude==0 then return end
+    	md=Vector3.new(md.X,0,md.Z).Unit
 
-	md=Vector3.new(md.X,0,md.Z).Unit
+    	local v=HRP.AssemblyLinearVelocity
+    	local y=v.Y
 
-	local v=HRP.AssemblyLinearVelocity
-	local y=v.Y
+    	local sp=v.Magnitude
+    	if sp<1 then return end
 
-	local sp=v.Magnitude
-	if sp<1 then return end
-
-	local target=md*sp
-	HRP.AssemblyLinearVelocity=v:Lerp(Vector3.new(target.X,y,target.Z),math.clamp(dt*snap,0,1))
-end)
+    	local target=md*sp
+    	HRP.AssemblyLinearVelocity=v:Lerp(Vector3.new(target.X,y,target.Z),math.clamp(dt*snap,0,1))
+    end)
+end
 
 end -- End of SetupSpeedster function
 
