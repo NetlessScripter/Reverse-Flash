@@ -418,7 +418,7 @@ i.Enabled = true
 i.Parent = l
 end
 l.Brightness = 1.5
-l.ClockTime = 15.109999656677246
+l.ClockTime = 0
 l.FogEnd = 100000
 l.FogStart = 0
 l.FogColor = Color3.new(0.7529412508010864,0.7529412508010864,0.7529412508010864)
