@@ -1,7 +1,7 @@
 --[[
     REVERSE FLASH SCRIPT - MULTIPLAYER VERSION
     
-    NightMode = true  -- Set to false for day mode
+    _G.NightMode = true  -- Set to false for day mode
     
     AllowedPlayers = {
         ["Hitmeforgamepass"] = "RF",
@@ -15,8 +15,8 @@
     STATES: RF, Zoom, KidFlash, GodOfSpeed, NWA, Regular
 --]]
 
-if NightMode == nil then
-    NightMode = true  -- Default to night mode if not set
+if _G.NightMode == nil then
+    _G.NightMode = true  -- Default to night mode if not set
 end
 
 AllowedPlayers = AllowedPlayers or {}
@@ -247,7 +247,7 @@ end
 
 local l = game:GetService('Lighting')
 
-if NightMode then
+if _G.NightMode then
     -- Night Mode Lighting
     do
     local i = Instance.new('Sky')
@@ -482,7 +482,7 @@ end
 
 -- Update clock time on heartbeat to maintain time of day
 RunService.Heartbeat:Connect(function()
-    if NightMode then
+    if _G.NightMode then
         l.ClockTime = 0
     else
         l.ClockTime = 15.109999656677246
