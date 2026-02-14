@@ -255,7 +255,7 @@ local function createTrail(part, color, props, offsetAmount)
         t.WidthScale = props.WidthScale
         t.Transparency = props.Transparency
         if color then
-            t.Color = ColorSequence.new(color, color)
+            t.Color = ColorSequence.new(color)
         else
             t.Color = props.Color
         end
@@ -418,7 +418,7 @@ i.Enabled = true
 i.Parent = l
 end
 l.Brightness = 1.5
-l.ClockTime = 0
+l.ClockTime = 15.109999656677246
 l.FogEnd = 100000
 l.FogStart = 0
 l.FogColor = Color3.new(0.7529412508010864,0.7529412508010864,0.7529412508010864)
@@ -433,7 +433,7 @@ l.ColorShift_Bottom = Color3.new(0,0,0)
 l.ColorShift_Top = Color3.new(0,0,0)
 l.Technology = Enum.Technology.Future
 l.ShadowSoftness = 0.3199999928474426
-l.TimeOfDay = "00:00:00"
+l.TimeOfDay = "15:06:36"
 
 local col = ColorSequence.new(Color3.new(1,0.231373,0.129412),Color3.new(1,0.231373,0.129412))
 
@@ -508,10 +508,10 @@ if shouldWrite then
 end
 
 local rfCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))})
-local zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(183,243,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(39,116,255))})
-local godCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(161,162,164)), ColorSequenceKeypoint.new(1, Color3.fromRGB(205,206,209))})
-local nwaCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(204,144,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(159,45,255))})
-local kidCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(252,255,137)), ColorSequenceKeypoint.new(1, Color3.fromRGB(249,255,43))})
+local zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(160,220,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))})
+local godCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))})
+local nwaCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(200,180,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(130,0,255))})
+local kidCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))})
 local defaultCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))})
 
 local t = {}
@@ -534,23 +534,23 @@ if _G.RF then
     )
     elseif _G.Zoom then
         x.Color = ColorSequence.new(
-            Color3.fromRGB(183,243,255),
-            Color3.fromRGB(39,116,255)
+            Color3.fromRGB(160,220,255),
+            Color3.fromRGB(0,120,255)
         )
     elseif _G.GodOfSpeed then
         x.Color = ColorSequence.new(
-            Color3.fromRGB(161,162,164),
-            Color3.fromRGB(205,206,209)
+            Color3.fromRGB(255,255,255),
+            Color3.fromRGB(255,255,255)
         )
     elseif _G.NWA then
         x.Color = ColorSequence.new(
-            Color3.fromRGB(204,144,255),
-            Color3.fromRGB(159,45,255)
+            Color3.fromRGB(200,180,255),
+            Color3.fromRGB(130,0,255)
         )
     elseif _G.KidFlash then
         x.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(252,255,137)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(249,255,43))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
         })
     else
         -- Regular/Default state
@@ -670,7 +670,7 @@ local function getColor()
         })
     elseif _G.Zoom then
         return ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(183,243,255)),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(160,220,255)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))
         })
     elseif _G.GodOfSpeed then
@@ -780,7 +780,7 @@ local function EnableDarkAura()
         if x:IsA("BasePart") then
             local e = Instance.new("ParticleEmitter")
             e.Parent = x
-            e.Color = ColorSequence.new(Color3.new(0,0,0), Color3.new(0,0,0))
+            e.Color = ColorSequence.new(Color3.new(0,0,0))
             e.Brightness = 20
             e.LightEmission = 0.75
             e.LightInfluence = 0
@@ -953,10 +953,7 @@ if _G.RF then
         })
     else
         -- Regular/Default state
-        Trail.Color = ColorSequence.new(
-            Color3.fromRGB(255,59,0),
-            Color3.fromRGB(255,59,0)
-        )
+        Trail.Color = ColorSequence.new(Color3.fromRGB(255,59,0))
     end
 
     Trail.FaceCamera = true
@@ -1093,10 +1090,11 @@ local function enableAll()
 
     animConnection = RunService.RenderStepped:Connect(UpdateAnimationsAndFOV)
     soundConnection = RunService.RenderStepped:Connect(function()
+        UpdateSounds()
         PlayRunningSound()
     end)
     if Humanoid.MoveDirection.Magnitude == 0 then
-        IdleAnimTrack:Play()
+        idle:Play()
     end
 end
 
@@ -1117,9 +1115,9 @@ local function disableAll()
     TrailsPerPart = {}
     if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
     if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
-    -- s1:Stop() -- Sound not defined
-    -- s3:Stop() -- Sound not defined
-    -- idle:Stop() -- Already stopped IdleAnimTrack above
+    s1:Stop()
+    s3:Stop()
+    idle:Stop()
     Camera.FieldOfView = 70
 end
 
@@ -1203,7 +1201,7 @@ local function make()
     fx2 = src2:Clone()
     fx2.Parent = HRP
 
-    local fxCol = ColorSequence.new(Color3.fromRGB(255,59,0), Color3.fromRGB(255,59,0))
+    local fxCol = ColorSequence.new(Color3.fromRGB(255,59,0))
 
     for _, x in pairs(fx1:GetChildren()) do
         if x:IsA("ParticleEmitter") then
@@ -1737,7 +1735,7 @@ StopVibrate()
 
 V88()
 
-        ocf=HRP.CFrame
+        ocf=r.CFrame
         occ=cam.CameraType
         cam.CameraType=Enum.CameraType.Scriptable
         sn(true)
