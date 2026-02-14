@@ -508,7 +508,7 @@ if shouldWrite then
 end
 
 local rfCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))})
-local zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(161,155,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(39,116,255))})
+local zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(183,243,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(39,116,255))})
 local godCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(161,162,164)), ColorSequenceKeypoint.new(1, Color3.fromRGB(205,206,209))})
 local nwaCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(204,144,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(159,45,255))})
 local kidCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(252,255,137)), ColorSequenceKeypoint.new(1, Color3.fromRGB(249,255,43))})
@@ -534,7 +534,7 @@ if _G.RF then
     )
     elseif _G.Zoom then
         x.Color = ColorSequence.new(
-            Color3.fromRGB(161,155,255),
+            Color3.fromRGB(183,243,255),
             Color3.fromRGB(39,116,255)
         )
     elseif _G.GodOfSpeed then
