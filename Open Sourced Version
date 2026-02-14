@@ -1,20 +1,37 @@
 --[[
-    REVERSE FLASH SCRIPT - FIXED VERSION
+    REVERSE FLASH SCRIPT - MULTIPLAYER FIXED VERSION
     
     FEATURES:
     - Fixed nil indexing error with _G variables
     - Added comprehensive R15 support (all R15 body parts)
     - Simple table-based user configuration
+    - AllowedPlayers whitelist support
+    - Fixed multiplayer replication (effects now visible to other players)
+    - AUTO-GENERATES speedster types from AllowedPlayers!
     
-    USAGE:
-    -- Define SetupUsers as a TABLE before loading the script:
-    _G.SetupUsers = {
-        ["YourUsername"] = "RF",
-        ["FriendUsername"] = "Zoom",
-        ["AnotherFriend"] = "KidFlash"
+    USAGE - SIMPLE (Only list names once!):
+    AllowedPlayers = {
+        "WediditGTA5",
+        "charzard010710",
+        "Player3"
     }
+    loadstring(game:HttpGet("YOUR_URL_HERE"))()
+    -- Each player automatically gets a different speedster type!
+    -- Player1 = RF, Player2 = Zoom, Player3 = KidFlash, etc.
     
-    -- THEN load the script:
+    USAGE - ADVANCED (Manual speedster type assignment):
+    AllowedPlayers = {
+        "WediditGTA5",
+        "charzard010710"
+    }
+    _G.SetupUsers = {
+        ["WediditGTA5"] = "RF",
+        ["charzard010710"] = "Zoom"
+    }
+    loadstring(game:HttpGet("YOUR_URL_HERE"))()
+    
+    USAGE - NO WHITELIST (Everyone can use):
+    -- Just load the script, everyone gets Regular speedster
     loadstring(game:HttpGet("YOUR_URL_HERE"))()
     
     CONTROLS:
@@ -27,9 +44,51 @@
     RF, Zoom, GodOfSpeed, NWA, KidFlash, Regular
 --]]
 
--- Setup user configuration from _G.SetupUsers table
+-- ============================================
+-- ALLOWEDPLAYERS WHITELIST CHECK
+-- ============================================
+local p = game:GetService("Players")
+local lp = p.LocalPlayer
+AllowedPlayers = AllowedPlayers or {}
+
+local function isAllowed(name)
+    -- If AllowedPlayers is empty, allow everyone
+    if #AllowedPlayers == 0 then
+        return true
+    end
+    
+    for _, v in pairs(AllowedPlayers) do
+        if v == name then
+            return true
+        end
+    end
+    return false
+end
+
+if not isAllowed(lp.Name) then 
+    warn("⛔ You are not authorized to use this script!")
+    return 
+end
+print("✓ Access granted for " .. lp.Name)
+
+-- ============================================
+-- SETUP USER CONFIGURATION
+-- ============================================
+
+-- AUTO-GENERATE SetupUsers from AllowedPlayers if not manually set
+if type(_G.SetupUsers) ~= "table" and #AllowedPlayers > 0 then
+    _G.SetupUsers = {}
+    local speedsterTypes = {"RF", "Zoom", "KidFlash", "GodOfSpeed", "NWA"}
+    for i, playerName in ipairs(AllowedPlayers) do
+        -- Cycle through speedster types so each player gets a different one
+        local typeIndex = ((i - 1) % #speedsterTypes) + 1
+        _G.SetupUsers[playerName] = speedsterTypes[typeIndex]
+    end
+    print("✓ Auto-generated speedster types from AllowedPlayers")
+end
+
 if type(_G.SetupUsers) == "table" then
-    local playerName = game:GetService("Players").LocalPlayer.Name
+    local playerName = lp.Name
     local speedsterType = _G.SetupUsers[playerName] or "Regular"
     
     -- Reset all flags
@@ -67,7 +126,7 @@ else
     -- No SetupUsers table found, check for pre-existing global flags
     if not _G.RF and not _G.Zoom and not _G.GodOfSpeed and not _G.NWA and not _G.KidFlash and not _G.Regular then
         _G.Regular = true
-        print("✓ Regular speedster (default) loaded for " .. game:GetService("Players").LocalPlayer.Name)
+        print("✓ Regular speedster (default) loaded for " .. lp.Name)
     end
 end
 
@@ -79,12 +138,10 @@ LocalPlayerRef = Players.LocalPlayer
 CharacterRef = LocalPlayerRef.Character or LocalPlayerRef.CharacterAdded:Wait()
 HRP = CharacterRef:WaitForChild("HumanoidRootPart")
 
-PartRef = Instance.new("Part")
-PartRef.Size = Vector3.new(1,1,1)
-PartRef.Anchored = true
-PartRef.CanCollide = false
-PartRef.Transparency = 1
-PartRef.Parent = WorkspaceRef
+-- MULTIPLAYER FIX: Create attachment on HRP for particle replication
+local lightningAttachment = Instance.new("Attachment")
+lightningAttachment.Name = "LightningAttachment"
+lightningAttachment.Parent = HRP
 
 ParticleRef = Instance.new("ParticleEmitter")
 ParticleRef.Brightness = 10
@@ -120,7 +177,8 @@ ParticleRef.VelocityInheritance = 0
 ParticleRef.ZOffset = 2
 ParticleRef.Acceleration = Vector3.new(0,0,0)
 ParticleRef.Enabled = false
-ParticleRef.Parent = PartRef
+-- MULTIPLAYER FIX: Parent to HRP attachment for replication
+ParticleRef.Parent = lightningAttachment
 
 if _G.Zoom then
     ParticleRef.Color = ColorSequence.new({
@@ -156,28 +214,19 @@ else
 end
 
 Running = false
-ConnectionRef = nil
 
 function EnableLightningGlobal()
     if Running then return end
     Running = true
     ParticleRef.Enabled = true
     ParticleRef:Emit(15)
-    ConnectionRef = RunService.RenderStepped:Connect(function()
-        if HRP and HRP.Parent then
-            PartRef.CFrame = HRP.CFrame
-        end
-    end)
+    -- No need to update CFrame - particle is on HRP attachment now
 end
 
 function DisableLightningGlobal()
     if not Running then return end
     Running = false
     ParticleRef.Enabled = false
-    if ConnectionRef then
-        ConnectionRef:Disconnect()
-        ConnectionRef = nil
-    end
 end
 
 
@@ -259,7 +308,8 @@ local function createTrail(part, color, props, offsetAmount)
         else
             t.Color = props.Color
         end
-        t.Parent = WorkspaceRef
+        -- MULTIPLAYER FIX: Parent to character part instead of workspace for replication
+        t.Parent = part
 
         table.insert(allTrails, t)
     end
