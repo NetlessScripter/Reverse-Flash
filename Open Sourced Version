@@ -255,7 +255,7 @@ local function createTrail(part, color, props, offsetAmount)
         t.WidthScale = props.WidthScale
         t.Transparency = props.Transparency
         if color then
-            t.Color = ColorSequence.new(color)
+            t.Color = ColorSequence.new(color, color)
         else
             t.Color = props.Color
         end
@@ -780,7 +780,7 @@ local function EnableDarkAura()
         if x:IsA("BasePart") then
             local e = Instance.new("ParticleEmitter")
             e.Parent = x
-            e.Color = ColorSequence.new(Color3.new(0,0,0))
+            e.Color = ColorSequence.new(Color3.new(0,0,0), Color3.new(0,0,0))
             e.Brightness = 20
             e.LightEmission = 0.75
             e.LightInfluence = 0
@@ -953,7 +953,10 @@ if _G.RF then
         })
     else
         -- Regular/Default state
-        Trail.Color = ColorSequence.new(Color3.fromRGB(255,59,0))
+        Trail.Color = ColorSequence.new(
+            Color3.fromRGB(255,59,0),
+            Color3.fromRGB(255,59,0)
+        )
     end
 
     Trail.FaceCamera = true
@@ -1090,11 +1093,10 @@ local function enableAll()
 
     animConnection = RunService.RenderStepped:Connect(UpdateAnimationsAndFOV)
     soundConnection = RunService.RenderStepped:Connect(function()
-        UpdateSounds()
         PlayRunningSound()
     end)
     if Humanoid.MoveDirection.Magnitude == 0 then
-        idle:Play()
+        IdleAnimTrack:Play()
     end
 end
 
@@ -1115,9 +1117,9 @@ local function disableAll()
     TrailsPerPart = {}
     if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
     if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
-    s1:Stop()
-    s3:Stop()
-    idle:Stop()
+    -- s1:Stop() -- Sound not defined
+    -- s3:Stop() -- Sound not defined
+    -- idle:Stop() -- Already stopped IdleAnimTrack above
     Camera.FieldOfView = 70
 end
 
@@ -1201,7 +1203,7 @@ local function make()
     fx2 = src2:Clone()
     fx2.Parent = HRP
 
-    local fxCol = ColorSequence.new(Color3.fromRGB(255,59,0))
+    local fxCol = ColorSequence.new(Color3.fromRGB(255,59,0), Color3.fromRGB(255,59,0))
 
     for _, x in pairs(fx1:GetChildren()) do
         if x:IsA("ParticleEmitter") then
@@ -1735,7 +1737,7 @@ StopVibrate()
 
 V88()
 
-        ocf=r.CFrame
+        ocf=HRP.CFrame
         occ=cam.CameraType
         cam.CameraType=Enum.CameraType.Scriptable
         sn(true)
