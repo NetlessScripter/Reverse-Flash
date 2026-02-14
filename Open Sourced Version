@@ -39,7 +39,7 @@ local lightningAttachment = Instance.new("Attachment")
 lightningAttachment.Name = "LightningAttachment"
 lightningAttachment.Parent = HRP
 
-ParticleRef = Instance.new("ParticleEmitter")
+local ParticleRef = Instance.new("ParticleEmitter")
 ParticleRef.Brightness = 10
 ParticleRef.Drag = 0
 ParticleRef.EmissionDirection = Enum.NormalId.Top
@@ -1858,7 +1858,7 @@ local b = {
     "RightFoot"
 }
 
-local ig = workspace:WaitForChild(u):WaitForChild("HumanoidRootPart"):WaitForChild("Attachment")
+local ig = lightningAttachment
 
 function mk()
 end
