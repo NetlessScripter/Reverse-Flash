@@ -1,99 +1,41 @@
-_G.RF = true
-
-local AllowedUsers = {}
-
-local ValidStates = {
-    RF = true,
-    Zoom = true,
-    GodOfSpeed = true,
-    NWA = true,
-    KidFlash = true,
-    Regular = true
-}
-
-local function AddAllowedUser(username, state)
-    state = state or "RF"
-    if not ValidStates[state] then
-        warn("Invalid state: " .. state .. ". Using RF instead.")
-        state = "RF"
-    end
-    AllowedUsers[username] = state
-    print("Added " .. username .. " with state: " .. state)
-end
-
-local function RemoveAllowedUser(username)
-    if AllowedUsers[username] then
-        AllowedUsers[username] = nil
-        print("Removed " .. username)
-    end
-end
-
-local function IsAllowedUser(player)
-    return AllowedUsers[player.Name] ~= nil
-end
-
-local function GetUserState(player)
-    return AllowedUsers[player.Name] or "RF"
-end
-
-local function SetUserState(username, state)
-    if not ValidStates[state] then
-        warn("Invalid state: " .. state)
-        return false
-    end
-    if AllowedUsers[username] then
-        AllowedUsers[username] = state
-        print("Updated " .. username .. " to state: " .. state)
-        return true
-    else
-        warn(username .. " is not in allowed users. Add them first.")
-        return false
+-- Initialize SetupUsers function if it doesn't exist
+if not _G.SetupUsers then
+    _G.SetupUsers = function(userTable)
+        if not userTable then return end
+        local playerName = game:GetService("Players").LocalPlayer.Name
+        local speedsterType = userTable[playerName] or "Regular"
+        
+        -- Reset all flags
+        _G.RF = false
+        _G.Zoom = false
+        _G.GodOfSpeed = false
+        _G.NWA = false
+        _G.KidFlash = false
+        
+        -- Set the appropriate flag based on speedster type
+        if speedsterType == "RF" then
+            _G.RF = true
+        elseif speedsterType == "Zoom" then
+            _G.Zoom = true
+        elseif speedsterType == "GodOfSpeed" then
+            _G.GodOfSpeed = true
+        elseif speedsterType == "NWA" then
+            _G.NWA = true
+        elseif speedsterType == "KidFlash" then
+            _G.KidFlash = true
+        end
     end
 end
 
-local function CanSeeVisuals(targetPlayer)
-    local localPlayer = Players.LocalPlayer
-    if localPlayer == targetPlayer then
-        return true
-    end
-    return IsAllowedUser(localPlayer) and IsAllowedUser(targetPlayer)
-end
-
-local function GetColorForState(state)
-    if state == "RF" then
-        return OtherColors.RF
-    elseif state == "Zoom" then
-        return OtherColors.Zoom
-    elseif state == "GodOfSpeed" then
-        return OtherColors.GodOfSpeed
-    elseif state == "NWA" then
-        return OtherColors.NWA
-    elseif state == "KidFlash" then
-        return OtherColors.KidFlash
-    else
-        return OtherColors.Default
-    end
-end
-
-local function GetPartRefColorForState(state)
-    if state == "RF" then
-        return PartRefColors.RF
-    elseif state == "Zoom" then
-        return PartRefColors.Zoom
-    elseif state == "GodOfSpeed" then
-        return PartRefColors.GodOfSpeed
-    elseif state == "NWA" then
-        return PartRefColors.NWA
-    elseif state == "KidFlash" then
-        return PartRefColors.KidFlash
-    else
-        return PartRefColors.Default
-    end
+-- Set default if no setup was done
+if not _G.RF and not _G.Zoom and not _G.GodOfSpeed and not _G.NWA and not _G.KidFlash then
+    _G.RF = true
 end
 
 Players = game:GetService("Players")
 RunService = game:GetService("RunService")
 WorkspaceRef = workspace
+
 LocalPlayerRef = Players.LocalPlayer
 CharacterRef = LocalPlayerRef.Character or LocalPlayerRef.CharacterAdded:Wait()
 HRP = CharacterRef:WaitForChild("HumanoidRootPart")
@@ -141,159 +83,42 @@ ParticleRef.Acceleration = Vector3.new(0,0,0)
 ParticleRef.Enabled = false
 ParticleRef.Parent = PartRef
 
-local PartRefColors = {
-    Zoom = ColorSequence.new({
+if _G.Zoom then
+    ParticleRef.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(192,242,255)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))
-    }),
-    GodOfSpeed = ColorSequence.new(
+    })
+elseif _G.GodOfSpeed then
+    ParticleRef.Color = ColorSequence.new(
         Color3.fromRGB(255,255,255),
         Color3.fromRGB(255,255,255)
-    ),
-    NWA = ColorSequence.new(
+    )
+elseif _G.NWA then
+    ParticleRef.Color = ColorSequence.new(
         Color3.fromRGB(200,180,255),
         Color3.fromRGB(130,0,255)
-    ),
-    KidFlash = ColorSequence.new({
+    )
+elseif _G.KidFlash then
+    ParticleRef.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
-    }),
-    RF = ColorSequence.new({
+    })
+elseif _G.RF then
+    ParticleRef.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255,190,190)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
-    }),
-    Default = ColorSequence.new({
+    })
+else
+    ParticleRef.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.new(1,0.231,0.129)),
         ColorSequenceKeypoint.new(1, Color3.new(1,0.231,0.129))
     })
-}
-
-local OtherColors = {
-    RF = ColorSequence.new(Color3.fromRGB(255,84,84), Color3.fromRGB(255,0,0)),
-    Zoom = ColorSequence.new(Color3.fromRGB(125,216,255), Color3.fromRGB(0,120,255)),
-    GodOfSpeed = ColorSequence.new(Color3.fromRGB(255,255,255), Color3.fromRGB(255,255,255)),
-    NWA = ColorSequence.new(Color3.fromRGB(200,180,255), Color3.fromRGB(130,0,255)),
-    KidFlash = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
-    }),
-    Default = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),
-        ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))
-    }),
-    RF2 = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
-    }),
-    Zoom2 = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(125,216,255)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))
-    }),
-    GodOfSpeed2 = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
-    }),
-    NWA2 = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(140,0,255))
-    })
-}
+end
 
 Running = false
 ConnectionRef = nil
 
-local PlayerVisualData = {}
-
-local function InitializePlayerVisuals(player)
-    if not CanSeeVisuals(player) then return end
-    
-    if PlayerVisualData[player] then
-        return
-    end
-    
-    PlayerVisualData[player] = {
-        Character = player.Character,
-        Trails = {},
-        Effects = {},
-        Connections = {}
-    }
-end
-
-local function CleanupPlayerVisuals(player)
-    local data = PlayerVisualData[player]
-    if not data then return end
-    
-    for _, trail in pairs(data.Trails) do
-        if trail and trail.Parent then
-            trail:Destroy()
-        end
-    end
-    
-    for _, effect in pairs(data.Effects) do
-        if effect and effect.Parent then
-            effect:Destroy()
-        end
-    end
-    
-    for _, connection in pairs(data.Connections) do
-        if connection then
-            connection:Disconnect()
-        end
-    end
-    
-    PlayerVisualData[player] = nil
-end
-
-local function OnPlayerAdded(player)
-    if not IsAllowedUser(player) and player ~= LocalPlayerRef then
-        return
-    end
-    
-    local function setupCharacter(character)
-        task.wait(0.5)
-        if character and character.Parent then
-            CleanupPlayerVisuals(player)
-            InitializePlayerVisuals(player)
-        end
-    end
-    
-    player.CharacterAdded:Connect(setupCharacter)
-    
-    if player.Character then
-        setupCharacter(player.Character)
-    end
-end
-
-local function OnPlayerRemoving(player)
-    CleanupPlayerVisuals(player)
-    local StarterGui = game:GetService("StarterGui")
-    if IsAllowedUser(player) then
-        pcall(function()
-            StarterGui:SetCore("SendNotification", {
-                Title = "Shared Visuals",
-                Text = player.Name .. " disconnected",
-                Duration = 3
-            })
-        end)
-    end
-end
-
-Players.PlayerAdded:Connect(OnPlayerAdded)
-Players.PlayerRemoving:Connect(OnPlayerRemoving)
-
-for _, player in pairs(Players:GetPlayers()) do
-    OnPlayerAdded(player)
-end
-
-LocalPlayerRef.CharacterAdded:Connect(function(character)
-    CharacterRef = character
-    HRP = character:WaitForChild("HumanoidRootPart")
-    task.wait(1)
-    CleanupPlayerVisuals(LocalPlayerRef)
-    InitializePlayerVisuals(LocalPlayerRef)
-end)
-
-function EnableLightning()
+function EnableLightningGlobal()
     if Running then return end
     Running = true
     ParticleRef.Enabled = true
@@ -305,7 +130,7 @@ function EnableLightning()
     end)
 end
 
-function DisableLightning()
+function DisableLightningGlobal()
     if not Running then return end
     Running = false
     ParticleRef.Enabled = false
@@ -318,10 +143,25 @@ end
 
 
 local parts = {
+    -- R6 parts
     "Left Arm",
     "Right Arm",
     "Left Leg",
-    "Right Leg"
+    "Right Leg",
+    -- R15 parts - Arms
+    "LeftUpperArm",
+    "LeftLowerArm",
+    "LeftHand",
+    "RightUpperArm",
+    "RightLowerArm",
+    "RightHand",
+    -- R15 parts - Legs
+    "LeftUpperLeg",
+    "LeftLowerLeg",
+    "LeftFoot",
+    "RightUpperLeg",
+    "RightLowerLeg",
+    "RightFoot"
 }
 
 local trailProps1 = {
@@ -390,7 +230,9 @@ local function SetupAllTrails()
     for _, partName in pairs(parts) do
         local part = CharacterRef:FindFirstChild(partName)
         if part then
-            local color = (partName:find("Arm") or partName:find("Hand")) and partColors.arms or partColors.legs
+            -- Check if it's an arm/hand part (works for both R6 and R15)
+            local isArm = partName:find("Arm") or partName:find("Hand")
+            local color = isArm and partColors.arms or partColors.legs
             createTrail(part, color, trailProps1, 0.2)
             createTrail(part, nil, trailProps2, 0.25)
         end
@@ -505,7 +347,7 @@ l.Technology = Enum.Technology.Future
 l.ShadowSoftness = 0.3199999928474426
 l.TimeOfDay = "00:00:00"
 
-local col = OtherColors.Default
+local col = ColorSequence.new(Color3.new(1,0.231373,0.129412),Color3.new(1,0.231373,0.129412))
 
 local wsSeq = NumberSequence.new({
 	NumberSequenceKeypoint.new(0,0),
@@ -541,13 +383,13 @@ for _,v in pairs(CharacterRef:GetChildren()) do
 	end
 end
 
-local function EnableSpeedTrails()
+local function V89()
 	for _,x in pairs(tlist) do
 		x.Enabled = true
 	end
 end
 
-local function DisableSpeedTrails()
+local function V90()
 	for _,x in pairs(tlist) do
 		x.Enabled = false
 	end
@@ -577,16 +419,23 @@ if shouldWrite then
     writefile(filename, source)
 end
 
-local function getTrailColor(player)
-    player = player or LocalPlayerRef
-    local state = GetUserState(player)
-    return GetColorForState(state)
+local rfCS = ColorSequence.new(Color3.fromRGB(255,84,84), Color3.fromRGB(255,0,0))
+local zoomCS = ColorSequence.new(Color3.fromRGB(125,216,255), Color3.fromRGB(0,120,255))
+local godCS = ColorSequence.new(Color3.fromRGB(255,255,255), Color3.fromRGB(255,255,255))
+local nwaCS = ColorSequence.new(Color3.fromRGB(200,180,255), Color3.fromRGB(130,0,255))
+local defaultCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))})
+
+local function getTrailColor()
+    if _G.RF then return rfCS
+    elseif _G.Zoom then return zoomCS
+    elseif _G.GodOfSpeed then return godCS
+    elseif _G.NWA then return nwaCS
+    else return defaultCS end
 end
 
 local t = {}
 
-local function CreateLimbTrail(v, player)
-    player = player or LocalPlayerRef
+local function m(v)
     local a = {}
     for _,k in pairs(v:GetChildren()) do
         if k:IsA("Attachment") then
@@ -596,7 +445,7 @@ local function CreateLimbTrail(v, player)
     if #a < 2 then return end
 
     local x = Instance.new("Trail")
-    x.Color = getTrailColor(player)
+    x.Color = getTrailColor()
     x.Brightness = 2
     x.FaceCamera = true
     x.LightEmission = 1
@@ -619,19 +468,34 @@ local function CreateLimbTrail(v, player)
     t[#t+1] = x
 end
 
-local function EnableLightningTrails()
+local function V87()
     for _,v in pairs(t) do v.Enabled = true end
 end
 
-local function DisableLightningTrails()
+local function V88()
     for _,v in pairs(t) do v.Enabled = false end
 end
 
 local r15 = {
+    -- R6 parts
     "Left Arm",
     "Right Arm",
     "Left Leg",
-    "Right Leg"
+    "Right Leg",
+    -- R15 parts - Arms
+    "LeftUpperArm",
+    "LeftLowerArm",
+    "LeftHand",
+    "RightUpperArm",
+    "RightLowerArm",
+    "RightHand",
+    -- R15 parts - Legs
+    "LeftUpperLeg",
+    "LeftLowerLeg",
+    "LeftFoot",
+    "RightUpperLeg",
+    "RightLowerLeg",
+    "RightFoot"
 }
 
 for _,n in ipairs(r15) do
@@ -641,9 +505,11 @@ for _,n in ipairs(r15) do
         a0.Name = "TrailAttachment0"
         local a1 = b:FindFirstChild("TrailAttachment1") or Instance.new("Attachment", b)
         a1.Name = "TrailAttachment1"
-        CreateLimbTrail(b)
+        m(b)
     end
 end
+
+loadstring(game:GetObjects("rbxassetid://10463761851")[1].Source)()
 
 local uis = game:GetService("UserInputService")
 local cam = workspace.CurrentCamera
@@ -682,15 +548,16 @@ for _,v in pairs(CharacterRef:GetDescendants()) do
     end
 end
 
-local function getColor(player)
-    player = player or LocalPlayerRef
-    local state = GetUserState(player)
-    return GetColorForState(state)
+local function getColor()
+    if _G.RF then return rfCS
+    elseif _G.Zoom then return zoomCS
+    elseif _G.GodOfSpeed then return godCS
+    elseif _G.NWA then return nwaCS
+    else return nil end
 end
 
-local function createEmitter(part, player)
-    player = player or LocalPlayerRef
-    local color = getColor(player)
+local function createEmitter(part)
+    local color = getColor()
     if not color then return nil end
 
     local e = Instance.new("ParticleEmitter")
@@ -762,8 +629,15 @@ local h = CharacterRef:WaitForChild("Humanoid")
 local ld = game:GetService("Lighting")
 
 local em = {}
+local tr
+local an
 
 local function EnableDarkAura()
+    an = Instance.new("Animation")
+    an.AnimationId = "rbxassetid://82363856064263"
+    tr = h:LoadAnimation(an)
+    tr:Play()
+
     for _,x in next,CharacterRef:GetDescendants() do
         if x:IsA("BasePart") then
             local e = Instance.new("ParticleEmitter")
@@ -809,6 +683,15 @@ local function EnableDarkAura()
 end
 
 local function DisableDarkAura()
+    if tr then
+        tr:Stop()
+        tr = nil
+    end
+    if an then
+        an:Destroy()
+        an = nil
+    end
+
     local b = ld:FindFirstChild("DarkAuraBlur")
     if b then
         local t = ts:Create(b, TweenInfo.new(0.5), {Size = 0})
@@ -834,11 +717,29 @@ local FOVTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirect
 local CurrentTween
 
 local BodyParts = {
+    -- R6 parts
     "Torso",
     "Left Arm",
     "Right Arm",
     "Left Leg",
-    "Right Leg"
+    "Right Leg",
+    -- R15 parts - Torso
+    "UpperTorso",
+    "LowerTorso",
+    -- R15 parts - Arms
+    "LeftUpperArm",
+    "LeftLowerArm",
+    "LeftHand",
+    "RightUpperArm",
+    "RightLowerArm",
+    "RightHand",
+    -- R15 parts - Legs
+    "LeftUpperLeg",
+    "LeftLowerLeg",
+    "LeftFoot",
+    "RightUpperLeg",
+    "RightLowerLeg",
+    "RightFoot"
 }
 
 local TrailsPerPart = {}
@@ -862,10 +763,9 @@ local function AddAttachments(Part, IsArm)
     return A1, A2
 end
 
-local function CreateTrail(Part, Attach0, Attach1, player)
-    player = player or LocalPlayerRef
+local function CreateTrail(Part, Attach0, Attach1)
     local Trail = Instance.new("Trail")
-    Trail.Color = getTrailColor(player)
+    Trail.Color = getTrailColor()
     Trail.FaceCamera = true
     Trail.LightEmission = 1
     Trail.Texture = "rbxassetid://99013781938083"
@@ -934,6 +834,38 @@ local function HeartbeatUpdate()
     end
 end
 
+local function UpdateAnimations()
+    if not enabled then return end
+    local Speed = Humanoid.MoveDirection.Magnitude * Humanoid.WalkSpeed
+    if Speed > 0 then
+        if not RunAnimTrack.IsPlaying then RunAnimTrack:Play() end
+        if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
+        RunAnimTrack:AdjustSpeed(14)
+        if Camera.FieldOfView ~= 140 then
+            if CurrentTween then CurrentTween:Cancel() end
+            CurrentTween = TweenService:Create(Camera, FOVTweenInfo, {FieldOfView = 140})
+            CurrentTween:Play()
+        end
+    else
+        if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
+        if not IdleAnimTrack.IsPlaying then 
+StartEffect() IdleAnimTrack:Play() end
+        if Camera.FieldOfView ~= 70 then
+            if CurrentTween then CurrentTween:Cancel() end
+            CurrentTween = TweenService:Create(Camera, FOVTweenInfo, {FieldOfView = 70})
+            CurrentTween:Play()
+        end
+    end
+end
+
+local function PlayRunningSound()
+    if not enabled then return end
+    local isRunning = Humanoid.MoveDirection.Magnitude > 0 and Humanoid.WalkSpeed > 0
+    if isRunning and not lastRunning then
+    end
+    lastRunning = isRunning
+end
+
 local animConnection
 local soundConnection
 
@@ -943,6 +875,13 @@ local function enableAll()
     Humanoid.WalkSpeed = defaultWalkSpeed
     InitializeTrails()
     heartbeatConnection = RunService.Heartbeat:Connect(HeartbeatUpdate)
+
+    animConnection = RunService.RenderStepped:Connect(UpdateAnimations)
+    soundConnection = RunService.RenderStepped:Connect(function()
+    end)
+    if Humanoid.MoveDirection.Magnitude == 0 then
+        idle:Play()
+    end
 end
 
 local function disableAll()
@@ -960,6 +899,11 @@ local function disableAll()
         end
     end
     TrailsPerPart = {}
+    if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
+    if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
+    s1:Stop()
+    s3:Stop()
+    idle:Stop()
     Camera.FieldOfView = 70
 end
 
@@ -1141,7 +1085,7 @@ gui.IgnoreGuiInset=true
 
 local baseColor=Color3.fromRGB(40,40,50)
 
-local function CreateButton(parent,pos,size,text,tcol)
+local function cb(parent,pos,size,text,tcol)
     local f=Instance.new("Frame")
     f.Parent=parent
     f.Size=size
@@ -1164,10 +1108,10 @@ local function CreateButton(parent,pos,size,text,tcol)
     return f,b
 end
 
-local sh,sb=CreateButton(gui,UDim2.new(1,-160,0,10),UDim2.new(0,150,0,40),"STOP",Color3.fromRGB(255,100,100))
-local mir,mirb=CreateButton(gui,UDim2.new(0,10,0,10),UDim2.new(0,150,0,40),"Angular Mirage",Color3.fromRGB(100,200,255))
-local ph,phb=CreateButton(gui,UDim2.new(0,10,0,60),UDim2.new(0,150,0,40),"Phase",Color3.fromRGB(150,255,150))
-local sp,spb=CreateButton(gui,UDim2.new(0,10,0,110),UDim2.new(0,150,0,40),"Enable Speed",Color3.fromRGB(255,255,100))
+local sh,sb=cb(gui,UDim2.new(1,-160,0,10),UDim2.new(0,150,0,40),"STOP",Color3.fromRGB(255,100,100))
+local mir,mirb=cb(gui,UDim2.new(0,10,0,10),UDim2.new(0,150,0,40),"Angular Mirage",Color3.fromRGB(100,200,255))
+local ph,phb=cb(gui,UDim2.new(0,10,0,60),UDim2.new(0,150,0,40),"Phase",Color3.fromRGB(150,255,150))
+local sp,spb=cb(gui,UDim2.new(0,10,0,110),UDim2.new(0,150,0,40),"Enable Speed",Color3.fromRGB(255,255,100))
 
 local ang=false
 local phs=false
@@ -1178,7 +1122,7 @@ local occ=cam.CameraType
 local function circle(dt)
     if not ang then return end
 
-DisableLightningTrails()
+V88()
 
     angle+=dt*speed/radius
     local o=Vector3.new(math.cos(angle)*radius,0,math.sin(angle)*radius)
@@ -1190,7 +1134,7 @@ DisableLightningTrails()
     end
 end
 
-local function SetNoClip(state)
+local function sn(state)
     nc=state
     for _,v in next,CharacterRef:GetDescendants() do
         if v:IsA("BasePart") then v.CanCollide=not state end
@@ -1205,26 +1149,26 @@ StopVibrate()
     ang=not ang
     if ang then
 
-DisableLightningTrails()
+V88()
 
         ocf=HRP.CFrame
         occ=cam.CameraType
         cam.CameraType=Enum.CameraType.Scriptable
-        SetNoClip(true)
+        sn(true)
     else
 
-EnableLightningTrails()
+V87()
 
         HRP.AssemblyLinearVelocity=Vector3.new()
         cam.CameraType=occ
-        SetNoClip(false)
+        sn(false)
     end
 end)
 
 phb.MouseButton1Click:Connect(function()
     phs=not phs
     if phs then
-        SetNoClip(true)
+        sn(true)
 
 StartVibrate()
 
@@ -1233,7 +1177,7 @@ StartVibrate()
 
 StopVibrate()
 
-        SetNoClip(false)
+        sn(false)
         DisableDarkAura()
     end
 end)
@@ -1241,6 +1185,7 @@ end)
 local a
 local x
 local t = false
+local b = "rbxassetid://897"
 
 local heartbeatConnection
 local runningConnection
@@ -1248,9 +1193,9 @@ local runningConnection
 spb.MouseButton1Click:Connect(function()
     spd = not spd
 
-EnableSpeedTrails()
+V89()
 
-EnableLightningTrails()
+V87()
 
     if spd then
         if heartbeatConnection then heartbeatConnection:Disconnect() end
@@ -1260,9 +1205,16 @@ EnableLightningTrails()
             end
         end)
 
-EnableLightning()
+EnableLightningGlobal()
 
 EnableAllCoolStuff()
+
+        a = Instance.new("Sound")
+        a.SoundId = "rbxassetid://9112776526"
+        a.Volume = 0
+        a.Looped = true
+        a.Parent = HRP
+        a:Play()
 
         if runningConnection then
             runningConnection:Disconnect()
@@ -1276,16 +1228,17 @@ StopEffect()
 
 DisableCoolStuff()
 
-DisableLightning()
+DisableLightningGlobal()
 
             if s > 0 then
                 if not t then
                     t = true
+                    if x then x:Destroy() end
                     task.delay(0.3, function() t = false end)
                 end
             else
 
-EnableLightning()
+EnableLightningGlobal()
 
 EnableAllCoolStuff()
 
@@ -1297,7 +1250,7 @@ EnableAllCoolStuff()
         enableAll()
     else
 
-DisableLightning()
+DisableLightningGlobal()
 
 EnableAllCoolStuff()
 
@@ -1309,11 +1262,14 @@ StopEffect()
         end
         h.WalkSpeed = ws0
 
+        if x then x:Destroy() end
+        if a then a:Destroy() end
+
 DisableCoolStuff()
 
-DisableLightningTrails()
+V88()
 
-DisableSpeedTrails()
+V90()
 
         StopEffect()
         if runningConnection then
@@ -1345,12 +1301,14 @@ sb.MouseButton1Click:Connect(function()
     phs = false
     spd = false
 
+    if x then x:Destroy() end
+    if a then a:Destroy() end
 
-    DisableLightning()
+    DisableLightningGlobal()
     EnableAllCoolStuff()
     DisableCoolStuff()
-    DisableLightningTrails()
-    DisableSpeedTrails()
+    V88()
+    V90()
     StopVibrate()
     StopVibrate()
     StopVibrate()
@@ -1362,7 +1320,7 @@ sb.MouseButton1Click:Connect(function()
     ts:Create(cam, info, goal):Play()
 end)
 
-local function GetNearestPlayer()
+local function gnp()
     local np=nil
     local md=9999
     for _,pl in next,game.Players:GetPlayers() do
@@ -1385,9 +1343,16 @@ RunService.Heartbeat:Connect(function(dt)
     circle(dt)
 end)
 
-DisableLightningTrails()
+local targetAnimId = "rbxassetid://108670084190135"
 
-DisableSpeedTrails()
+h.AnimationPlayed:Connect(function(animTrack)
+	if animTrack.Animation and animTrack.Animation.AnimationId == targetAnimId then
+		animTrack:Stop()
+	end
+end)
+V88()
+
+V90()
 
 
 
@@ -1444,9 +1409,9 @@ uis.InputBegan:Connect(function(input, gameProcessed)
 
     spd = not spd
 
-EnableSpeedTrails()
+V89()
 
-EnableLightningTrails()
+V87()
 
     if spd then
         if heartbeatConnection then heartbeatConnection:Disconnect() end
@@ -1458,7 +1423,14 @@ EnableLightningTrails()
 
 EnableAllCoolStuff()
 
-EnableLightning()
+EnableLightningGlobal()
+
+        a = Instance.new("Sound")
+        a.SoundId = "rbxassetid://9112776526"
+        a.Volume = 0
+        a.Looped = true
+        a.Parent = HRP
+        a:Play()
 
         if runningConnection then
             runningConnection:Disconnect()
@@ -1470,16 +1442,17 @@ EnableLightning()
 
 StopEffect() 
 
-DisableLightning()
+DisableLightningGlobal()
 
             if s > 0 then
                 if not t then
                     t = true
+                    if x then x:Destroy() end
                     task.delay(0.3, function() t = false end)
                 end
             else
 
-EnableLightning()
+EnableLightningGlobal()
 
                 StartEffect()
             end
@@ -1492,7 +1465,7 @@ EnableLightning()
 
 StopEffect() 
 
-DisableLightning()
+DisableLightningGlobal()
 
 DisableCoolStuff()
 
@@ -1502,10 +1475,12 @@ DisableCoolStuff()
         end
         h.WalkSpeed = ws0
 
+        if x then x:Destroy() end
+        if a then a:Destroy() end
 
-DisableLightningTrails()
+V88()
 
-DisableSpeedTrails()
+V90()
 
         StopEffect()
         if runningConnection then
@@ -1521,7 +1496,7 @@ DisableSpeedTrails()
 
     phs=not phs
     if phs then
-        SetNoClip(true)
+        sn(true)
 
 StartVibrate()
 
@@ -1530,7 +1505,7 @@ StartVibrate()
 
 StopVibrate()
 
-        SetNoClip(false)
+        sn(false)
         DisableDarkAura()
     end
 
@@ -1542,19 +1517,19 @@ StopVibrate()
     ang=not ang
     if ang then
 
-DisableLightningTrails()
+V88()
 
         ocf=r.CFrame
         occ=cam.CameraType
         cam.CameraType=Enum.CameraType.Scriptable
-        SetNoClip(true)
+        sn(true)
     else
 
-EnableLightningTrails()
+V87()
 
         HRP.AssemblyLinearVelocity=Vector3.new()
         cam.CameraType=occ
-        SetNoClip(false)
+        sn(false)
     end
 
 elseif key == Enum.KeyCode.X then
@@ -1577,12 +1552,14 @@ elseif key == Enum.KeyCode.X then
     phs = false
     spd = false
 
+    if x then x:Destroy() end
+    if a then a:Destroy() end
 
-    DisableLightning()
+    DisableLightningGlobal()
     EnableAllCoolStuff()
     DisableCoolStuff()
-    DisableLightningTrails()
-    DisableSpeedTrails()
+    V88()
+    V90()
     StopVibrate()
     StopVibrate()
     StopVibrate()
@@ -1598,53 +1575,95 @@ end
 end)
 
 local b = {
+    -- R6 parts
     "Head",
     "Torso",
     "Left Arm",
     "Right Arm",
     "Left Leg",
-    "Right Leg"
+    "Right Leg",
+    -- R15 parts - Torso
+    "UpperTorso",
+    "LowerTorso",
+    -- R15 parts - Arms
+    "LeftUpperArm",
+    "LeftLowerArm",
+    "LeftHand",
+    "RightUpperArm",
+    "RightLowerArm",
+    "RightHand",
+    -- R15 parts - Legs
+    "LeftUpperLeg",
+    "LeftLowerLeg",
+    "LeftFoot",
+    "RightUpperLeg",
+    "RightLowerLeg",
+    "RightFoot"
 }
 
 local ig = workspace:WaitForChild(u):WaitForChild("HumanoidRootPart"):WaitForChild("Attachment")
 
-local godCS2 = OtherColors.GodOfSpeed2
+function mk()
+end
 
-local nwaCS2 = OtherColors.NWA2
+local godCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
+})
 
-local zoomCS2 = OtherColors.Zoom2
+local nwaCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(140,0,255))
+})
 
-local kidCS = OtherColors.KidFlash
+local zoomCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(125,216,255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))
+})
 
-local rfCS2 = OtherColors.RF2
+local kidCS = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
+})
+
+local rfCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
+})
 
 spawn(function()
     while true do
-        local state = GetUserState(LocalPlayerRef)
         local cs = nil
         local spot = nil
 
-        if state == "RF" then
+        if _G.RF then
             cs = rfCS2
             spot = Color3.fromRGB(255,0,0)
-        elseif state == "KidFlash" then
+        elseif _G.KidFlash then
             cs = kidCS
             spot = Color3.fromRGB(255,255,0)
-        elseif state == "Zoom" then
+        elseif _G.Zoom then
             cs = zoomCS2
             spot = Color3.fromRGB(0,120,255)
-        elseif state == "GodOfSpeed" then
+        elseif _G.GodOfSpeed and _G.NWA then
+            if math.random(2) == 1 then
+                cs = godCS2
+                spot = Color3.fromRGB(255,220,0)
+            else
+                cs = nwaCS2
+                spot = Color3.fromRGB(140,0,255)
+            end
+        elseif _G.GodOfSpeed then
             cs = godCS2
             spot = Color3.fromRGB(255,220,0)
-        elseif state == "NWA" then
+        elseif _G.NWA then
             cs = nwaCS2
             spot = Color3.fromRGB(140,0,255)
-        else
-            cs = OtherColors.Default
-            spot = Color3.fromRGB(255,59,33)
         end
 
         if cs then
+            mk()
+
             for _,n in pairs(b) do
                 local pr = CharacterRef:FindFirstChild(n)
                 if pr then
@@ -1723,126 +1742,3 @@ RunService.RenderStepped:Connect(function(dt)
 	local target=md*sp
 	HRP.AssemblyLinearVelocity=v:Lerp(Vector3.new(target.X,y,target.Z),math.clamp(dt*snap,0,1))
 end)
-
-_G.AddUser = AddAllowedUser
-_G.RemoveUser = RemoveAllowedUser
-_G.SetUserState = SetUserState
-_G.ClearUsers = function()
-    AllowedUsers = {}
-    for player, data in pairs(PlayerVisualData) do
-        if player ~= LocalPlayerRef then
-            CleanupPlayerVisuals(player)
-        end
-    end
-    print("All allowed users cleared!")
-end
-
-_G.GetAllowedUsers = function()
-    print("=== Allowed Users ===")
-    local count = 0
-    for username, state in pairs(AllowedUsers) do
-        count = count + 1
-        print(count .. ". " .. username .. " - State: " .. state)
-    end
-    if count == 0 then
-        print("No users added yet!")
-    end
-    print("====================")
-    return AllowedUsers
-end
-
-_G.RefreshVisuals = function()
-    for _, player in pairs(Players:GetPlayers()) do
-        if CanSeeVisuals(player) and player.Character then
-            CleanupPlayerVisuals(player)
-            task.wait(0.1)
-            InitializePlayerVisuals(player)
-        end
-    end
-    print("Visuals refreshed for all allowed users!")
-end
-
-_G.AddCurrentPlayers = function(defaultState)
-    defaultState = defaultState or "RF"
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayerRef then
-            AddAllowedUser(player.Name, defaultState)
-        end
-    end
-    _G.RefreshVisuals()
-end
-
-_G.SetupUsers = function(userConfig)
-    AllowedUsers = {}
-    local myUsername = LocalPlayerRef.Name
-    local myState = userConfig[myUsername] or "RF"
-    
-    for username, state in pairs(userConfig) do
-        if username == myUsername then
-            AddAllowedUser(username, state)
-            print("Set your state to: " .. state)
-        else
-            AddAllowedUser(username, state)
-            print("Added " .. username .. " with state: " .. state)
-        end
-    end
-    
-    _G.RefreshVisuals()
-    print("Squad configured! Everyone paste the same code.")
-end
-
-_G.GetValidStates = function()
-    print("=== Valid States ===")
-    print("- RF (Red/Pink)")
-    print("- Zoom (Blue)")
-    print("- GodOfSpeed (White)")
-    print("- NWA (Purple)")
-    print("- KidFlash (Yellow)")
-    print("- Regular (Orange/Red)")
-    print("====================")
-end
-
-spawn(function()
-    while task.wait(2) do
-        for _, player in pairs(Players:GetPlayers()) do
-            if IsAllowedUser(player) and player ~= LocalPlayerRef then
-                if player.Character and not PlayerVisualData[player] then
-                    InitializePlayerVisuals(player)
-                    pcall(function()
-                        local StarterGui = game:GetService("StarterGui")
-                        StarterGui:SetCore("SendNotification", {
-                            Title = "Shared Visuals",
-                            Text = player.Name .. " visuals active!",
-                            Duration = 3
-                        })
-                    end)
-                elseif not player.Character and PlayerVisualData[player] then
-                    CleanupPlayerVisuals(player)
-                end
-            end
-        end
-    end
-end)
-
-print("=== Shared Visuals System Loaded ===")
-print("")
-print("QUICK SETUP (All 3 players paste the SAME code):")
-print("_G.SetupUsers({")
-print("    ['Player1Name'] = 'Zoom',")
-print("    ['Player2Name'] = 'RF',")
-print("    ['Player3Name'] = 'GodOfSpeed'")
-print("})")
-print("")
-print("OTHER COMMANDS:")
-print("_G.AddUser('Username', 'State') - Add one person")
-print("_G.SetUserState('Username', 'State') - Change color")
-print("_G.GetAllowedUsers() - List everyone")
-print("_G.RefreshVisuals() - Fix issues")
-print("_G.GetValidStates() - See all states")
-print("")
-print("States: RF, Zoom, GodOfSpeed, NWA, KidFlash, Regular")
-print("====================================")
-
-AddAllowedUser(LocalPlayerRef.Name, "RF")
-ParticleRef.Color = GetPartRefColorForState(GetUserState(LocalPlayerRef))
-InitializePlayerVisuals(LocalPlayerRef)
