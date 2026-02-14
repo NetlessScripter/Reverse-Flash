@@ -300,6 +300,54 @@ local u = LocalPlayerRef.Name
 
 local l = game:GetService('Lighting')
 do
+local i = Instance.new('Sky')
+i.SkyboxBk = "rbxassetid://6444884337"
+i.SkyboxDn = "rbxassetid://6444884785"
+i.SkyboxFt = "rbxassetid://6444884337"
+i.SkyboxLf = "rbxassetid://6444884337"
+i.SkyboxRt = "rbxassetid://6444884337"
+i.SkyboxUp = "rbxassetid://6412503613"
+i.MoonAngularSize = 11
+i.MoonTextureId = "rbxassetid://6444320592"
+i.SunAngularSize = 11
+i.SunTextureId = "rbxassetid://6196665106"
+i.Parent = l
+end
+do
+local i = Instance.new('SunRaysEffect')
+i.Intensity = 0.009999999776482582
+i.Spread = 0.10000000149011612
+i.Enabled = true
+i.Parent = l
+end
+do
+local i = Instance.new('Atmosphere')
+i.Density = 0.30000001192092896
+i.Offset = 0.25
+i.Color = Color3.new(0.7803921699523926,0.7803921699523926,0.7803921699523926)
+i.Decay = Color3.new(0.4156862795352936,0.43921568989753723,0.4901960790157318)
+i.Glare = 0
+i.Haze = 0
+i.Parent = l
+end
+do
+local i = Instance.new('BloomEffect')
+i.Intensity = 1
+i.Size = 24
+i.Threshold = 2
+i.Enabled = true
+i.Parent = l
+end
+do
+local i = Instance.new('DepthOfFieldEffect')
+i.FarIntensity = 0.10000000149011612
+i.FocusDistance = 0.05000000074505806
+i.InFocusRadius = 30
+i.NearIntensity = 0.75
+i.Enabled = false
+i.Parent = l
+end
+do
 local i = Instance.new('SunRaysEffect')
 i.Intensity = 0.16899999976158142
 i.Spread = 1
@@ -385,7 +433,7 @@ l.ColorShift_Bottom = Color3.new(0,0,0)
 l.ColorShift_Top = Color3.new(0,0,0)
 l.Technology = Enum.Technology.Future
 l.ShadowSoftness = 0.3199999928474426
-l.TimeOfDay = "00:00:00"
+l.TimeOfDay = "15:06:36"
 
 local col = ColorSequence.new(Color3.new(1,0.231373,0.129412),Color3.new(1,0.231373,0.129412))
 
@@ -841,6 +889,28 @@ local runState = false
 local lastRunning = false
 local defaultWalkSpeed = 20
 
+-- ================================
+-- Animations
+-- ================================
+local RUN_ANIM_ID = "rbxassetid://102622695004986"
+local IDLE_ANIM_ID = "rbxassetid://132861892011980"
+
+local RunAnimation = Instance.new("Animation")
+RunAnimation.AnimationId = RUN_ANIM_ID
+local IdleAnimation = Instance.new("Animation")
+IdleAnimation.AnimationId = IDLE_ANIM_ID
+
+local Animator = Humanoid:FindFirstChildOfClass("Animator")
+if not Animator then
+    Animator = Instance.new("Animator")
+    Animator.Parent = Humanoid
+end
+
+local RunAnimTrack = Animator:LoadAnimation(RunAnimation)
+RunAnimTrack.Priority = Enum.AnimationPriority.Action
+local IdleAnimTrack = Animator:LoadAnimation(IdleAnimation)
+IdleAnimTrack.Priority = Enum.AnimationPriority.Action
+
 local function AddAttachments(Part, IsArm)
     local A1 = Instance.new("Attachment")
     A1.Name = "1"
@@ -952,6 +1022,9 @@ local function HeartbeatUpdate()
             CreateInvisibleWater(Part)
         end
     end
+    
+    -- Keep TimeOfDay constant
+    game:GetService('Lighting').TimeOfDay = "15:06:36"
 end
 
 local function PlayRunningSound()
@@ -960,6 +1033,49 @@ local function PlayRunningSound()
     if isRunning and not lastRunning then
     end
     lastRunning = isRunning
+end
+
+-- ================================
+-- Animations and FOV Update
+-- ================================
+local function UpdateAnimationsAndFOV()
+    if not enabled then return end
+    
+    local isMoving = Humanoid.MoveDirection.Magnitude > 0
+    local isFalling = Humanoid.FloorMaterial == Enum.Material.Air and Humanoid.MoveDirection.Magnitude == 0
+    
+    if isMoving then
+        -- Running
+        if not RunAnimTrack.IsPlaying then 
+            if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
+            RunAnimTrack:Play() 
+        end
+        RunAnimTrack:AdjustSpeed(14)
+        
+        -- FOV to 140 when moving
+        if Camera.FieldOfView ~= 140 then
+            if CurrentTween then CurrentTween:Cancel() end
+            CurrentTween = TweenService:Create(Camera, FOVTweenInfo, {FieldOfView = 140})
+            CurrentTween:Play()
+        end
+    else
+        -- Not moving
+        if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
+        
+        -- Only play idle if not falling
+        if not isFalling and not IdleAnimTrack.IsPlaying then 
+            IdleAnimTrack:Play() 
+        elseif isFalling and IdleAnimTrack.IsPlaying then
+            IdleAnimTrack:Stop()
+        end
+        
+        -- FOV to 70 when stopped
+        if Camera.FieldOfView ~= 70 then
+            if CurrentTween then CurrentTween:Cancel() end
+            CurrentTween = TweenService:Create(Camera, FOVTweenInfo, {FieldOfView = 70})
+            CurrentTween:Play()
+        end
+    end
 end
 
 local animConnection
@@ -972,6 +1088,7 @@ local function enableAll()
     InitializeTrails()
     heartbeatConnection = RunService.Heartbeat:Connect(HeartbeatUpdate)
 
+    animConnection = RunService.RenderStepped:Connect(UpdateAnimationsAndFOV)
     soundConnection = RunService.RenderStepped:Connect(function()
         UpdateSounds()
         PlayRunningSound()
@@ -1412,9 +1529,11 @@ sb.MouseButton1Click:Connect(function()
     DisableDarkAura()
 
     cam.CameraType = Enum.CameraType.Custom
-    local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
-    local goal = { FieldOfView = 70 }
-    ts:Create(cam, info, goal):Play()
+    if cam.FieldOfView ~= 70 then
+        local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+        local goal = { FieldOfView = 70 }
+        ts:Create(cam, info, goal):Play()
+    end
 end)
 
 local function gnp()
@@ -1663,9 +1782,11 @@ elseif key == Enum.KeyCode.X then
     DisableDarkAura()
 
     cam.CameraType = Enum.CameraType.Custom
-    local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
-    local goal = { FieldOfView = 70 }
-    ts:Create(cam, info, goal):Play()
+    if cam.FieldOfView ~= 70 then
+        local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+        local goal = { FieldOfView = 70 }
+        ts:Create(cam, info, goal):Play()
+    end
 
 end
 end
