@@ -1027,6 +1027,105 @@ local function HeartbeatUpdate()
 end
 
 -- ================================
+-- Sound System
+-- ================================
+-- Create all sound instances
+-- REMOVED: enableSpeedSound (rbxassetid://9775087198) - Not authorized
+
+local generalEnableSound = Instance.new("Sound")
+generalEnableSound.SoundId = "rbxassetid://9112776526"
+generalEnableSound.Volume = 0.8
+generalEnableSound.Looped = true
+generalEnableSound.Parent = HRP
+
+local runSound1 = Instance.new("Sound")
+runSound1.SoundId = "rbxassetid://5113213873"
+runSound1.Volume = 0.3
+runSound1.Looped = true
+runSound1.Parent = HRP
+
+local runSound2 = Instance.new("Sound")
+runSound2.SoundId = "rbxassetid://4738483700"
+runSound2.Volume = 0.5
+runSound2.Looped = false
+runSound2.Parent = HRP
+
+local runSound3 = Instance.new("Sound")
+runSound3.SoundId = "rbxassetid://6336173633"
+runSound3.Volume = 0.3
+runSound3.Looped = true
+runSound3.Parent = HRP
+
+local runSound4 = Instance.new("Sound")
+runSound4.SoundId = "rbxassetid://3308152153"
+runSound4.Volume = 0.3
+runSound4.Looped = true
+runSound4.Parent = HRP
+
+local runSound5 = Instance.new("Sound")
+runSound5.SoundId = "rbxassetid://2852749304"
+runSound5.Volume = 0.3
+runSound5.Looped = false
+runSound5.Parent = HRP
+
+-- REMOVED: runStartSound (rbxassetid://9775087665) - Not authorized
+
+-- REMOVED: slidingSound1 (rbxassetid://14652670240) - Not authorized
+-- REMOVED: slidingSound2 (rbxassetid://14652670143) - Not authorized
+
+local stopSound = Instance.new("Sound")
+stopSound.SoundId = "rbxassetid://4944377949"
+stopSound.Volume = 0.5
+stopSound.Looped = false
+stopSound.Parent = HRP
+
+-- Sound state tracking
+local wasRunning = false
+local lastWalkSpeed = 0
+local soundConnection = nil
+
+local function UpdateSounds()
+    if not enabled then return end
+    
+    local currentSpeed = Humanoid.WalkSpeed
+    local isMoving = Humanoid.MoveDirection.Magnitude > 0
+    local isRunning = isMoving and currentSpeed > 0
+    
+    -- Handle running sounds
+    if isRunning then
+        if not wasRunning then
+            -- Start looped run sounds
+            if not runSound1.IsPlaying then runSound1:Play() end
+            if not runSound3.IsPlaying then runSound3:Play() end
+            if not runSound4.IsPlaying then runSound4:Play() end
+        end
+        -- Always play non-looped sounds while running
+        if not runSound2.IsPlaying then runSound2:Play() end
+        if not runSound5.IsPlaying then runSound5:Play() end
+    else
+        -- Stop running sounds
+        if wasRunning or (not isMoving and currentSpeed == 0) then
+            if runSound1.IsPlaying then runSound1:Stop() end
+            if runSound2.IsPlaying then runSound2:Stop() end
+            if runSound3.IsPlaying then runSound3:Stop() end
+            if runSound4.IsPlaying then runSound4:Stop() end
+            if runSound5.IsPlaying then runSound5:Stop() end
+        end
+    end
+    
+    -- Handle stop sound - play when walkspeed becomes 0
+    if not isMoving and currentSpeed == 0 and wasRunning then
+        if not stopSound.IsPlaying then
+            stopSound:Play()
+        end
+    end
+    
+    -- Update state
+    wasRunning = isRunning
+    lastWalkSpeed = currentSpeed
+end
+
+-- ================================
 -- Animations and FOV Update
 -- ================================
 local function UpdateAnimationsAndFOV()
@@ -1079,6 +1178,15 @@ local function enableAll()
     heartbeatConnection = RunService.Heartbeat:Connect(HeartbeatUpdate)
 
     animConnection = RunService.RenderStepped:Connect(UpdateAnimationsAndFOV)
+    
+    -- Play enable sounds
+    if not generalEnableSound.IsPlaying then
+        generalEnableSound:Play()
+    end
+    
+    -- Start sound update loop
+    soundConnection = RunService.RenderStepped:Connect(UpdateSounds)
+    
     if Humanoid.MoveDirection.Magnitude == 0 then
         IdleAnimTrack:Play()
     end
@@ -1090,6 +1198,20 @@ local function disableAll()
     Humanoid.WalkSpeed = 25
     if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
     if animConnection then animConnection:Disconnect() animConnection = nil end
+    if soundConnection then soundConnection:Disconnect() soundConnection = nil end
+    
+    -- Stop all sounds
+    if generalEnableSound.IsPlaying then generalEnableSound:Stop() end
+    if runSound1.IsPlaying then runSound1:Stop() end
+    if runSound2.IsPlaying then runSound2:Stop() end
+    if runSound3.IsPlaying then runSound3:Stop() end
+    if runSound4.IsPlaying then runSound4:Stop() end
+    if runSound5.IsPlaying then runSound5:Stop() end
+    if stopSound.IsPlaying then stopSound:Stop() end
+    
+    -- Reset sound state
+    wasRunning = false
+    
     for Part, Data in pairs(TrailsPerPart) do
         for i=1,2 do
             if Data[i] and Data[i].Parent then
