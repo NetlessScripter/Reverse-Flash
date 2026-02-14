@@ -433,7 +433,7 @@ l.ColorShift_Bottom = Color3.new(0,0,0)
 l.ColorShift_Top = Color3.new(0,0,0)
 l.Technology = Enum.Technology.Future
 l.ShadowSoftness = 0.3199999928474426
-l.TimeOfDay = "15:06:36"
+l.TimeOfDay = "00:00:00"
 
 local col = ColorSequence.new(Color3.new(1,0.231373,0.129412),Color3.new(1,0.231373,0.129412))
 
