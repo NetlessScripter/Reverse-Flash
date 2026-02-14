@@ -19,6 +19,7 @@
         _G.GodOfSpeed = false
         _G.NWA = false
         _G.KidFlash = false
+        _G.Regular = false
         
         -- Set the appropriate flag
         if speedsterType == "RF" then
@@ -31,6 +32,8 @@
             _G.NWA = true
         elseif speedsterType == "KidFlash" then
             _G.KidFlash = true
+        elseif speedsterType == "Regular" then
+            _G.Regular = true
         end
     end
     
@@ -53,8 +56,8 @@
 --]]
 
 -- Check for pre-existing global flags, set default if none exist
-if not _G.RF and not _G.Zoom and not _G.GodOfSpeed and not _G.NWA and not _G.KidFlash then
-    _G.RF = true
+if not _G.RF and not _G.Zoom and not _G.GodOfSpeed and not _G.NWA and not _G.KidFlash and not _G.Regular then
+    _G.Regular = true
 end
 
 Players = game:GetService("Players")
@@ -132,6 +135,11 @@ elseif _G.RF then
     ParticleRef.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255,190,190)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
+    })
+elseif _G.Regular then
+    ParticleRef.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255,59,33)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255,59,33))
     })
 else
     ParticleRef.Color = ColorSequence.new({
@@ -448,6 +456,7 @@ local rfCS = ColorSequence.new(Color3.fromRGB(255,84,84), Color3.fromRGB(255,0,0
 local zoomCS = ColorSequence.new(Color3.fromRGB(125,216,255), Color3.fromRGB(0,120,255))
 local godCS = ColorSequence.new(Color3.fromRGB(255,255,255), Color3.fromRGB(255,255,255))
 local nwaCS = ColorSequence.new(Color3.fromRGB(200,180,255), Color3.fromRGB(130,0,255))
+local kidCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))})
 local defaultCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))})
 
 local function getTrailColor()
@@ -455,6 +464,8 @@ local function getTrailColor()
     elseif _G.Zoom then return zoomCS
     elseif _G.GodOfSpeed then return godCS
     elseif _G.NWA then return nwaCS
+    elseif _G.KidFlash then return kidCS
+    elseif _G.Regular then return defaultCS
     else return defaultCS end
 end
 
@@ -578,6 +589,8 @@ local function getColor()
     elseif _G.Zoom then return zoomCS
     elseif _G.GodOfSpeed then return godCS
     elseif _G.NWA then return nwaCS
+    elseif _G.KidFlash then return kidCS
+    elseif _G.Regular then return defaultCS
     else return nil end
 end
 
@@ -1656,6 +1669,11 @@ local rfCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
 })
 
+local regularCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,59,33)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,59,33))
+})
+
 spawn(function()
     while true do
         local cs = nil
@@ -1684,6 +1702,9 @@ spawn(function()
         elseif _G.NWA then
             cs = nwaCS2
             spot = Color3.fromRGB(140,0,255)
+        elseif _G.Regular then
+            cs = regularCS2
+            spot = Color3.fromRGB(255,59,33)
         end
 
         if cs then
