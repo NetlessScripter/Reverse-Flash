@@ -1,10 +1,12 @@
 --[[
     REVERSE FLASH SCRIPT - MULTIPLAYER VERSION
     
+    NightMode = true  -- Set to false for day mode
+    
     AllowedPlayers = {
-        ["Player1"] = "RF",
-        ["Player2"] = "Regular",
-        ["Player3"] = "KidFlash"
+        ["Hitmeforgamepass"] = "RF",
+        ["veyzak"] = "Regular",
+        ["BOT338204"] = "Regular"
     }
     
     loadstring(game:HttpGet("https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Open%20Sourced%20Version"))()
@@ -13,7 +15,9 @@
     STATES: RF, Zoom, KidFlash, GodOfSpeed, NWA, Regular
 --]]
 
-NightMode = NightMode or true  -- Set to false to disable night lighting
+if NightMode == nil then
+    NightMode = true  -- Default to night mode if not set
+end
 
 AllowedPlayers = AllowedPlayers or {}
 
