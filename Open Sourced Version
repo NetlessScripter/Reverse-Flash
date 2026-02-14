@@ -1,144 +1,59 @@
 --[[
-    REVERSE FLASH SCRIPT - MULTIPLAYER FIXED VERSION
+    REVERSE FLASH SCRIPT - MULTIPLAYER VERSION
     
-    FEATURES:
-    - Fixed nil indexing error with _G variables
-    - Added comprehensive R15 support (all R15 body parts)
-    - Simple table-based user configuration
-    - AllowedPlayers whitelist support
-    - Fixed multiplayer replication (effects now visible to other players)
-    - AUTO-GENERATES speedster types from AllowedPlayers!
-    
-    USAGE - SIMPLE (Only list names once!):
+    USAGE:
     AllowedPlayers = {
-        "WediditGTA5",
-        "charzard010710",
-        "Player3"
+        "Player1",
+        "Player2"
     }
-    loadstring(game:HttpGet("YOUR_URL_HERE"))()
-    -- Each player automatically gets a different speedster type!
-    -- Player1 = RF, Player2 = Zoom, Player3 = KidFlash, etc.
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Open%20Sourced%20Version"))()
     
-    USAGE - ADVANCED (Manual speedster type assignment):
-    AllowedPlayers = {
-        "WediditGTA5",
-        "charzard010710"
-    }
-    _G.SetupUsers = {
-        ["WediditGTA5"] = "RF",
-        ["charzard010710"] = "Zoom"
-    }
-    loadstring(game:HttpGet("YOUR_URL_HERE"))()
-    
-    USAGE - NO WHITELIST (Everyone can use):
-    -- Just load the script, everyone gets Regular speedster
-    loadstring(game:HttpGet("YOUR_URL_HERE"))()
-    
-    CONTROLS:
-    - Press Q to toggle Speed Mode
-    - Press C to toggle Phase Mode
-    - Press B to toggle Angular Mirage
-    - Press X to Disable your speed
-    
-    STATE NAMES:
-    RF, Zoom, GodOfSpeed, NWA, KidFlash, Regular
+    CONTROLS: Q = Speed | C = Phase | B = Angular Mirage | X = Disable
+    STATES: RF, Zoom, KidFlash, GodOfSpeed, NWA (auto-assigned by order)
 --]]
 
--- ============================================
--- ALLOWEDPLAYERS WHITELIST CHECK
--- ============================================
-local p = game:GetService("Players")
-local lp = p.LocalPlayer
 AllowedPlayers = AllowedPlayers or {}
 
-local function isAllowed(name)
-    -- If AllowedPlayers is empty, allow everyone
-    if #AllowedPlayers == 0 then
-        return true
-    end
-    
-    for _, v in pairs(AllowedPlayers) do
-        if v == name then
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Auto-assign speedster types
+local speedsterTypes = {"RF", "Zoom", "KidFlash", "GodOfSpeed", "NWA"}
+local playerSpeedsterMap = {}
+for i, playerName in ipairs(AllowedPlayers) do
+    local typeIndex = ((i - 1) % #speedsterTypes) + 1
+    playerSpeedsterMap[playerName] = speedsterTypes[typeIndex]
+end
+
+local function IsAllowed(player)
+    if #AllowedPlayers == 0 then return true end
+    for _, name in ipairs(AllowedPlayers) do
+        if player.Name == name then
             return true
         end
     end
     return false
 end
 
-if not isAllowed(lp.Name) then 
-    warn("⛔ You are not authorized to use this script!")
-    return 
-end
-print("✓ Access granted for " .. lp.Name)
-
--- ============================================
--- SETUP USER CONFIGURATION
--- ============================================
-
--- AUTO-GENERATE SetupUsers from AllowedPlayers if not manually set
-if type(_G.SetupUsers) ~= "table" and #AllowedPlayers > 0 then
-    _G.SetupUsers = {}
-    local speedsterTypes = {"RF", "Zoom", "KidFlash", "GodOfSpeed", "NWA"}
-    for i, playerName in ipairs(AllowedPlayers) do
-        -- Cycle through speedster types so each player gets a different one
-        local typeIndex = ((i - 1) % #speedsterTypes) + 1
-        _G.SetupUsers[playerName] = speedsterTypes[typeIndex]
-    end
-    print("✓ Auto-generated speedster types from AllowedPlayers")
-end
-
-if type(_G.SetupUsers) == "table" then
-    local playerName = lp.Name
-    local speedsterType = _G.SetupUsers[playerName] or "Regular"
+local function SetupSpeedster(player)
+    local CharacterRef = player.Character or player.CharacterAdded:Wait()
+    local HRP = CharacterRef:WaitForChild("HumanoidRootPart")
     
-    -- Reset all flags
-    _G.RF = false
-    _G.Zoom = false
-    _G.GodOfSpeed = false
-    _G.NWA = false
-    _G.KidFlash = false
-    _G.Regular = false
+    -- Get speedster type for this player
+    local speedsterType = playerSpeedsterMap[player.Name] or "Regular"
+    local isRF = speedsterType == "RF"
+    local isZoom = speedsterType == "Zoom"
+    local isGod = speedsterType == "GodOfSpeed"
+    local isNWA = speedsterType == "NWA"
+    local isKid = speedsterType == "KidFlash"
     
-    -- Set the appropriate flag
-    if speedsterType == "RF" then
-        _G.RF = true
-        print("✓ Reverse Flash loaded for " .. playerName)
-    elseif speedsterType == "Zoom" then
-        _G.Zoom = true
-        print("✓ Zoom loaded for " .. playerName)
-    elseif speedsterType == "GodOfSpeed" then
-        _G.GodOfSpeed = true
-        print("✓ Godspeed loaded for " .. playerName)
-    elseif speedsterType == "NWA" then
-        _G.NWA = true
-        print("✓ Negative Speed Force loaded for " .. playerName)
-    elseif speedsterType == "KidFlash" then
-        _G.KidFlash = true
-        print("✓ Kid Flash loaded for " .. playerName)
-    elseif speedsterType == "Regular" then
-        _G.Regular = true
-        print("✓ Regular speedster loaded for " .. playerName)
-    else
-        _G.Regular = true
-        print("✓ Regular speedster (default) loaded for " .. playerName)
-    end
-else
-    -- No SetupUsers table found, check for pre-existing global flags
-    if not _G.RF and not _G.Zoom and not _G.GodOfSpeed and not _G.NWA and not _G.KidFlash and not _G.Regular then
-        _G.Regular = true
-        print("✓ Regular speedster (default) loaded for " .. lp.Name)
-    end
-end
+    print("✓ Loading " .. speedsterType .. " for " .. player.Name)
 
 Players = game:GetService("Players")
 RunService = game:GetService("RunService")
 WorkspaceRef = workspace
 
-LocalPlayerRef = Players.LocalPlayer
-CharacterRef = LocalPlayerRef.Character or LocalPlayerRef.CharacterAdded:Wait()
-HRP = CharacterRef:WaitForChild("HumanoidRootPart")
-
--- MULTIPLAYER FIX: Create attachment on HRP for particle replication
+-- Create lightning attachment on HRP for replication
 local lightningAttachment = Instance.new("Attachment")
 lightningAttachment.Name = "LightningAttachment"
 lightningAttachment.Parent = HRP
@@ -177,30 +92,29 @@ ParticleRef.VelocityInheritance = 0
 ParticleRef.ZOffset = 2
 ParticleRef.Acceleration = Vector3.new(0,0,0)
 ParticleRef.Enabled = false
--- MULTIPLAYER FIX: Parent to HRP attachment for replication
 ParticleRef.Parent = lightningAttachment
 
-if _G.Zoom then
+if isZoom then
     ParticleRef.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(160,220,255)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))
     })
-elseif _G.GodOfSpeed then
+elseif isGod then
     ParticleRef.Color = ColorSequence.new(
         Color3.fromRGB(255,255,255),
         Color3.fromRGB(255,255,255)
     )
-elseif _G.NWA then
+elseif isNWA then
     ParticleRef.Color = ColorSequence.new(
         Color3.fromRGB(200,180,255),
         Color3.fromRGB(130,0,255)
     )
-elseif _G.KidFlash then
+elseif isKid then
     ParticleRef.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
     })
-elseif _G.RF then
+elseif isRF then
     ParticleRef.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255,190,190)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
@@ -220,7 +134,6 @@ function EnableLightningGlobal()
     Running = true
     ParticleRef.Enabled = true
     ParticleRef:Emit(15)
-    -- No need to update CFrame - particle is on HRP attachment now
 end
 
 function DisableLightningGlobal()
@@ -308,7 +221,7 @@ local function createTrail(part, color, props, offsetAmount)
         else
             t.Color = props.Color
         end
-        -- MULTIPLAYER FIX: Parent to character part instead of workspace for replication
+        -- Parent to character part for replication
         t.Parent = part
 
         table.insert(allTrails, t)
@@ -577,27 +490,27 @@ local function m(v)
 
     local x = Instance.new("Trail")
 
-if _G.RF then
+if isRF then
     x.Color = ColorSequence.new(
         Color3.fromRGB(255,84,84),
         Color3.fromRGB(255,0,0)
     )
-    elseif _G.Zoom then
+    elseif isZoom then
         x.Color = ColorSequence.new(
             Color3.fromRGB(160,220,255),
             Color3.fromRGB(0,120,255)
         )
-    elseif _G.GodOfSpeed then
+    elseif isGod then
         x.Color = ColorSequence.new(
             Color3.fromRGB(255,255,255),
             Color3.fromRGB(255,255,255)
         )
-    elseif _G.NWA then
+    elseif isNWA then
         x.Color = ColorSequence.new(
             Color3.fromRGB(200,180,255),
             Color3.fromRGB(130,0,255)
         )
-    elseif _G.KidFlash then
+    elseif isKid then
         x.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
@@ -675,6 +588,11 @@ end
 
 loadstring(game:GetObjects("rbxassetid://10463761851")[1].Source)()
 
+-- CONTROLS (only for LocalPlayer)
+if player ~= LocalPlayer then
+    return -- Skip controls for other players
+end
+
 local uis = game:GetService("UserInputService")
 local cam = workspace.CurrentCamera
 local ts = game:GetService("TweenService")
@@ -713,27 +631,27 @@ for _,v in pairs(CharacterRef:GetDescendants()) do
 end
 
 local function getColor()
-   if _G.RF then
+   if isRF then
         return ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
         })
-    elseif _G.Zoom then
+    elseif isZoom then
         return ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(160,220,255)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))
         })
-    elseif _G.GodOfSpeed then
+    elseif isGod then
         return ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
         })
-    elseif _G.NWA then
+    elseif isNWA then
         return ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(200,180,255)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(130,0,255))
         })
-    elseif _G.KidFlash then
+    elseif isKid then
         return ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
@@ -975,27 +893,27 @@ end
 local function CreateTrail(Part, Attach0, Attach1)
     local Trail = Instance.new("Trail")
 
-if _G.RF then
+if isRF then
         Trail.Color = ColorSequence.new(
             Color3.fromRGB(255,84,84),
             Color3.fromRGB(255,0,0)
         )
-    elseif _G.Zoom then
+    elseif isZoom then
         Trail.Color = ColorSequence.new(
             Color3.fromRGB(160,220,255),
             Color3.fromRGB(0,120,255)
         )
-    elseif _G.GodOfSpeed then
+    elseif isGod then
         Trail.Color = ColorSequence.new(
             Color3.fromRGB(255,255,255),
             Color3.fromRGB(255,255,255)
         )
-    elseif _G.NWA then
+    elseif isNWA then
         Trail.Color = ColorSequence.new(
             Color3.fromRGB(200,180,255),
             Color3.fromRGB(130,0,255)
         )
-    elseif _G.KidFlash then
+    elseif isKid then
         Trail.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
@@ -2003,16 +1921,16 @@ spawn(function()
         local cs = nil
         local spot = nil
 
-        if _G.RF then
+        if isRF then
             cs = rfCS2
             spot = Color3.fromRGB(255,0,0)
-        elseif _G.KidFlash then
+        elseif isKid then
             cs = kidCS
             spot = Color3.fromRGB(255,255,0)
-        elseif _G.Zoom then
+        elseif isZoom then
             cs = zoomCS2
             spot = Color3.fromRGB(0,120,255)
-        elseif _G.GodOfSpeed and _G.NWA then
+        elseif isGod and isNWA then
             if math.random(2) == 1 then
                 cs = godCS2
                 spot = Color3.fromRGB(255,220,0)
@@ -2020,13 +1938,13 @@ spawn(function()
                 cs = nwaCS2
                 spot = Color3.fromRGB(140,0,255)
             end
-        elseif _G.GodOfSpeed then
+        elseif isGod then
             cs = godCS2
             spot = Color3.fromRGB(255,220,0)
-        elseif _G.NWA then
+        elseif isNWA then
             cs = nwaCS2
             spot = Color3.fromRGB(140,0,255)
-        elseif _G.Regular then
+        elseif false then
             cs = regularCS2
             spot = Color3.fromRGB(255,59,33)
         else
@@ -2116,3 +2034,30 @@ RunService.RenderStepped:Connect(function(dt)
 	local target=md*sp
 	HRP.AssemblyLinearVelocity=v:Lerp(Vector3.new(target.X,y,target.Z),math.clamp(dt*snap,0,1))
 end)
+
+end -- End of SetupSpeedster function
+
+-- Apply to all allowed players
+for _, player in ipairs(Players:GetPlayers()) do
+    if IsAllowed(player) and player.Character then
+        SetupSpeedster(player)
+    end
+end
+
+-- Handle new players joining
+Players.PlayerAdded:Connect(function(player)
+    if IsAllowed(player) then
+        player.CharacterAdded:Connect(function()
+            SetupSpeedster(player)
+        end)
+    end
+end)
+
+-- Handle character respawns for existing players
+for _, player in ipairs(Players:GetPlayers()) do
+    if IsAllowed(player) then
+        player.CharacterAdded:Connect(function()
+            SetupSpeedster(player)
+        end)
+    end
+end
