@@ -820,7 +820,7 @@ local function LoadPhaseSound()
     phaseSound = Instance.new("Sound")
     phaseSound.Name = "PhaseVibrationSound"
     phaseSound.SoundId = getcustomasset(soundFileName)
-    phaseSound.Volume = 0.5
+    phaseSound.Volume = 1.65
     phaseSound.Looped = true
     phaseSound.Parent = HRP
     phaseSoundLoaded = true
@@ -838,6 +838,80 @@ end
 local function StopPhaseSound()
     if phaseSound and phaseSound.IsPlaying then
         phaseSound:Stop()
+    end
+end
+
+-- Run Start Sound System (Random between 2 sounds)
+local runStartSound1
+local runStartSound2
+local runStartSoundsLoaded = false
+
+local function LoadRunStartSounds()
+    if runStartSoundsLoaded then return end
+    
+    -- Sound 1
+    local sound1FileName = "run_start_01.wav"
+    local sound1Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2001.wav"
+    
+    if not isfile(sound1FileName) then
+        local success, soundData = pcall(function()
+            return game:HttpGet(sound1Url)
+        end)
+        
+        if success and soundData then
+            writefile(sound1FileName, soundData)
+            print("✅ Run start sound 1 downloaded!")
+        else
+            warn("❌ Failed to download run start sound 1")
+        end
+    end
+    
+    -- Sound 2
+    local sound2FileName = "run_start_02.wav"
+    local sound2Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2002.wav"
+    
+    if not isfile(sound2FileName) then
+        local success, soundData = pcall(function()
+            return game:HttpGet(sound2Url)
+        end)
+        
+        if success and soundData then
+            writefile(sound2FileName, soundData)
+            print("✅ Run start sound 2 downloaded!")
+        else
+            warn("❌ Failed to download run start sound 2")
+        end
+    end
+    
+    -- Create sound instances
+    runStartSound1 = Instance.new("Sound")
+    runStartSound1.Name = "RunStartSound1"
+    runStartSound1.SoundId = getcustomasset(sound1FileName)
+    runStartSound1.Volume = 2
+    runStartSound1.Looped = false
+    runStartSound1.Parent = HRP
+    
+    runStartSound2 = Instance.new("Sound")
+    runStartSound2.Name = "RunStartSound2"
+    runStartSound2.SoundId = getcustomasset(sound2FileName)
+    runStartSound2.Volume = 2
+    runStartSound2.Looped = false
+    runStartSound2.Parent = HRP
+    
+    runStartSoundsLoaded = true
+    print("🔊 Run start sounds loaded!")
+end
+
+local function PlayRandomRunStartSound()
+    if not runStartSound1 or not runStartSound2 then 
+        LoadRunStartSounds() 
+    end
+    
+    -- Randomly pick between sound 1 or 2
+    local selectedSound = math.random(1, 2) == 1 and runStartSound1 or runStartSound2
+    
+    if selectedSound and not selectedSound.IsPlaying then
+        selectedSound:Play()
     end
 end
 
@@ -1966,6 +2040,8 @@ StopEffect()
             if s > 0 then
                 if not t then
                     t = true
+                    -- Play random run start sound
+                    PlayRandomRunStartSound()
                     if x then x:Destroy() end
                     task.delay(0.3, function() t = false end)
                 end
@@ -2192,6 +2268,8 @@ StopEffect()
             if s > 0 then
                 if not t then
                     t = true
+                    -- Play random run start sound
+                    PlayRandomRunStartSound()
                     if x then x:Destroy() end
                     task.delay(0.3, function() t = false end)
                 end
