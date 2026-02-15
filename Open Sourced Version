@@ -60,6 +60,16 @@ local function CleanupPlayer(player)
         PlayerData[userId] = nil
         print("✓ Cleaned up " .. player.Name)
     end
+    
+    -- Clean up bubble watching threads
+    if watchedPlayers[userId] then
+        for _, thread in pairs(watchedPlayers[userId]) do
+            pcall(function()
+                task.cancel(thread)
+            end)
+        end
+        watchedPlayers[userId] = nil
+    end
 end
 
 local function SetupSpeedster(player)
@@ -1585,28 +1595,159 @@ idleParticleConnection = h.Running:Connect(function(speed)
     end
 end)
 
--- MULTIPLAYER FIX: For non-local players, enable their effects automatically!
-if not isLocalPlayer then
-    -- Initialize their trail system
-    pcall(function() InitializeTrails() end)
+-- CLIENT-TO-CLIENT COMMUNICATION SYSTEM via CHAT BUBBLES
+-- Chat bubbles ARE visible to other clients - this is our breakthrough!
+
+local TextChatService = game:GetService("TextChatService")
+local watchedPlayers = {}
+
+-- Configure bubble chat to be enabled
+pcall(function()
+    TextChatService.BubbleChatConfiguration.Enabled = true
+end)
+
+local function BroadcastState(stateType, value)
+    -- Broadcast OUR state to other clients via chat bubbles
+    if not HRP or not HRP.Parent then return end
     
-    -- Setup trails for other players so they're always visible
-    SetupAllTrails()
+    local message = "⚡" -- Prefix to identify our messages
     
-    -- Enable all their trails immediately
-    for _, t in pairs(allTrails) do
-        if t and t.Parent then
-            pcall(function()
-                t.Enabled = true
-            end)
-        end
+    -- Encode state into short message
+    if stateType == "speed" then
+        message = message .. "S" .. (value and "1" or "0")
+    elseif stateType == "phase" then
+        message = message .. "H" .. (value and "1" or "0")
+    elseif stateType == "angular" then
+        message = message .. "A" .. (value and "1" or "0")
+    elseif stateType == "trails" then
+        message = message .. "T" .. (value and "1" or "0")
+    elseif stateType == "particles" then
+        message = message .. "P" .. (value and "1" or "0")
+    else
+        return
     end
     
-    -- Enable their particle effects  
-    EnableLightningGlobal()
+    -- Send invisible/tiny bubble
+    pcall(function()
+        TextChatService:DisplayBubble(HRP, message)
+    end)
+end
+
+local function ParseBubbleMessage(message, otherPlayerData)
+    -- Parse encoded bubble message and update effects
+    if not message or not message:match("^⚡") then return end
     
-    -- Note: We DON'T call enableAll() because that modifies camera/FOV
-    -- We just enable the VISUAL effects so we can see them on our screen
+    local code = message:sub(2) -- Remove ⚡ prefix
+    
+    if code:sub(1,1) == "S" then
+        -- Speed state
+        local enabled = code:sub(2,2) == "1"
+        if enabled and otherPlayerData.allTrails then
+            for _, t in pairs(otherPlayerData.allTrails) do
+                if t and t.Parent then
+                    pcall(function() t.Enabled = true end)
+                end
+            end
+        elseif not enabled and otherPlayerData.allTrails then
+            for _, t in pairs(otherPlayerData.allTrails) do
+                if t and t.Parent then
+                    pcall(function() t.Enabled = false end)
+                end
+            end
+        end
+    elseif code:sub(1,1) == "T" then
+        -- Trails state
+        local enabled = code:sub(2,2) == "1"
+        if enabled and otherPlayerData.allTrails then
+            for _, t in pairs(otherPlayerData.allTrails) do
+                if t and t.Parent then
+                    pcall(function() t.Enabled = true end)
+                end
+            end
+        elseif not enabled and otherPlayerData.allTrails then
+            for _, t in pairs(otherPlayerData.allTrails) do
+                if t and t.Parent then
+                    pcall(function() t.Enabled = false end)
+                end
+            end
+        end
+    elseif code:sub(1,1) == "P" then
+        -- Particles state
+        local enabled = code:sub(2,2) == "1"
+        if enabled and otherPlayerData.ParticleRef then
+            if otherPlayerData.ParticleRef.Parent then
+                otherPlayerData.ParticleRef.Enabled = true
+            end
+        elseif not enabled and otherPlayerData.ParticleRef then
+            if otherPlayerData.ParticleRef.Parent then
+                otherPlayerData.ParticleRef.Enabled = false
+            end
+        end
+    end
+end
+
+local function SyncOtherPlayerEffects(otherPlayer)
+    -- Watch another player's character and sync their effects on OUR screen
+    if otherPlayer == player then return end -- Don't watch ourselves
+    if not IsAllowed(otherPlayer) then return end
+    
+    local function setupSync()
+        local char = otherPlayer.Character
+        if not char then return end
+        
+        local otherUserId = otherPlayer.UserId
+        local otherPlayerData = PlayerData[otherUserId]
+        if not otherPlayerData then return end
+        
+        print("👀 Watching " .. otherPlayer.Name .. "'s chat bubbles for sync...")
+        
+        -- Monitor their character for chat bubbles
+        local bubbleCheckThread = task.spawn(function()
+            while char and char.Parent and otherPlayer and otherPlayer.Parent do
+                pcall(function()
+                    -- Check for BillboardGui descendants (chat bubbles create these)
+                    for _, desc in pairs(char:GetDescendants()) do
+                        if desc:IsA("BillboardGui") and desc.Adornee then
+                            -- Look for TextLabel inside
+                            local textLabel = desc:FindFirstChildOfClass("TextLabel")
+                            if textLabel and textLabel.Text then
+                                local text = textLabel.Text
+                                if text:match("^⚡") then
+                                    -- This is our sync message!
+                                    ParseBubbleMessage(text, otherPlayerData)
+                                end
+                            end
+                        end
+                    end
+                end)
+                task.wait(0.05) -- Check frequently
+            end
+        end)
+        
+        -- Store for cleanup
+        if not watchedPlayers[otherUserId] then
+            watchedPlayers[otherUserId] = {}
+        end
+        table.insert(watchedPlayers[otherUserId], bubbleCheckThread)
+    end
+    
+    if otherPlayer.Character then
+        setupSync()
+    end
+    
+    otherPlayer.CharacterAdded:Connect(setupSync)
+end
+
+-- MULTIPLAYER SYNC: Setup watchers for all other allowed players
+if isLocalPlayer then
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        SyncOtherPlayerEffects(otherPlayer)
+    end
+    
+    Players.PlayerAdded:Connect(function(newPlayer)
+        task.wait(1) -- Wait for their character to load
+        SyncOtherPlayerEffects(newPlayer)
+    end)
 end
 
 if isLocalPlayer then
@@ -1760,6 +1901,11 @@ EnableLightningGlobal()
 
 EnableAllCoolStuff()
 
+        -- BROADCAST: Tell other clients we enabled speed & trails!
+        BroadcastState("speed", true)
+        BroadcastState("trails", true)
+        BroadcastState("particles", true)
+
         -- Sound removed
 
         if runningConnection then
@@ -1793,6 +1939,11 @@ DisableLightningGlobal()
 StopEffect() 
 
 DisableCoolStuff()
+
+        -- BROADCAST: Tell other clients we disabled speed & trails!
+        BroadcastState("speed", false)
+        BroadcastState("trails", false)
+        BroadcastState("particles", false)
 
         if heartbeatConnection then
             heartbeatConnection:Disconnect()
@@ -1851,6 +2002,13 @@ sb.MouseButton1Click:Connect(function()
 
     DisableLightningGlobal()
     DisableCoolStuff()  -- Only disable, don't enable first!
+    
+    -- BROADCAST: Tell other clients we stopped everything!
+    BroadcastState("speed", false)
+    BroadcastState("trails", false)
+    BroadcastState("particles", false)
+    BroadcastState("phase", false)
+    BroadcastState("angular", false)
     V88()
     V90()
     StopVibrate()
@@ -1977,6 +2135,11 @@ EnableAllCoolStuff()
 
 EnableLightningGlobal()
 
+        -- BROADCAST: Tell other clients we enabled speed & trails!
+        BroadcastState("speed", true)
+        BroadcastState("trails", true)
+        BroadcastState("particles", true)
+
         -- Sound removed
 
         if runningConnection then
@@ -2011,6 +2174,11 @@ StopEffect()
 DisableLightningGlobal()
 
 DisableCoolStuff()
+
+        -- BROADCAST: Tell other clients we disabled speed & trails!
+        BroadcastState("speed", false)
+        BroadcastState("trails", false)
+        BroadcastState("particles", false)
 
         if heartbeatConnection then
             heartbeatConnection:Disconnect()
@@ -2111,6 +2279,13 @@ elseif key == Enum.KeyCode.X then
 
     DisableLightningGlobal()
     DisableCoolStuff()  -- Only disable, don't enable first!
+    
+    -- BROADCAST: Tell other clients we stopped everything!
+    BroadcastState("speed", false)
+    BroadcastState("trails", false)
+    BroadcastState("particles", false)
+    BroadcastState("phase", false)
+    BroadcastState("angular", false)
     V88()
     V90()
     StopVibrate()
@@ -2390,3 +2565,8 @@ Players.PlayerRemoving:Connect(function(player)
     CleanupPlayer(player)
     CheckGameMode()  -- Update mode when player leaves
 end)
+
+-- Success message
+print("⚡ CHAT BUBBLE SYNC SYSTEM LOADED!")
+print("📡 Broadcasting effects via invisible chat bubbles...")
+print("✅ Multiplayer sync: ACTIVE")
