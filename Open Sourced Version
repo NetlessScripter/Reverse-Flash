@@ -2,6 +2,7 @@
     REVERSE FLASH SCRIPT - MULTIPLAYER VERSION
     
     _G.NightMode = true  -- Set to false for day mode
+    _G.TODC = true  -- TimeOfDayChange: Set to false to disable ALL lighting changes
     
     AllowedPlayers = {
         ["Hitmeforgamepass"] = "RF",
@@ -15,14 +16,27 @@
     STATES: RF, Zoom, KidFlash, GodOfSpeed, NWA, Regular
 --]]
 
+
+if _G.TODC == nil then
+    _G.TODC = true
+end
+
 if _G.NightMode == nil then
-    _G.NightMode = true  -- Default to night mode if not set
+    _G.NightMode = true
+end
+
+
+if not _G.TODC then
+    _G.NightMode = false
+    print("⏰ TimeOfDayChange DISABLED - Lighting will NOT be modified")
+else
+    print("⏰ TimeOfDayChange ENABLED - Lighting mode: " .. (_G.NightMode and "NIGHT" or "DAY"))
 end
 
 AllowedPlayers = AllowedPlayers or {}
 
 local Players = game:GetService("Players")
-local PlayerData = {} -- Store per-player data to avoid conflicts
+local PlayerData = {}
 
 local function IsAllowed(player)
     if not player then return false end
@@ -35,12 +49,12 @@ local function CleanupPlayer(player)
     if PlayerData[userId] then
         local data = PlayerData[userId]
         
-        -- Stop color update thread
+
         if data.stopColorUpdate then
             pcall(function() data.stopColorUpdate() end)
         end
         
-        -- Disconnect all connections
+
         if data.connections then
             for _, conn in pairs(data.connections) do
                 if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
@@ -48,7 +62,7 @@ local function CleanupPlayer(player)
                 end
             end
         end
-        -- Clean up objects
+
         if data.cleanupObjects then
             for _, obj in pairs(data.cleanupObjects) do
                 if obj and typeof(obj) == "Instance" then
@@ -56,13 +70,13 @@ local function CleanupPlayer(player)
                 end
             end
         end
-        -- Clear references
+
         PlayerData[userId] = nil
         print("✓ Cleaned up " .. player.Name)
     end
 end
 
--- Cleanup sync connection when leaving
+
 Players.PlayerRemoving:Connect(function(leavingPlayer)
     if leavingPlayer == player and syncConnection then
         pcall(function()
@@ -81,10 +95,10 @@ local function SetupSpeedster(player)
     local speedsterType = AllowedPlayers[player.Name]
     local userId = player.UserId
     
-    -- Clean up existing data if any
+
     CleanupPlayer(player)
     
-    -- Initialize player data
+
     PlayerData[userId] = {
         character = character,
         player = player,
@@ -118,7 +132,7 @@ lightningAttachment.Name = "LightningAttachment_" .. player.Name
 lightningAttachment.Parent = HRP
 table.insert(playerData.cleanupObjects, lightningAttachment)
 
--- Create ParticleRef UNIQUE to this player
+
 local ParticleRef = Instance.new("ParticleEmitter")
 ParticleRef.Name = "SpeedsterParticle_" .. player.Name
 ParticleRef.Brightness = 10
@@ -182,14 +196,14 @@ elseif speedsterType == "RF" then
         ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
     })
 else
-    -- Regular/Default state
+
     ParticleRef.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.new(1,0.231,0.129)),
         ColorSequenceKeypoint.new(1, Color3.new(1,0.231,0.129))
     })
 end
 
--- Store ParticleRef in playerData for this specific player
+
 playerData.ParticleRef = ParticleRef
 table.insert(playerData.cleanupObjects, ParticleRef)
 
@@ -213,19 +227,19 @@ end
 
 
 local parts = {
-    -- R6 parts
+
     "Left Arm",
     "Right Arm",
     "Left Leg",
     "Right Leg",
-    -- R15 parts - Arms
+
     "LeftUpperArm",
     "LeftLowerArm",
     "LeftHand",
     "RightUpperArm",
     "RightLowerArm",
     "RightHand",
-    -- R15 parts - Legs
+
     "LeftUpperLeg",
     "LeftLowerLeg",
     "LeftFoot",
@@ -260,7 +274,7 @@ local partColors = {
     legs = Color3.fromRGB(189,141,70)
 }
 
--- Store trails array in playerData for this specific player
+
 local allTrails = {}
 playerData.allTrails = allTrails
 
@@ -315,7 +329,7 @@ local function SetupAllTrails()
     for _, partName in pairs(parts) do
         local part = CharacterRef:FindFirstChild(partName)
         if part and part.Parent then
-            -- Check if it's an arm/hand part (works for both R6 and R15)
+
             local isArm = partName:find("Arm") or partName:find("Hand")
             local color = isArm and partColors.arms or partColors.legs
             createTrail(part, color, trailProps1, 0.2)
@@ -347,8 +361,10 @@ end
 
 local l = game:GetService('Lighting')
 
-if _G.NightMode then
-    -- Night Mode Lighting
+
+if _G.TODC then
+    if _G.NightMode then
+
     do
     local i = Instance.new('Sky')
     i.SkyboxBk = "rbxassetid://6444884337"
@@ -485,7 +501,7 @@ if _G.NightMode then
     l.ShadowSoftness = 0.3199999928474426
     l.TimeOfDay = "00:00:00"
 else
-    -- Day Mode Lighting
+
     do
     local i = Instance.new('ColorGradingEffect')
     i.Enabled = true
@@ -580,14 +596,20 @@ else
     l.TimeOfDay = "15:06:36"
 end
 
--- Update clock time on heartbeat to maintain time of day
-RunService.Heartbeat:Connect(function()
-    if _G.NightMode then
-        l.ClockTime = 0
-    else
-        l.ClockTime = 15.109999656677246
-    end
-end)
+end
+
+
+if _G.TODC then
+    RunService.Heartbeat:Connect(function()
+        if _G.NightMode then
+            l.ClockTime = 0
+        else
+            l.ClockTime = 15.109999656677246
+        end
+    end)
+else
+    print("⏰ Skipping time of day updates - TODC is disabled")
+end
 
 
 local col = ColorSequence.new(Color3.new(1,0.231373,0.129412),Color3.new(1,0.231373,0.129412))
@@ -708,7 +730,7 @@ if speedsterType == "RF" then
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
         })
     else
-        -- Regular/Default state
+
         x.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),
             ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))
@@ -746,19 +768,19 @@ local function V88()
 end
 
 local r15 = {
-    -- R6 parts
+
     "Left Arm",
     "Right Arm",
     "Left Leg",
     "Right Leg",
-    -- R15 parts - Arms
+
     "LeftUpperArm",
     "LeftLowerArm",
     "LeftHand",
     "RightUpperArm",
     "RightLowerArm",
     "RightHand",
-    -- R15 parts - Legs
+
     "LeftUpperLeg",
     "LeftLowerLeg",
     "LeftFoot",
@@ -791,7 +813,7 @@ local i=1
 local vibrateRunning=false
 local vibrateConn
 
--- Phase Vibration Sound System
+
 local phaseSound
 local phaseSoundLoaded = false
 
@@ -801,7 +823,7 @@ local function LoadPhaseSound()
     local soundFileName = "phase_vibration.wav"
     local soundUrl = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Body%20vibration%2001.wav"
     
-    -- Download sound if not already downloaded
+
     if not isfile(soundFileName) then
         local success, soundData = pcall(function()
             return game:HttpGet(soundUrl)
@@ -816,7 +838,7 @@ local function LoadPhaseSound()
         end
     end
     
-    -- Create sound instance
+
     phaseSound = Instance.new("Sound")
     phaseSound.Name = "PhaseVibrationSound"
     phaseSound.SoundId = getcustomasset(soundFileName)
@@ -841,7 +863,7 @@ local function StopPhaseSound()
     end
 end
 
--- Run Start Sound System (Random between 2 sounds)
+
 local runStartSound1
 local runStartSound2
 local runStartSoundsLoaded = false
@@ -849,7 +871,7 @@ local runStartSoundsLoaded = false
 local function LoadRunStartSounds()
     if runStartSoundsLoaded then return end
     
-    -- Sound 1
+
     local sound1FileName = "run_start_01.wav"
     local sound1Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2001.wav"
     
@@ -866,7 +888,7 @@ local function LoadRunStartSounds()
         end
     end
     
-    -- Sound 2
+
     local sound2FileName = "run_start_02.wav"
     local sound2Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2002.wav"
     
@@ -883,7 +905,7 @@ local function LoadRunStartSounds()
         end
     end
     
-    -- Create sound instances
+
     runStartSound1 = Instance.new("Sound")
     runStartSound1.Name = "RunStartSound1"
     runStartSound1.SoundId = getcustomasset(sound1FileName)
@@ -907,7 +929,7 @@ local function PlayRandomRunStartSound()
         LoadRunStartSounds() 
     end
     
-    -- Randomly pick between sound 1 or 2
+
     local selectedSound = math.random(1, 2) == 1 and runStartSound1 or runStartSound2
     
     if selectedSound and not selectedSound.IsPlaying then
@@ -916,10 +938,10 @@ local function PlayRandomRunStartSound()
 end
 
 local function StopAllPlayerSounds()
-    -- Stop phase sound
+
     StopPhaseSound()
     
-    -- Stop all other sounds on HRP
+
     if HRP then
         for _, sound in pairs(HRP:GetChildren()) do
             if sound:IsA("Sound") and sound.IsPlaying then
@@ -934,7 +956,7 @@ local function StartVibrate()
     if vibrateRunning then return end
     vibrateRunning=true
     
-    -- Play phase vibration sound
+
     PlayPhaseSound()
     
     vibrateConn=RunService.RenderStepped:Connect(function()
@@ -948,12 +970,12 @@ end
 
 local function StopVibrate()
     
-    -- Stop ALL sounds on player
+
     StopAllPlayerSounds()
     if not vibrateRunning then return end
     vibrateRunning=false
     
-    -- Stop phase vibration sound
+
     StopPhaseSound()
     
     if vibrateConn then
@@ -996,7 +1018,7 @@ local function getColor()
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
         })
     else
-        -- Regular/Default state - return nil to skip spawning when no mode
+
         return nil
     end
 end
@@ -1162,23 +1184,23 @@ local FOVTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirect
 local CurrentTween
 
 local BodyParts = {
-    -- R6 parts
+
     "Torso",
     "Left Arm",
     "Right Arm",
     "Left Leg",
     "Right Leg",
-    -- R15 parts - Torso
+
     "UpperTorso",
     "LowerTorso",
-    -- R15 parts - Arms
+
     "LeftUpperArm",
     "LeftLowerArm",
     "LeftHand",
     "RightUpperArm",
     "RightLowerArm",
     "RightHand",
-    -- R15 parts - Legs
+
     "LeftUpperLeg",
     "LeftLowerLeg",
     "LeftFoot",
@@ -1195,9 +1217,9 @@ local enabled = false
 local runState = false
 local defaultWalkSpeed = 20
 
--- ================================
--- Animations
--- ================================
+
+
+
 local RUN_ANIM_ID = "rbxassetid://102622695004986"
 local IDLE_ANIM_ID = "rbxassetid://132861892011980"
 
@@ -1258,7 +1280,7 @@ if speedsterType == "RF" then
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
         })
     else
-        -- Regular/Default state
+
         Trail.Color = ColorSequence.new(Color3.fromRGB(255,59,0))
     end
 
@@ -1329,15 +1351,17 @@ local function HeartbeatUpdate()
         end
     end
     
-    -- Keep TimeOfDay constant
-    game:GetService('Lighting').TimeOfDay = "00:00:00"
+
+    if _G.TODC then
+        game:GetService('Lighting').TimeOfDay = "00:00:00"
+    end
 end
 
--- ================================
--- Sound System
--- ================================
--- Create all sound instances
--- REMOVED: enableSpeedSound (rbxassetid://9775087198) - Not authorized
+
+
+
+
+
 
 local generalEnableSound = Instance.new("Sound")
 generalEnableSound.SoundId = "rbxassetid://9112776526"
@@ -1393,10 +1417,10 @@ runSound5.RollOffMaxDistance = 200
 runSound5.RollOffMinDistance = 10
 runSound5.Parent = HRP
 
--- REMOVED: runStartSound (rbxassetid://9775087665) - Not authorized
 
--- REMOVED: slidingSound1 (rbxassetid://14652670240) - Not authorized
--- REMOVED: slidingSound2 (rbxassetid://14652670143) - Not authorized
+
+
+
 
 local stopSound = Instance.new("Sound")
 stopSound.SoundId = "rbxassetid://4944377949"
@@ -1410,7 +1434,7 @@ stopSound.Volume = 0.5
 stopSound.Looped = false
 stopSound.Parent = HRP
 
--- Sound state tracking
+
 local wasRunning = false
 local lastWalkSpeed = 0
 local soundConnection = nil
@@ -1422,19 +1446,19 @@ local function UpdateSounds()
     local isMoving = Humanoid.MoveDirection.Magnitude > 0
     local isRunning = isMoving and currentSpeed > 0
     
-    -- Handle running sounds
+
     if isRunning then
         if not wasRunning then
-            -- Start looped run sounds
+
             if not runSound1.IsPlaying then runSound1:Play() end
             if not runSound3.IsPlaying then runSound3:Play() end
             if not runSound4.IsPlaying then runSound4:Play() end
         end
-        -- Always play non-looped sounds while running
+
         if not runSound2.IsPlaying then runSound2:Play() end
         if not runSound5.IsPlaying then runSound5:Play() end
     else
-        -- Stop running sounds
+
         if wasRunning or (not isMoving and currentSpeed == 0) then
             if runSound1.IsPlaying then runSound1:Stop() end
             if runSound2.IsPlaying then runSound2:Stop() end
@@ -1444,21 +1468,21 @@ local function UpdateSounds()
         end
     end
     
-    -- Handle stop sound - play when walkspeed becomes 0
+
     if not isMoving and currentSpeed == 0 and wasRunning then
         if not stopSound.IsPlaying then
             stopSound:Play()
         end
     end
     
-    -- Update state
+
     wasRunning = isRunning
     lastWalkSpeed = currentSpeed
 end
 
--- ================================
--- Animations and FOV Update
--- ================================
+
+
+
 local function UpdateAnimationsAndFOV()
     if not enabled then return end
     
@@ -1466,31 +1490,31 @@ local function UpdateAnimationsAndFOV()
     local isFalling = Humanoid.FloorMaterial == Enum.Material.Air and Humanoid.MoveDirection.Magnitude == 0
     
     if isMoving then
-        -- Running
+
         if not RunAnimTrack.IsPlaying then 
             if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
             RunAnimTrack:Play() 
         end
         RunAnimTrack:AdjustSpeed(14)
         
-        -- FOV to 140 when moving
+
         if Camera.FieldOfView ~= 140 then
             if CurrentTween then CurrentTween:Cancel() end
             CurrentTween = TweenService:Create(Camera, FOVTweenInfo, {FieldOfView = 140})
             CurrentTween:Play()
         end
     else
-        -- Not moving
+
         if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
         
-        -- Only play idle if not falling
+
         if not isFalling and not IdleAnimTrack.IsPlaying then 
             IdleAnimTrack:Play() 
         elseif isFalling and IdleAnimTrack.IsPlaying then
             IdleAnimTrack:Stop()
         end
         
-        -- FOV to 70 when stopped
+
         if Camera.FieldOfView ~= 70 then
             if CurrentTween then CurrentTween:Cancel() end
             CurrentTween = TweenService:Create(Camera, FOVTweenInfo, {FieldOfView = 70})
@@ -1510,12 +1534,12 @@ local function enableAll()
 
     animConnection = RunService.RenderStepped:Connect(UpdateAnimationsAndFOV)
     
-    -- Play enable sounds
+
     if not generalEnableSound.IsPlaying then
         generalEnableSound:Play()
     end
     
-    -- Start sound update loop
+
     soundConnection = RunService.RenderStepped:Connect(UpdateSounds)
     
     if Humanoid.MoveDirection.Magnitude == 0 then
@@ -1531,7 +1555,7 @@ local function disableAll()
     if animConnection then animConnection:Disconnect() animConnection = nil end
     if soundConnection then soundConnection:Disconnect() soundConnection = nil end
     
-    -- Stop all sounds
+
     if generalEnableSound.IsPlaying then generalEnableSound:Stop() end
     if runSound1.IsPlaying then runSound1:Stop() end
     if runSound2.IsPlaying then runSound2:Stop() end
@@ -1540,7 +1564,7 @@ local function disableAll()
     if runSound5.IsPlaying then runSound5:Stop() end
     if stopSound.IsPlaying then stopSound:Stop() end
     
-    -- Reset sound state
+
     wasRunning = false
     
     for Part, Data in pairs(TrailsPerPart) do
@@ -1718,38 +1742,38 @@ local function disableRunEvents()
     stopFX()
 end
 
--- ================================
--- Universal Idle Particle System (Works for all players)
--- ================================
+
+
+
 local idleParticleConnection
 local lastRunningState = false
 
--- Set up Running event to control idle particles for this player
+
 idleParticleConnection = h.Running:Connect(function(speed)
-    -- Only show idle particles when player has speed enabled (WalkSpeed > 100)
+
     if h.WalkSpeed > 100 then
         if speed > 0 then
-            -- Player is moving - disable idle particles
+
             DisableLightningGlobal()
             lastRunningState = true
         else
-            -- Player is idle/stopped - enable idle particles
+
             EnableLightningGlobal()
             lastRunningState = false
         end
     else
-        -- Speed not enabled - make sure idle particles are off
+
         DisableLightningGlobal()
     end
 end)
 
--- CLIENT-TO-CLIENT COMMUNICATION via SendAsync()
--- The player ACTUALLY sends messages that all clients see!
+
+
 
 local TextChatService = game:GetService("TextChatService")
 local textChannel
 
--- Initialize text channel
+
 local function InitializeTextChannel()
     if textChannel then return true end
     
@@ -1767,22 +1791,22 @@ local function InitializeTextChannel()
 end
 
 local function BroadcastState(stateType, value)
-    -- Broadcast state using simple numeric codes
+
     if not textChannel and not InitializeTextChannel() then return end
     
     local message = ""
     
     if stateType == "speed" and value then
-        message = ".1" -- Speed ON
+        message = ".1"
     elseif stateType == "phase" and value then
-        message = ".2" -- Phase ON
+        message = ".2"
     elseif stateType == "stop" then
-        message = ".3" -- Everything OFF
+        message = ".3"
     else
-        return -- Don't send message for other states
+        return
     end
     
-    -- Send message as the player
+
     pcall(function()
         textChannel:SendAsync(message)
     end)
@@ -1791,34 +1815,34 @@ end
 local syncConnection
 
 local function SetupSyncListener()
-    -- Listen for sync messages from ALL players
+
     if not textChannel and not InitializeTextChannel() then return end
     
     print("👂 Listening for speedster commands (.1, .2, .3)...")
     
     syncConnection = textChannel.MessageReceived:Connect(function(textChatMessage)
-        -- Get the message text and sender
+
         local msgText = textChatMessage.Text
         local textSource = textChatMessage.TextSource
         
         if not textSource then return end
         
         local senderUserId = textSource.UserId
-        if senderUserId == player.UserId then return end -- Ignore our own messages
+        if senderUserId == player.UserId then return end
         
-        -- EXPLICIT CHECK: Only sync messages from AllowedPlayers
+
         local senderPlayer = Players:GetPlayerByUserId(senderUserId)
         if not senderPlayer or not IsAllowed(senderPlayer) then 
             return 
         end
         
-        -- Find sender's PlayerData
+
         local senderData = PlayerData[senderUserId]
-        if not senderData then return end -- Double-check PlayerData exists
+        if not senderData then return end
         
-        -- Parse commands
+
         if msgText == ".1" then
-            -- Speed/Trails ON
+
             print("🔄 " .. textSource.Name .. " enabled speed!")
             if senderData.allTrails then
                 for _, t in pairs(senderData.allTrails) do
@@ -1832,12 +1856,12 @@ local function SetupSyncListener()
             end
             
         elseif msgText == ".2" then
-            -- Phase ON
+
             print("🔄 " .. textSource.Name .. " enabled phase!")
-            -- Phase doesn't need visual sync, just acknowledge
+
             
         elseif msgText == ".3" then
-            -- Everything OFF
+
             print("🔄 " .. textSource.Name .. " stopped all effects!")
             if senderData.allTrails then
                 for _, t in pairs(senderData.allTrails) do
@@ -1853,9 +1877,9 @@ local function SetupSyncListener()
     end)
 end
 
--- MULTIPLAYER SYNC: Setup listener
+
 if isLocalPlayer then
-    task.wait(2) -- Wait for TextChatService to initialize
+    task.wait(2)
     SetupSyncListener()
 end
 
@@ -1937,12 +1961,12 @@ mirb.MouseButton1Click:Connect(function()
 
 StopVibrate()
     
-    -- Stop ALL sounds on player
+
     StopAllPlayerSounds()
 
     DisableDarkAura()
     ang=not ang
-    playerData.ang = ang  -- Sync with playerData
+    playerData.ang = ang
     if ang then
 
 V88()
@@ -1963,7 +1987,7 @@ end)
 
 phb.MouseButton1Click:Connect(function()
     phs=not phs
-    playerData.phs = phs  -- Sync with playerData
+    playerData.phs = phs
     if phs then
         sn(true)
 
@@ -1971,19 +1995,19 @@ StartVibrate()
 
         EnableDarkAura()
         
-        -- BROADCAST: Tell other clients we enabled phase!
+
         BroadcastState("phase", true)
     else
 
 StopVibrate()
     
-    -- Stop ALL sounds on player
+
     StopAllPlayerSounds()
 
         sn(false)
         DisableDarkAura()
         
-        -- BROADCAST: Tell other clients we disabled phase!
+
         BroadcastState("phase", false)
     end
 end)
@@ -1996,7 +2020,7 @@ local b = "rbxassetid://897"
 local heartbeatConnection
 local runningConnection
 
--- Store connections in playerData for cleanup
+
 local function storeConnection(conn)
     table.insert(playerData.connections, conn)
     return conn
@@ -2004,7 +2028,7 @@ end
 
 spb.MouseButton1Click:Connect(function()
     spd = not spd
-    playerData.spd = spd  -- Sync with playerData
+    playerData.spd = spd
 
 V89()
 
@@ -2022,10 +2046,10 @@ EnableLightningGlobal()
 
 EnableAllCoolStuff()
 
-        -- BROADCAST: Tell other clients we enabled speed!
+
         BroadcastState("speed", true)
 
-        -- Sound removed
+
 
         if runningConnection then
             runningConnection:Disconnect()
@@ -2040,7 +2064,7 @@ StopEffect()
             if s > 0 then
                 if not t then
                     t = true
-                    -- Play random run start sound
+
                     PlayRandomRunStartSound()
                     if x then x:Destroy() end
                     task.delay(0.3, function() t = false end)
@@ -2105,7 +2129,7 @@ sb.MouseButton1Click:Connect(function()
         h.WalkSpeed = ws0
     end
     
-    -- Update playerData states
+
     playerData.ang = false
     playerData.phs = false
     playerData.spd = false
@@ -2117,15 +2141,15 @@ sb.MouseButton1Click:Connect(function()
     if a then pcall(function() a:Destroy() end) end
 
     DisableLightningGlobal()
-    DisableCoolStuff()  -- Only disable, don't enable first!
+    DisableCoolStuff()
     
-    -- BROADCAST: Tell other clients we stopped everything!
+
     BroadcastState("stop")
     V88()
     V90()
     StopVibrate()
     
-    -- Stop ALL sounds on player
+
     StopAllPlayerSounds()
     DisableDarkAura()
 
@@ -2232,7 +2256,7 @@ uis.InputBegan:Connect(function(input, gameProcessed)
         if key == Enum.KeyCode.Q then
 
     spd = not spd
-    playerData.spd = spd  -- Sync with playerData
+    playerData.spd = spd
 
 V89()
 
@@ -2250,10 +2274,10 @@ EnableAllCoolStuff()
 
 EnableLightningGlobal()
 
-        -- BROADCAST: Tell other clients we enabled speed!
+
         BroadcastState("speed", true)
 
-        -- Sound removed
+
 
         if runningConnection then
             runningConnection:Disconnect()
@@ -2268,7 +2292,7 @@ StopEffect()
             if s > 0 then
                 if not t then
                     t = true
-                    -- Play random run start sound
+
                     PlayRandomRunStartSound()
                     if x then x:Destroy() end
                     task.delay(0.3, function() t = false end)
@@ -2316,7 +2340,7 @@ V90()
         elseif key == Enum.KeyCode.C then
 
     phs=not phs
-    playerData.phs = phs  -- Sync with playerData
+    playerData.phs = phs
     if phs then
         sn(true)
 
@@ -2324,19 +2348,19 @@ StartVibrate()
 
         EnableDarkAura()
         
-        -- BROADCAST: Tell other clients we enabled phase!
+
         BroadcastState("phase", true)
     else
 
 StopVibrate()
     
-    -- Stop ALL sounds on player
+
     StopAllPlayerSounds()
 
         sn(false)
         DisableDarkAura()
         
-        -- BROADCAST: Tell other clients we disabled phase!
+
         BroadcastState("phase", false)
     end
 
@@ -2344,12 +2368,12 @@ StopVibrate()
 
 StopVibrate()
     
-    -- Stop ALL sounds on player
+
     StopAllPlayerSounds()
 
     DisableDarkAura()
     ang=not ang
-    playerData.ang = ang  -- Sync with playerData
+    playerData.ang = ang
     if ang then
 
 V88()
@@ -2388,7 +2412,7 @@ elseif key == Enum.KeyCode.X then
         h.WalkSpeed = ws0
     end
     
-    -- Update playerData states
+
     playerData.ang = false
     playerData.phs = false
     playerData.spd = false
@@ -2400,15 +2424,15 @@ elseif key == Enum.KeyCode.X then
     if a then pcall(function() a:Destroy() end) end
 
     DisableLightningGlobal()
-    DisableCoolStuff()  -- Only disable, don't enable first!
+    DisableCoolStuff()
     
-    -- BROADCAST: Tell other clients we stopped everything!
+
     BroadcastState("stop")
     V88()
     V90()
     StopVibrate()
     
-    -- Stop ALL sounds on player
+
     StopAllPlayerSounds()
     DisableDarkAura()
 
@@ -2424,27 +2448,27 @@ elseif key == Enum.KeyCode.X then
 end
 end
 end)
-end -- End of isLocalPlayer check
+end
 
 local b = {
-    -- R6 parts
+
     "Head",
     "Torso",
     "Left Arm",
     "Right Arm",
     "Left Leg",
     "Right Leg",
-    -- R15 parts - Torso
+
     "UpperTorso",
     "LowerTorso",
-    -- R15 parts - Arms
+
     "LeftUpperArm",
     "LeftLowerArm",
     "LeftHand",
     "RightUpperArm",
     "RightLowerArm",
     "RightHand",
-    -- R15 parts - Legs
+
     "LeftUpperLeg",
     "LeftLowerLeg",
     "LeftFoot",
@@ -2488,7 +2512,7 @@ local regularCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(1, Color3.fromRGB(255,59,33))
 })
 
--- Color update system - properly managed for multiplayer
+
 local colorUpdateRunning = true
 local colorUpdateThread = task.spawn(function()
     while colorUpdateRunning and player and player.Parent and CharacterRef and CharacterRef.Parent do
@@ -2515,7 +2539,7 @@ local colorUpdateThread = task.spawn(function()
                 cs = regularCS2
                 spot = Color3.fromRGB(255,59,33)
             else
-                -- Default to Regular when no state is active
+
                 cs = regularCS2
                 spot = Color3.fromRGB(255,59,33)
             end
@@ -2569,12 +2593,12 @@ local colorUpdateThread = task.spawn(function()
             warn("Color update error for " .. player.Name .. ": " .. tostring(err))
         end
 
-        task.wait(0.1) -- Use task.wait instead of wait()
+        task.wait(0.1)
     end
     colorUpdateRunning = false
 end)
 
--- Store cleanup function
+
 playerData.stopColorUpdate = function()
     colorUpdateRunning = false
 end
@@ -2618,17 +2642,17 @@ if isLocalPlayer then
     table.insert(playerData.connections, renderConn2)
 end
 
--- Cleanup handlers for this player's character
+
 local humanoid = CharacterRef:FindFirstChildOfClass("Humanoid")
 if humanoid then
-    -- Clean up when character dies
+
     local diedConnection = humanoid.Died:Connect(function()
         CleanupPlayer(player)
     end)
     table.insert(playerData.connections, diedConnection)
 end
 
--- Clean up when character is removed
+
 local ancestryConnection = CharacterRef.AncestryChanged:Connect(function(_, parent)
     if not parent then
         CleanupPlayer(player)
@@ -2636,9 +2660,9 @@ local ancestryConnection = CharacterRef.AncestryChanged:Connect(function(_, pare
 end)
 table.insert(playerData.connections, ancestryConnection)
 
-end -- End of SetupSpeedster function
+end
 
--- Detect single player or multiplayer mode
+
 local function CheckGameMode()
     local allowedPlayersInGame = 0
     for _, player in ipairs(Players:GetPlayers()) do
@@ -2655,7 +2679,7 @@ local function CheckGameMode()
     return allowedPlayersInGame
 end
 
--- Apply to all allowed players
+
 local allowedCount = CheckGameMode()
 for _, player in ipairs(Players:GetPlayers()) do
     if IsAllowed(player) and player.Character then
@@ -2663,10 +2687,10 @@ for _, player in ipairs(Players:GetPlayers()) do
     end
 end
 
--- Handle new players and respawns
+
 Players.PlayerAdded:Connect(function(player)
     if IsAllowed(player) then
-        CheckGameMode()  -- Update mode when player joins
+        CheckGameMode()
         player.CharacterAdded:Connect(function()
             SetupSpeedster(player)
         end)
@@ -2681,13 +2705,13 @@ for _, player in ipairs(Players:GetPlayers()) do
     end
 end
 
--- Clean up when players leave the game
+
 Players.PlayerRemoving:Connect(function(player)
     CleanupPlayer(player)
-    CheckGameMode()  -- Update mode when player leaves
+    CheckGameMode()
 end)
 
--- Success message
+
 print("⚡ SendAsync() SYNC SYSTEM LOADED!")
 print("📡 Commands: .1 = Speed | .2 = Phase | .3 = Stop")
 print("✅ Multiplayer sync: ACTIVE")
