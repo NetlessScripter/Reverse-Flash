@@ -27,8 +27,7 @@ end
 
 
 if not _G.TODC then
-    _G.NightMode = false
-    print("⏰ TimeOfDayChange DISABLED - Lighting will NOT be modified")
+    print("⏰ TimeOfDayChange DISABLED - ClockTime will NOT be modified")
 else
     print("⏰ TimeOfDayChange ENABLED - Lighting mode: " .. (_G.NightMode and "NIGHT" or "DAY"))
 end
@@ -361,9 +360,8 @@ end
 
 local l = game:GetService('Lighting')
 
-
-if _G.TODC then
-    if _G.NightMode then
+-- Lighting effects always apply regardless of TODC
+if _G.NightMode then
 
     do
     local i = Instance.new('Sky')
@@ -594,8 +592,6 @@ else
     l.Technology = Enum.Technology.Future
     l.ShadowSoftness = 0.3199999928474426
     l.TimeOfDay = "15:06:36"
-end
-
 end
 
 
