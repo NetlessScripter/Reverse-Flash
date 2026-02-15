@@ -1004,6 +1004,9 @@ local tr
 local an
 
 local function EnableDarkAura()
+        
+        -- BROADCAST: Tell other clients we enabled phase!
+        BroadcastState("phase", true)
     an = Instance.new("Animation")
     an.AnimationId = "rbxassetid://82363856064263"
     tr = h:LoadAnimation(an)
@@ -1669,105 +1672,119 @@ idleParticleConnection = h.Running:Connect(function(speed)
     end
 end)
 
--- CLIENT-TO-CLIENT COMMUNICATION SYSTEM via TEXT CHANNELS
--- DisplaySystemMessage sends to ALL clients in the server!
+-- CLIENT-TO-CLIENT COMMUNICATION via SendAsync()
+-- The player ACTUALLY sends messages that all clients see!
 
 local TextChatService = game:GetService("TextChatService")
+local textChannel
+
+-- Initialize text channel
+local function InitializeTextChannel()
+    if textChannel then return true end
+    
+    local success = pcall(function()
+        textChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral")
+    end)
+    
+    if success and textChannel then
+        print("📡 TextChannel initialized!")
+        return true
+    else
+        warn("⚠️ Failed to initialize TextChannel")
+        return false
+    end
+end
 
 local function BroadcastState(stateType, value)
-    -- Broadcast OUR state to ALL other clients via system message
-    if not HRP or not HRP.Parent then return end
+    -- Broadcast state using simple numeric codes
+    if not textChannel and not InitializeTextChannel() then return end
     
-    local message = "⚡SPEEDSTER:" .. player.Name .. ":"
+    local message = ""
     
-    -- Encode state into short message
-    if stateType == "speed" then
-        message = message .. "S" .. (value and "1" or "0")
-    elseif stateType == "phase" then
-        message = message .. "H" .. (value and "1" or "0")
-    elseif stateType == "angular" then
-        message = message .. "A" .. (value and "1" or "0")
-    elseif stateType == "trails" then
-        message = message .. "T" .. (value and "1" or "0")
-    elseif stateType == "particles" then
-        message = message .. "P" .. (value and "1" or "0")
+    if stateType == "speed" and value then
+        message = ".1" -- Speed ON
+    elseif stateType == "phase" and value then
+        message = ".2" -- Phase ON
+    elseif stateType == "stop" then
+        message = ".3" -- Everything OFF
     else
-        return
+        return -- Don't send message for other states
     end
     
-    -- Send system message to RBXGeneral channel (visible to ALL clients)
+    -- Send message as the player
     pcall(function()
-        local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-        if channel then
-            channel:DisplaySystemMessage(message)
-        end
+        textChannel:SendAsync(message)
     end)
 end
 
 local syncConnection
 
 local function SetupSyncListener()
-    -- Listen to RBXGeneral for ALL speedster sync messages
-    pcall(function()
-        local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
-        if not channel then 
-            warn("⚠️ RBXGeneral channel not found!")
+    -- Listen for sync messages from ALL players
+    if not textChannel and not InitializeTextChannel() then return end
+    
+    print("👂 Listening for speedster commands (.1, .2, .3)...")
+    
+    syncConnection = textChannel.MessageReceived:Connect(function(textChatMessage)
+        -- Get the message text and sender
+        local msgText = textChatMessage.Text
+        local textSource = textChatMessage.TextSource
+        
+        if not textSource then return end
+        
+        local senderUserId = textSource.UserId
+        if senderUserId == player.UserId then return end -- Ignore our own messages
+        
+        -- EXPLICIT CHECK: Only sync messages from AllowedPlayers
+        local senderPlayer = Players:GetPlayerByUserId(senderUserId)
+        if not senderPlayer or not IsAllowed(senderPlayer) then 
             return 
         end
         
-        print("📡 Listening for speedster sync messages...")
+        -- Find sender's PlayerData
+        local senderData = PlayerData[senderUserId]
+        if not senderData then return end -- Double-check PlayerData exists
         
-        syncConnection = channel.MessageReceived:Connect(function(textChatMessage)
-            local msgText = textChatMessage.Text
-            
-            -- Check if this is a speedster sync message
-            if not msgText or not msgText:match("^⚡SPEEDSTER:") then return end
-            
-            -- Parse: ⚡SPEEDSTER:PlayerName:Code
-            local pattern = "^⚡SPEEDSTER:(.+):(.+)$"
-            local senderName, code = msgText:match(pattern)
-            
-            if not senderName or not code then return end
-            if senderName == player.Name then return end -- Ignore our own messages
-            
-            -- Find the sender's PlayerData
-            local senderPlayer = Players:FindFirstChild(senderName)
-            if not senderPlayer then return end
-            
-            local senderUserId = senderPlayer.UserId
-            local senderData = PlayerData[senderUserId]
-            if not senderData then return end
-            
-            -- Parse the code and update their effects
-            local stateType = code:sub(1,1)
-            local enabled = code:sub(2,2) == "1"
-            
-            if stateType == "S" or stateType == "T" then
-                -- Speed or Trails
-                if senderData.allTrails then
-                    for _, t in pairs(senderData.allTrails) do
-                        if t and t.Parent then
-                            pcall(function() 
-                                t.Enabled = enabled 
-                            end)
-                        end
+        -- Parse commands
+        if msgText == ".1" then
+            -- Speed/Trails ON
+            print("🔄 " .. textSource.Name .. " enabled speed!")
+            if senderData.allTrails then
+                for _, t in pairs(senderData.allTrails) do
+                    if t and t.Parent then
+                        pcall(function() t.Enabled = true end)
                     end
                 end
-            elseif stateType == "P" then
-                -- Particles
-                if senderData.ParticleRef and senderData.ParticleRef.Parent then
-                    senderData.ParticleRef.Enabled = enabled
-                end
+            end
+            if senderData.ParticleRef and senderData.ParticleRef.Parent then
+                senderData.ParticleRef.Enabled = true
             end
             
-            print("🔄 Synced " .. senderName .. "'s effects: " .. code)
-        end)
+        elseif msgText == ".2" then
+            -- Phase ON
+            print("🔄 " .. textSource.Name .. " enabled phase!")
+            -- Phase doesn't need visual sync, just acknowledge
+            
+        elseif msgText == ".3" then
+            -- Everything OFF
+            print("🔄 " .. textSource.Name .. " stopped all effects!")
+            if senderData.allTrails then
+                for _, t in pairs(senderData.allTrails) do
+                    if t and t.Parent then
+                        pcall(function() t.Enabled = false end)
+                    end
+                end
+            end
+            if senderData.ParticleRef and senderData.ParticleRef.Parent then
+                senderData.ParticleRef.Enabled = false
+            end
+        end
     end)
 end
 
--- MULTIPLAYER SYNC: Setup listener for ALL sync messages
+-- MULTIPLAYER SYNC: Setup listener
 if isLocalPlayer then
-    task.wait(2) -- Wait for TextChatService to fully initialize
+    task.wait(2) -- Wait for TextChatService to initialize
     SetupSyncListener()
 end
 
@@ -1882,6 +1899,9 @@ phb.MouseButton1Click:Connect(function()
 StartVibrate()
 
         EnableDarkAura()
+        
+        -- BROADCAST: Tell other clients we enabled phase!
+        BroadcastState("phase", true)
     else
 
 StopVibrate()
@@ -1928,10 +1948,8 @@ EnableLightningGlobal()
 
 EnableAllCoolStuff()
 
-        -- BROADCAST: Tell other clients we enabled speed & trails!
+        -- BROADCAST: Tell other clients we enabled speed!
         BroadcastState("speed", true)
-        BroadcastState("trails", true)
-        BroadcastState("particles", true)
 
         -- Sound removed
 
@@ -1966,11 +1984,6 @@ DisableLightningGlobal()
 StopEffect() 
 
 DisableCoolStuff()
-
-        -- BROADCAST: Tell other clients we disabled speed & trails!
-        BroadcastState("speed", false)
-        BroadcastState("trails", false)
-        BroadcastState("particles", false)
 
         if heartbeatConnection then
             heartbeatConnection:Disconnect()
@@ -2031,11 +2044,7 @@ sb.MouseButton1Click:Connect(function()
     DisableCoolStuff()  -- Only disable, don't enable first!
     
     -- BROADCAST: Tell other clients we stopped everything!
-    BroadcastState("speed", false)
-    BroadcastState("trails", false)
-    BroadcastState("particles", false)
-    BroadcastState("phase", false)
-    BroadcastState("angular", false)
+    BroadcastState("stop")
     V88()
     V90()
     StopVibrate()
@@ -2165,10 +2174,8 @@ EnableAllCoolStuff()
 
 EnableLightningGlobal()
 
-        -- BROADCAST: Tell other clients we enabled speed & trails!
+        -- BROADCAST: Tell other clients we enabled speed!
         BroadcastState("speed", true)
-        BroadcastState("trails", true)
-        BroadcastState("particles", true)
 
         -- Sound removed
 
@@ -2205,11 +2212,6 @@ DisableLightningGlobal()
 
 DisableCoolStuff()
 
-        -- BROADCAST: Tell other clients we disabled speed & trails!
-        BroadcastState("speed", false)
-        BroadcastState("trails", false)
-        BroadcastState("particles", false)
-
         if heartbeatConnection then
             heartbeatConnection:Disconnect()
             heartbeatConnection = nil
@@ -2243,6 +2245,9 @@ V90()
 StartVibrate()
 
         EnableDarkAura()
+        
+        -- BROADCAST: Tell other clients we enabled phase!
+        BroadcastState("phase", true)
     else
 
 StopVibrate()
@@ -2317,11 +2322,7 @@ elseif key == Enum.KeyCode.X then
     DisableCoolStuff()  -- Only disable, don't enable first!
     
     -- BROADCAST: Tell other clients we stopped everything!
-    BroadcastState("speed", false)
-    BroadcastState("trails", false)
-    BroadcastState("particles", false)
-    BroadcastState("phase", false)
-    BroadcastState("angular", false)
+    BroadcastState("stop")
     V88()
     V90()
     StopVibrate()
@@ -2606,6 +2607,6 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 -- Success message
-print("⚡ TEXT CHANNEL SYNC SYSTEM LOADED!")
-print("📡 Broadcasting via RBXGeneral:DisplaySystemMessage()...")
+print("⚡ SendAsync() SYNC SYSTEM LOADED!")
+print("📡 Commands: .1 = Speed | .2 = Phase | .3 = Stop")
 print("✅ Multiplayer sync: ACTIVE")
