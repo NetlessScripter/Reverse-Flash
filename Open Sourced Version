@@ -23,6 +23,7 @@ AllowedPlayers = AllowedPlayers or {}
 
 local Players = game:GetService("Players")
 local PlayerData = {} -- Store per-player data to avoid conflicts
+local watchedPlayers = {} -- Store watched players for bubble sync (must be declared early)
 
 local function IsAllowed(player)
     if not player then return false end
@@ -1599,7 +1600,6 @@ end)
 -- Chat bubbles ARE visible to other clients - this is our breakthrough!
 
 local TextChatService = game:GetService("TextChatService")
-local watchedPlayers = {}
 
 -- Configure bubble chat to be enabled
 pcall(function()
