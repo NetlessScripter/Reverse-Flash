@@ -22,30 +22,96 @@ end
 AllowedPlayers = AllowedPlayers or {}
 
 local Players = game:GetService("Players")
+local PlayerData = {} -- Store per-player data to avoid conflicts
 
 local function IsAllowed(player)
+    if not player then return false end
     return AllowedPlayers[player.Name] ~= nil
+end
+
+local function CleanupPlayer(player)
+    if not player then return end
+    local userId = player.UserId
+    if PlayerData[userId] then
+        local data = PlayerData[userId]
+        
+        -- Stop color update thread
+        if data.stopColorUpdate then
+            pcall(function() data.stopColorUpdate() end)
+        end
+        
+        -- Disconnect all connections
+        if data.connections then
+            for _, conn in pairs(data.connections) do
+                if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
+                    pcall(function() conn:Disconnect() end)
+                end
+            end
+        end
+        -- Clean up objects
+        if data.cleanupObjects then
+            for _, obj in pairs(data.cleanupObjects) do
+                if obj and typeof(obj) == "Instance" then
+                    pcall(function() obj:Destroy() end)
+                end
+            end
+        end
+        -- Clear references
+        PlayerData[userId] = nil
+        print("✓ Cleaned up " .. player.Name)
+    end
 end
 
 local function SetupSpeedster(player)
     if not IsAllowed(player) then return end
+    if not player or not player.Parent then return end
     
     local character = player.Character or player.CharacterAdded:Wait()
+    if not character then return end
+    
     local speedsterType = AllowedPlayers[player.Name]
+    local userId = player.UserId
+    
+    -- Clean up existing data if any
+    CleanupPlayer(player)
+    
+    -- Initialize player data
+    PlayerData[userId] = {
+        character = character,
+        player = player,
+        speedsterType = speedsterType,
+        connections = {},
+        cleanupObjects = {},
+        spd = false,
+        phs = false,
+        ang = false,
+        Running = false
+    }
+    
+    local playerData = PlayerData[userId]
     
     print("✓ Loading " .. speedsterType .. " for " .. player.Name)
 
 local CharacterRef = character
-local HRP = CharacterRef:WaitForChild("HumanoidRootPart")
+local HRP = CharacterRef:WaitForChild("HumanoidRootPart", 10)
+if not HRP then 
+    warn("Failed to find HumanoidRootPart for " .. player.Name)
+    CleanupPlayer(player)
+    return 
+end
+
 local RunService = game:GetService("RunService")
 local WorkspaceRef = workspace
 local u = player.Name
 
 local lightningAttachment = Instance.new("Attachment")
-lightningAttachment.Name = "LightningAttachment"
+lightningAttachment.Name = "LightningAttachment_" .. player.Name
 lightningAttachment.Parent = HRP
+table.insert(playerData.cleanupObjects, lightningAttachment)
 
+-- Create ParticleRef UNIQUE to this player
 local ParticleRef = Instance.new("ParticleEmitter")
+ParticleRef.Name = "SpeedsterParticle_" .. player.Name
 ParticleRef.Brightness = 10
 ParticleRef.Drag = 0
 ParticleRef.EmissionDirection = Enum.NormalId.Top
@@ -114,19 +180,25 @@ else
     })
 end
 
-local Running = false
+-- Store ParticleRef in playerData for this specific player
+playerData.ParticleRef = ParticleRef
+table.insert(playerData.cleanupObjects, ParticleRef)
 
 local function EnableLightningGlobal()
-    if Running then return end
-    Running = true
-    ParticleRef.Enabled = true
-    ParticleRef:Emit(15)
+    if playerData.Running then return end
+    playerData.Running = true
+    if playerData.ParticleRef and playerData.ParticleRef.Parent then
+        playerData.ParticleRef.Enabled = true
+        playerData.ParticleRef:Emit(15)
+    end
 end
 
 local function DisableLightningGlobal()
-    if not Running then return end
-    Running = false
-    ParticleRef.Enabled = false
+    if not playerData.Running then return end
+    playerData.Running = false
+    if playerData.ParticleRef and playerData.ParticleRef.Parent then
+        playerData.ParticleRef.Enabled = false
+    end
 end
 
 
@@ -179,46 +251,61 @@ local partColors = {
     legs = Color3.fromRGB(189,141,70)
 }
 
+-- Store trails array in playerData for this specific player
 local allTrails = {}
+playerData.allTrails = allTrails
 
 local function createTrail(part, color, props, offsetAmount)
+    if not part or not part.Parent then return end
+    
     for i=1,2 do
-        local t = Instance.new("Trail")
-        local a0 = Instance.new("Attachment", part)
-        local a1 = Instance.new("Attachment", part)
+        local success, err = pcall(function()
+            local t = Instance.new("Trail")
+            local a0 = Instance.new("Attachment", part)
+            local a1 = Instance.new("Attachment", part)
 
-        local offset = (i == 1) and Vector3.new(0, offsetAmount, 0) or Vector3.new(0, -offsetAmount, 0)
-        a0.Position = offset
-        a1.Position = offset * -1
-        a0.Visible = false
-        a1.Visible = false
+            local offset = (i == 1) and Vector3.new(0, offsetAmount, 0) or Vector3.new(0, -offsetAmount, 0)
+            a0.Position = offset
+            a1.Position = offset * -1
+            a0.Visible = false
+            a1.Visible = false
 
-        t.Attachment0 = a0
-        t.Attachment1 = a1
-        t.Enabled = false
-        t.Texture = props.Texture
-        t.TextureLength = props.TextureLength
-        t.TextureMode = props.TextureMode
-        t.FaceCamera = props.FaceCamera
-        t.Lifetime = props.Lifetime
-        t.WidthScale = props.WidthScale
-        t.Transparency = props.Transparency
-        if color then
-            t.Color = ColorSequence.new(color)
-        else
-            t.Color = props.Color
+            t.Attachment0 = a0
+            t.Attachment1 = a1
+            t.Enabled = false
+            t.Texture = props.Texture
+            t.TextureLength = props.TextureLength
+            t.TextureMode = props.TextureMode
+            t.FaceCamera = props.FaceCamera
+            t.Lifetime = props.Lifetime
+            t.WidthScale = props.WidthScale
+            t.Transparency = props.Transparency
+            if color then
+                t.Color = ColorSequence.new(color)
+            else
+                t.Color = props.Color
+            end
+            t.Parent = part
+
+            table.insert(allTrails, t)
+            table.insert(playerData.cleanupObjects, t)
+            table.insert(playerData.cleanupObjects, a0)
+            table.insert(playerData.cleanupObjects, a1)
+        end)
+        
+        if not success then
+            warn("Failed to create trail for " .. player.Name .. ": " .. tostring(err))
         end
-        t.Parent = part
-
-        table.insert(allTrails, t)
     end
 end
 
 local function SetupAllTrails()
     if #allTrails > 0 then return end
+    if not CharacterRef or not CharacterRef.Parent then return end
+    
     for _, partName in pairs(parts) do
         local part = CharacterRef:FindFirstChild(partName)
-        if part then
+        if part and part.Parent then
             -- Check if it's an arm/hand part (works for both R6 and R15)
             local isArm = partName:find("Arm") or partName:find("Hand")
             local color = isArm and partColors.arms or partColors.legs
@@ -231,16 +318,20 @@ end
 local function EnableAllCoolStuff()
     SetupAllTrails()
     for _, t in pairs(allTrails) do
-        if t then
-            t.Enabled = true
+        if t and t.Parent then
+            pcall(function()
+                t.Enabled = true
+            end)
         end
     end
 end
 
 local function DisableCoolStuff()
     for _, t in pairs(allTrails) do
-        if t then
-            t.Enabled = false
+        if t and t.Parent then
+            pcall(function()
+                t.Enabled = false
+            end)
         end
     end
 end
@@ -1574,6 +1665,7 @@ StopVibrate()
 
     DisableDarkAura()
     ang=not ang
+    playerData.ang = ang  -- Sync with playerData
     if ang then
 
 V88()
@@ -1594,6 +1686,7 @@ end)
 
 phb.MouseButton1Click:Connect(function()
     phs=not phs
+    playerData.phs = phs  -- Sync with playerData
     if phs then
         sn(true)
 
@@ -1617,8 +1710,15 @@ local b = "rbxassetid://897"
 local heartbeatConnection
 local runningConnection
 
+-- Store connections in playerData for cleanup
+local function storeConnection(conn)
+    table.insert(playerData.connections, conn)
+    return conn
+end
+
 spb.MouseButton1Click:Connect(function()
     spd = not spd
+    playerData.spd = spd  -- Sync with playerData
 
 V89()
 
@@ -1707,30 +1807,38 @@ sb.MouseButton1Click:Connect(function()
     disableRunEvents()
     disableAll()
 
-    HRP.AssemblyLinearVelocity = Vector3.new()
-    h.WalkSpeed = ws0
+    if HRP and HRP.Parent then
+        HRP.AssemblyLinearVelocity = Vector3.new()
+    end
+    if h and h.Parent then
+        h.WalkSpeed = ws0
+    end
+    
+    -- Update playerData states
+    playerData.ang = false
+    playerData.phs = false
+    playerData.spd = false
     ang = false
     phs = false
     spd = false
 
-    if x then x:Destroy() end
-    if a then a:Destroy() end
+    if x then pcall(function() x:Destroy() end) end
+    if a then pcall(function() a:Destroy() end) end
 
     DisableLightningGlobal()
-    EnableAllCoolStuff()
-    DisableCoolStuff()
+    DisableCoolStuff()  -- Only disable, don't enable first!
     V88()
     V90()
     StopVibrate()
-    StopVibrate()
-    StopVibrate()
     DisableDarkAura()
 
-    cam.CameraType = Enum.CameraType.Custom
-    if cam.FieldOfView ~= 70 then
-        local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
-        local goal = { FieldOfView = 70 }
-        ts:Create(cam, info, goal):Play()
+    if cam then
+        cam.CameraType = Enum.CameraType.Custom
+        if cam.FieldOfView ~= 70 then
+            local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+            local goal = { FieldOfView = 70 }
+            ts:Create(cam, info, goal):Play()
+        end
     end
 end)
 
@@ -1748,22 +1856,27 @@ local function gnp()
     return np
 end
 
-RunService.Heartbeat:Connect(function(dt)
+local mainHeartbeat = RunService.Heartbeat:Connect(function(dt)
+    if not CharacterRef or not CharacterRef.Parent then return end
     if nc then
         for _,v in next,CharacterRef:GetDescendants() do
-            if v:IsA("BasePart") then v.CanCollide=false end
+            if v:IsA("BasePart") then 
+                pcall(function() v.CanCollide=false end)
+            end
         end
     end
     circle(dt)
 end)
+table.insert(playerData.connections, mainHeartbeat)
 
 local targetAnimId = "rbxassetid://108670084190135"
 
-h.AnimationPlayed:Connect(function(animTrack)
+local animPlayedConn = h.AnimationPlayed:Connect(function(animTrack)
 	if animTrack.Animation and animTrack.Animation.AnimationId == targetAnimId then
 		animTrack:Stop()
 	end
 end)
+table.insert(playerData.connections, animPlayedConn)
 V88()
 
 V90()
@@ -1822,6 +1935,7 @@ uis.InputBegan:Connect(function(input, gameProcessed)
         if key == Enum.KeyCode.Q then
 
     spd = not spd
+    playerData.spd = spd  -- Sync with playerData
 
 V89()
 
@@ -1900,6 +2014,7 @@ V90()
         elseif key == Enum.KeyCode.C then
 
     phs=not phs
+    playerData.phs = phs  -- Sync with playerData
     if phs then
         sn(true)
 
@@ -1920,6 +2035,7 @@ StopVibrate()
 
     DisableDarkAura()
     ang=not ang
+    playerData.ang = ang  -- Sync with playerData
     if ang then
 
 V88()
@@ -1951,30 +2067,38 @@ elseif key == Enum.KeyCode.X then
     disableRunEvents()
     disableAll()
 
-    HRP.AssemblyLinearVelocity = Vector3.new()
-    h.WalkSpeed = ws0
+    if HRP and HRP.Parent then
+        HRP.AssemblyLinearVelocity = Vector3.new()
+    end
+    if h and h.Parent then
+        h.WalkSpeed = ws0
+    end
+    
+    -- Update playerData states
+    playerData.ang = false
+    playerData.phs = false
+    playerData.spd = false
     ang = false
     phs = false
     spd = false
 
-    if x then x:Destroy() end
-    if a then a:Destroy() end
+    if x then pcall(function() x:Destroy() end) end
+    if a then pcall(function() a:Destroy() end) end
 
     DisableLightningGlobal()
-    EnableAllCoolStuff()
-    DisableCoolStuff()
+    DisableCoolStuff()  -- Only disable, don't enable first!
     V88()
     V90()
     StopVibrate()
-    StopVibrate()
-    StopVibrate()
     DisableDarkAura()
 
-    cam.CameraType = Enum.CameraType.Custom
-    if cam.FieldOfView ~= 70 then
-        local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
-        local goal = { FieldOfView = 70 }
-        ts:Create(cam, info, goal):Play()
+    if cam then
+        cam.CameraType = Enum.CameraType.Custom
+        if cam.FieldOfView ~= 70 then
+            local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+            local goal = { FieldOfView = 70 }
+            ts:Create(cam, info, goal):Play()
+        end
     end
 
 end
@@ -2044,103 +2168,125 @@ local regularCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(1, Color3.fromRGB(255,59,33))
 })
 
-spawn(function()
-    while true do
-        local cs = nil
-        local spot = nil
+-- Color update system - properly managed for multiplayer
+local colorUpdateRunning = true
+local colorUpdateThread = task.spawn(function()
+    while colorUpdateRunning and player and player.Parent and CharacterRef and CharacterRef.Parent do
+        local success, err = pcall(function()
+            local cs = nil
+            local spot = nil
 
-        if speedsterType == "RF" then
-            cs = rfCS2
-            spot = Color3.fromRGB(255,0,0)
-        elseif speedsterType == "KidFlash" then
-            cs = kidCS
-            spot = Color3.fromRGB(255,255,0)
-        elseif speedsterType == "Zoom" then
-            cs = zoomCS2
-            spot = Color3.fromRGB(0,120,255)
-        elseif speedsterType == "GodOfSpeed" or speedsterType == "NWA" then
-            if math.random(2) == 1 then
+            if speedsterType == "RF" then
+                cs = rfCS2
+                spot = Color3.fromRGB(255,0,0)
+            elseif speedsterType == "KidFlash" then
+                cs = kidCS
+                spot = Color3.fromRGB(255,255,0)
+            elseif speedsterType == "Zoom" then
+                cs = zoomCS2
+                spot = Color3.fromRGB(0,120,255)
+            elseif speedsterType == "GodOfSpeed" or speedsterType == "NWA" then
+                if math.random(2) == 1 then
+                    cs = godCS2
+                    spot = Color3.fromRGB(255,220,0)
+                else
+                    cs = nwaCS2
+                    spot = Color3.fromRGB(140,0,255)
+                end
+            elseif speedsterType == "GodOfSpeed" then
                 cs = godCS2
                 spot = Color3.fromRGB(255,220,0)
-            else
+            elseif speedsterType == "NWA" then
                 cs = nwaCS2
                 spot = Color3.fromRGB(140,0,255)
+            elseif speedsterType == "Regular" then
+                cs = regularCS2
+                spot = Color3.fromRGB(255,59,33)
+            else
+                -- Default to Regular when no state is active
+                cs = regularCS2
+                spot = Color3.fromRGB(255,59,33)
             end
-        elseif speedsterType == "GodOfSpeed" then
-            cs = godCS2
-            spot = Color3.fromRGB(255,220,0)
-        elseif speedsterType == "NWA" then
-            cs = nwaCS2
-            spot = Color3.fromRGB(140,0,255)
-        elseif speedsterType == "Regular" then
-            cs = regularCS2
-            spot = Color3.fromRGB(255,59,33)
-        else
-            -- Default to Regular when no state is active
-            cs = regularCS2
-            spot = Color3.fromRGB(255,59,33)
-        end
 
-        if cs then
-            mk()
+            if cs and CharacterRef and CharacterRef.Parent then
+                mk()
 
-            for _,n in pairs(b) do
-                local pr = CharacterRef:FindFirstChild(n)
-                if pr then
-                    for _,t in pairs(pr:GetChildren()) do
-                        if t:IsA("Trail") then
-                            t.Color = cs
+                for _,n in pairs(b) do
+                    local pr = CharacterRef:FindFirstChild(n)
+                    if pr and pr.Parent then
+                        for _,t in pairs(pr:GetChildren()) do
+                            if t:IsA("Trail") and t.Parent then
+                                t.Color = cs
+                            end
                         end
                     end
                 end
-            end
 
-            for _,v in pairs(CharacterRef:GetDescendants()) do
-                if v:IsA("ParticleEmitter") then
-                    local cur = v
-                    local g = false
-                    while cur do
-                        if cur == ig then
+                for _,v in pairs(CharacterRef:GetDescendants()) do
+                    if v:IsA("ParticleEmitter") and v.Parent then
+                        local cur = v
+                        local g = false
+                        while cur do
+                            if cur == ig then
+                                g = true
+                                break
+                            end
+                            cur = cur.Parent
+                        end
+
+                        if v.Texture == "rbxassetid://9731596776" then
                             g = true
-                            break
                         end
-                        cur = cur.Parent
-                    end
+                        if v.Texture == "rbxassetid://10583327833" then
+                            v.Color = cs
+                            g = true
+                        end
 
-                    if v.Texture == "rbxassetid://9731596776" then
-                        g = true
+                        if not g then
+                            v.Color = cs
+                        end
+                    elseif v:IsA("SpotLight") and v.Parent then
+                        v.Color = spot
+                        v.Enabled = true
                     end
-                    if v.Texture == "rbxassetid://10583327833" then
-                        v.Color = cs
-                        g = true
-                    end
-
-                    if not g then
-                        v.Color = cs
-                    end
-                elseif v:IsA("SpotLight") then
-                    v.Color = spot
-                    v.Enabled = true
                 end
             end
+        end)
+        
+        if not success then
+            warn("Color update error for " .. player.Name .. ": " .. tostring(err))
         end
 
-        wait()
+        task.wait(0.1) -- Use task.wait instead of wait()
     end
+    colorUpdateRunning = false
 end)
+
+-- Store cleanup function
+playerData.stopColorUpdate = function()
+    colorUpdateRunning = false
+end
 
 
 
 
 if isLocalPlayer then
-    game:GetService("RunService").RenderStepped:Connect(function()
-        local d = player.Character.Humanoid.MoveDirection
-        if d.Magnitude > 0 then HRP.CFrame = CFrame.new(HRP.Position, HRP.Position + d) end
+    local renderConn1 = game:GetService("RunService").RenderStepped:Connect(function()
+        if not CharacterRef or not CharacterRef.Parent or not player or not player.Parent then return end
+        local humanoid = CharacterRef:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+        
+        local d = humanoid.MoveDirection
+        if d.Magnitude > 0 and HRP and HRP.Parent then 
+            HRP.CFrame = CFrame.new(HRP.Position, HRP.Position + d) 
+        end
     end)
+    table.insert(playerData.connections, renderConn1)
 
     local snap=18
 
-    RunService.RenderStepped:Connect(function(dt)
+    local renderConn2 = RunService.RenderStepped:Connect(function(dt)
+        if not CharacterRef or not CharacterRef.Parent or not HRP or not HRP.Parent or not h or not h.Parent then return end
     	if h.FloorMaterial==Enum.Material.Air then return end
 
     	local md=h.MoveDirection
@@ -2157,11 +2303,48 @@ if isLocalPlayer then
     	local target=md*sp
     	HRP.AssemblyLinearVelocity=v:Lerp(Vector3.new(target.X,y,target.Z),math.clamp(dt*snap,0,1))
     end)
+    table.insert(playerData.connections, renderConn2)
 end
+
+-- Cleanup handlers for this player's character
+local humanoid = CharacterRef:FindFirstChildOfClass("Humanoid")
+if humanoid then
+    -- Clean up when character dies
+    local diedConnection = humanoid.Died:Connect(function()
+        CleanupPlayer(player)
+    end)
+    table.insert(playerData.connections, diedConnection)
+end
+
+-- Clean up when character is removed
+local ancestryConnection = CharacterRef.AncestryChanged:Connect(function(_, parent)
+    if not parent then
+        CleanupPlayer(player)
+    end
+end)
+table.insert(playerData.connections, ancestryConnection)
 
 end -- End of SetupSpeedster function
 
+-- Detect single player or multiplayer mode
+local function CheckGameMode()
+    local allowedPlayersInGame = 0
+    for _, player in ipairs(Players:GetPlayers()) do
+        if IsAllowed(player) then
+            allowedPlayersInGame = allowedPlayersInGame + 1
+        end
+    end
+    
+    if allowedPlayersInGame == 1 then
+        print("🎮 SINGLE PLAYER MODE - Running solo!")
+    else
+        print("👥 MULTIPLAYER MODE - " .. allowedPlayersInGame .. " speedsters active!")
+    end
+    return allowedPlayersInGame
+end
+
 -- Apply to all allowed players
+local allowedCount = CheckGameMode()
 for _, player in ipairs(Players:GetPlayers()) do
     if IsAllowed(player) and player.Character then
         SetupSpeedster(player)
@@ -2171,6 +2354,7 @@ end
 -- Handle new players and respawns
 Players.PlayerAdded:Connect(function(player)
     if IsAllowed(player) then
+        CheckGameMode()  -- Update mode when player joins
         player.CharacterAdded:Connect(function()
             SetupSpeedster(player)
         end)
@@ -2184,3 +2368,9 @@ for _, player in ipairs(Players:GetPlayers()) do
         end)
     end
 end
+
+-- Clean up when players leave the game
+Players.PlayerRemoving:Connect(function(player)
+    CleanupPlayer(player)
+    CheckGameMode()  -- Update mode when player leaves
+end)
