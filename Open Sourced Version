@@ -23,7 +23,6 @@ AllowedPlayers = AllowedPlayers or {}
 
 local Players = game:GetService("Players")
 local PlayerData = {} -- Store per-player data to avoid conflicts
-local watchedPlayers = {} -- Store watched players for bubble sync (must be declared early)
 
 local function IsAllowed(player)
     if not player then return false end
@@ -61,17 +60,16 @@ local function CleanupPlayer(player)
         PlayerData[userId] = nil
         print("✓ Cleaned up " .. player.Name)
     end
-    
-    -- Clean up bubble watching threads
-    if watchedPlayers[userId] then
-        for _, thread in pairs(watchedPlayers[userId]) do
-            pcall(function()
-                task.cancel(thread)
-            end)
-        end
-        watchedPlayers[userId] = nil
-    end
 end
+
+-- Cleanup sync connection when leaving
+Players.PlayerRemoving:Connect(function(leavingPlayer)
+    if leavingPlayer == player and syncConnection then
+        pcall(function()
+            syncConnection:Disconnect()
+        end)
+    end
+end)
 
 local function SetupSpeedster(player)
     if not IsAllowed(player) then return end
@@ -793,10 +791,78 @@ local i=1
 local vibrateRunning=false
 local vibrateConn
 
+-- Phase Vibration Sound System
+local phaseSound
+local phaseSoundLoaded = false
+
+local function LoadPhaseSound()
+    if phaseSoundLoaded then return end
+    
+    local soundFileName = "phase_vibration.wav"
+    local soundUrl = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Body%20vibration%2001.wav"
+    
+    -- Download sound if not already downloaded
+    if not isfile(soundFileName) then
+        local success, soundData = pcall(function()
+            return game:HttpGet(soundUrl)
+        end)
+        
+        if success and soundData then
+            writefile(soundFileName, soundData)
+            print("✅ Phase vibration sound downloaded!")
+        else
+            warn("❌ Failed to download phase sound")
+            return
+        end
+    end
+    
+    -- Create sound instance
+    phaseSound = Instance.new("Sound")
+    phaseSound.Name = "PhaseVibrationSound"
+    phaseSound.SoundId = getcustomasset(soundFileName)
+    phaseSound.Volume = 0.5
+    phaseSound.Looped = true
+    phaseSound.Parent = HRP
+    phaseSoundLoaded = true
+    
+    print("🔊 Phase vibration sound loaded!")
+end
+
+local function PlayPhaseSound()
+    if not phaseSound then LoadPhaseSound() end
+    if phaseSound and not phaseSound.IsPlaying then
+        phaseSound:Play()
+    end
+end
+
+local function StopPhaseSound()
+    if phaseSound and phaseSound.IsPlaying then
+        phaseSound:Stop()
+    end
+end
+
+local function StopAllPlayerSounds()
+    -- Stop phase sound
+    StopPhaseSound()
+    
+    -- Stop all other sounds on HRP
+    if HRP then
+        for _, sound in pairs(HRP:GetChildren()) do
+            if sound:IsA("Sound") and sound.IsPlaying then
+                sound:Stop()
+            end
+        end
+    end
+end
+
 local function StartVibrate()
     if not isLocalPlayer then return end
     if vibrateRunning then return end
     vibrateRunning=true
+    
+    -- Play phase vibration sound
+    PlayPhaseSound()
+    
     vibrateConn=RunService.RenderStepped:Connect(function()
         local pos=HRP.Position
         local rot=HRP.CFrame - HRP.CFrame.Position
@@ -807,8 +873,15 @@ local function StartVibrate()
 end
 
 local function StopVibrate()
+    
+    -- Stop ALL sounds on player
+    StopAllPlayerSounds()
     if not vibrateRunning then return end
     vibrateRunning=false
+    
+    -- Stop phase vibration sound
+    StopPhaseSound()
+    
     if vibrateConn then
         vibrateConn:Disconnect()
         vibrateConn=nil
@@ -1596,22 +1669,16 @@ idleParticleConnection = h.Running:Connect(function(speed)
     end
 end)
 
--- CLIENT-TO-CLIENT COMMUNICATION SYSTEM via CHAT BUBBLES
--- Chat bubbles ARE visible to other clients - this is our breakthrough!
+-- CLIENT-TO-CLIENT COMMUNICATION SYSTEM via TEXT CHANNELS
+-- DisplaySystemMessage sends to ALL clients in the server!
 
 local TextChatService = game:GetService("TextChatService")
-local ChatService = game:GetService("Chat")
-
--- Configure bubble chat to be enabled
-pcall(function()
-    TextChatService.BubbleChatConfiguration.Enabled = true
-end)
 
 local function BroadcastState(stateType, value)
-    -- Broadcast OUR state to other clients via chat bubbles
+    -- Broadcast OUR state to ALL other clients via system message
     if not HRP or not HRP.Parent then return end
     
-    local message = "⚡" -- Prefix to identify our messages
+    local message = "⚡SPEEDSTER:" .. player.Name .. ":"
     
     -- Encode state into short message
     if stateType == "speed" then
@@ -1628,127 +1695,80 @@ local function BroadcastState(stateType, value)
         return
     end
     
-    -- Send bubble via Chat service (replicates to all clients!)
+    -- Send system message to RBXGeneral channel (visible to ALL clients)
     pcall(function()
-        ChatService:Chat(HRP, message, Enum.ChatColor.White)
+        local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+        if channel then
+            channel:DisplaySystemMessage(message)
+        end
     end)
 end
 
-local function ParseBubbleMessage(message, otherPlayerData)
-    -- Parse encoded bubble message and update effects
-    if not message or not message:match("^⚡") then return end
-    
-    local code = message:sub(2) -- Remove ⚡ prefix
-    
-    if code:sub(1,1) == "S" then
-        -- Speed state
-        local enabled = code:sub(2,2) == "1"
-        if enabled and otherPlayerData.allTrails then
-            for _, t in pairs(otherPlayerData.allTrails) do
-                if t and t.Parent then
-                    pcall(function() t.Enabled = true end)
-                end
-            end
-        elseif not enabled and otherPlayerData.allTrails then
-            for _, t in pairs(otherPlayerData.allTrails) do
-                if t and t.Parent then
-                    pcall(function() t.Enabled = false end)
-                end
-            end
-        end
-    elseif code:sub(1,1) == "T" then
-        -- Trails state
-        local enabled = code:sub(2,2) == "1"
-        if enabled and otherPlayerData.allTrails then
-            for _, t in pairs(otherPlayerData.allTrails) do
-                if t and t.Parent then
-                    pcall(function() t.Enabled = true end)
-                end
-            end
-        elseif not enabled and otherPlayerData.allTrails then
-            for _, t in pairs(otherPlayerData.allTrails) do
-                if t and t.Parent then
-                    pcall(function() t.Enabled = false end)
-                end
-            end
-        end
-    elseif code:sub(1,1) == "P" then
-        -- Particles state
-        local enabled = code:sub(2,2) == "1"
-        if enabled and otherPlayerData.ParticleRef then
-            if otherPlayerData.ParticleRef.Parent then
-                otherPlayerData.ParticleRef.Enabled = true
-            end
-        elseif not enabled and otherPlayerData.ParticleRef then
-            if otherPlayerData.ParticleRef.Parent then
-                otherPlayerData.ParticleRef.Enabled = false
-            end
-        end
-    end
-end
+local syncConnection
 
-local function SyncOtherPlayerEffects(otherPlayer)
-    -- Watch another player's character and sync their effects on OUR screen
-    if otherPlayer == player then return end -- Don't watch ourselves
-    if not IsAllowed(otherPlayer) then return end
-    
-    local function setupSync()
-        local char = otherPlayer.Character
-        if not char then return end
+local function SetupSyncListener()
+    -- Listen to RBXGeneral for ALL speedster sync messages
+    pcall(function()
+        local channel = TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+        if not channel then 
+            warn("⚠️ RBXGeneral channel not found!")
+            return 
+        end
         
-        local otherUserId = otherPlayer.UserId
-        local otherPlayerData = PlayerData[otherUserId]
-        if not otherPlayerData then return end
+        print("📡 Listening for speedster sync messages...")
         
-        print("👀 Watching " .. otherPlayer.Name .. "'s chat bubbles for sync...")
-        
-        -- Monitor their character for chat bubbles
-        local bubbleCheckThread = task.spawn(function()
-            while char and char.Parent and otherPlayer and otherPlayer.Parent do
-                pcall(function()
-                    -- Check for BillboardGui descendants (chat bubbles create these)
-                    for _, desc in pairs(char:GetDescendants()) do
-                        if desc:IsA("BillboardGui") and desc.Adornee then
-                            -- Look for TextLabel inside
-                            local textLabel = desc:FindFirstChildOfClass("TextLabel")
-                            if textLabel and textLabel.Text then
-                                local text = textLabel.Text
-                                if text:match("^⚡") then
-                                    -- This is our sync message!
-                                    ParseBubbleMessage(text, otherPlayerData)
-                                end
-                            end
+        syncConnection = channel.MessageReceived:Connect(function(textChatMessage)
+            local msgText = textChatMessage.Text
+            
+            -- Check if this is a speedster sync message
+            if not msgText or not msgText:match("^⚡SPEEDSTER:") then return end
+            
+            -- Parse: ⚡SPEEDSTER:PlayerName:Code
+            local pattern = "^⚡SPEEDSTER:(.+):(.+)$"
+            local senderName, code = msgText:match(pattern)
+            
+            if not senderName or not code then return end
+            if senderName == player.Name then return end -- Ignore our own messages
+            
+            -- Find the sender's PlayerData
+            local senderPlayer = Players:FindFirstChild(senderName)
+            if not senderPlayer then return end
+            
+            local senderUserId = senderPlayer.UserId
+            local senderData = PlayerData[senderUserId]
+            if not senderData then return end
+            
+            -- Parse the code and update their effects
+            local stateType = code:sub(1,1)
+            local enabled = code:sub(2,2) == "1"
+            
+            if stateType == "S" or stateType == "T" then
+                -- Speed or Trails
+                if senderData.allTrails then
+                    for _, t in pairs(senderData.allTrails) do
+                        if t and t.Parent then
+                            pcall(function() 
+                                t.Enabled = enabled 
+                            end)
                         end
                     end
-                end)
-                task.wait(0.05) -- Check frequently
+                end
+            elseif stateType == "P" then
+                -- Particles
+                if senderData.ParticleRef and senderData.ParticleRef.Parent then
+                    senderData.ParticleRef.Enabled = enabled
+                end
             end
+            
+            print("🔄 Synced " .. senderName .. "'s effects: " .. code)
         end)
-        
-        -- Store for cleanup
-        if not watchedPlayers[otherUserId] then
-            watchedPlayers[otherUserId] = {}
-        end
-        table.insert(watchedPlayers[otherUserId], bubbleCheckThread)
-    end
-    
-    if otherPlayer.Character then
-        setupSync()
-    end
-    
-    otherPlayer.CharacterAdded:Connect(setupSync)
+    end)
 end
 
--- MULTIPLAYER SYNC: Setup watchers for all other allowed players
+-- MULTIPLAYER SYNC: Setup listener for ALL sync messages
 if isLocalPlayer then
-    for _, otherPlayer in ipairs(Players:GetPlayers()) do
-        SyncOtherPlayerEffects(otherPlayer)
-    end
-    
-    Players.PlayerAdded:Connect(function(newPlayer)
-        task.wait(1) -- Wait for their character to load
-        SyncOtherPlayerEffects(newPlayer)
-    end)
+    task.wait(2) -- Wait for TextChatService to fully initialize
+    SetupSyncListener()
 end
 
 if isLocalPlayer then
@@ -1828,6 +1848,9 @@ end
 mirb.MouseButton1Click:Connect(function()
 
 StopVibrate()
+    
+    -- Stop ALL sounds on player
+    StopAllPlayerSounds()
 
     DisableDarkAura()
     ang=not ang
@@ -1862,6 +1885,9 @@ StartVibrate()
     else
 
 StopVibrate()
+    
+    -- Stop ALL sounds on player
+    StopAllPlayerSounds()
 
         sn(false)
         DisableDarkAura()
@@ -2013,6 +2039,9 @@ sb.MouseButton1Click:Connect(function()
     V88()
     V90()
     StopVibrate()
+    
+    -- Stop ALL sounds on player
+    StopAllPlayerSounds()
     DisableDarkAura()
 
     if cam then
@@ -2217,6 +2246,9 @@ StartVibrate()
     else
 
 StopVibrate()
+    
+    -- Stop ALL sounds on player
+    StopAllPlayerSounds()
 
         sn(false)
         DisableDarkAura()
@@ -2225,6 +2257,9 @@ StopVibrate()
         elseif key == Enum.KeyCode.B then
 
 StopVibrate()
+    
+    -- Stop ALL sounds on player
+    StopAllPlayerSounds()
 
     DisableDarkAura()
     ang=not ang
@@ -2290,6 +2325,9 @@ elseif key == Enum.KeyCode.X then
     V88()
     V90()
     StopVibrate()
+    
+    -- Stop ALL sounds on player
+    StopAllPlayerSounds()
     DisableDarkAura()
 
     if cam then
@@ -2568,6 +2606,6 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 -- Success message
-print("⚡ CHAT BUBBLE SYNC SYSTEM LOADED!")
-print("📡 Broadcasting effects via invisible chat bubbles...")
+print("⚡ TEXT CHANNEL SYNC SYSTEM LOADED!")
+print("📡 Broadcasting via RBXGeneral:DisplaySystemMessage()...")
 print("✅ Multiplayer sync: ACTIVE")
