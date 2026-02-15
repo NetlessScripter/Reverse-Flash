@@ -1611,12 +1611,9 @@ local function BroadcastState(stateType, value)
     -- Broadcast OUR state to other clients via chat bubbles
     if not HRP or not HRP.Parent then return end
     
-    -- Invisible Unicode prefix (appears as empty space to non-script users)
-    -- Using zero-width characters that are invisible but detectable
-    local invisiblePrefix = "⁠⁠⁠" -- U+2060 Word Joiner (invisible)
-    local message = invisiblePrefix
+    local message = "⚡" -- Prefix to identify our messages
     
-    -- Encode state into short message (hidden after invisible chars)
+    -- Encode state into short message
     if stateType == "speed" then
         message = message .. "S" .. (value and "1" or "0")
     elseif stateType == "phase" then
@@ -1632,8 +1629,6 @@ local function BroadcastState(stateType, value)
     end
     
     -- Send bubble via Chat service (replicates to all clients!)
-    -- Non-script users will see an empty/blank bubble
-    -- Script users can detect and parse the hidden message
     pcall(function()
         ChatService:Chat(HRP, message, Enum.ChatColor.White)
     end)
@@ -1641,12 +1636,9 @@ end
 
 local function ParseBubbleMessage(message, otherPlayerData)
     -- Parse encoded bubble message and update effects
-    -- Check for invisible prefix (zero-width characters)
-    local invisiblePrefix = "⁠⁠⁠" -- U+2060 Word Joiner
-    if not message or not message:match("^" .. invisiblePrefix) then return end
+    if not message or not message:match("^⚡") then return end
     
-    -- Remove invisible prefix (3 characters)
-    local code = message:sub(4)
+    local code = message:sub(2) -- Remove ⚡ prefix
     
     if code:sub(1,1) == "S" then
         -- Speed state
@@ -1721,9 +1713,7 @@ local function SyncOtherPlayerEffects(otherPlayer)
                             local textLabel = desc:FindFirstChildOfClass("TextLabel")
                             if textLabel and textLabel.Text then
                                 local text = textLabel.Text
-                                -- Check for invisible prefix (zero-width characters)
-                                local invisiblePrefix = "⁠⁠⁠"
-                                if text:match("^" .. invisiblePrefix) then
+                                if text:match("^⚡") then
                                     -- This is our sync message!
                                     ParseBubbleMessage(text, otherPlayerData)
                                 end
