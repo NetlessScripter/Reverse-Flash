@@ -887,14 +887,14 @@ local function LoadRunStartSounds()
     runStartSound1 = Instance.new("Sound")
     runStartSound1.Name = "RunStartSound1"
     runStartSound1.SoundId = getcustomasset(sound1FileName)
-    runStartSound1.Volume = 2
+    runStartSound1.Volume = 0.3
     runStartSound1.Looped = false
     runStartSound1.Parent = HRP
     
     runStartSound2 = Instance.new("Sound")
     runStartSound2.Name = "RunStartSound2"
     runStartSound2.SoundId = getcustomasset(sound2FileName)
-    runStartSound2.Volume = 2
+    runStartSound2.Volume = 0.3
     runStartSound2.Looped = false
     runStartSound2.Parent = HRP
     
@@ -1078,9 +1078,6 @@ local tr
 local an
 
 local function EnableDarkAura()
-        
-        -- BROADCAST: Tell other clients we enabled phase!
-        BroadcastState("phase", true)
     an = Instance.new("Animation")
     an.AnimationId = "rbxassetid://82363856064263"
     tr = h:LoadAnimation(an)
@@ -1985,6 +1982,9 @@ StopVibrate()
 
         sn(false)
         DisableDarkAura()
+        
+        -- BROADCAST: Tell other clients we disabled phase!
+        BroadcastState("phase", false)
     end
 end)
 
@@ -2335,6 +2335,9 @@ StopVibrate()
 
         sn(false)
         DisableDarkAura()
+        
+        -- BROADCAST: Tell other clients we disabled phase!
+        BroadcastState("phase", false)
     end
 
         elseif key == Enum.KeyCode.B then
