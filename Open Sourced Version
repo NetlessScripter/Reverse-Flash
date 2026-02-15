@@ -1600,6 +1600,7 @@ end)
 -- Chat bubbles ARE visible to other clients - this is our breakthrough!
 
 local TextChatService = game:GetService("TextChatService")
+local ChatService = game:GetService("Chat")
 
 -- Configure bubble chat to be enabled
 pcall(function()
@@ -1610,9 +1611,12 @@ local function BroadcastState(stateType, value)
     -- Broadcast OUR state to other clients via chat bubbles
     if not HRP or not HRP.Parent then return end
     
-    local message = "⚡" -- Prefix to identify our messages
+    -- Invisible Unicode prefix (appears as empty space to non-script users)
+    -- Using zero-width characters that are invisible but detectable
+    local invisiblePrefix = "⁠⁠⁠" -- U+2060 Word Joiner (invisible)
+    local message = invisiblePrefix
     
-    -- Encode state into short message
+    -- Encode state into short message (hidden after invisible chars)
     if stateType == "speed" then
         message = message .. "S" .. (value and "1" or "0")
     elseif stateType == "phase" then
@@ -1627,17 +1631,22 @@ local function BroadcastState(stateType, value)
         return
     end
     
-    -- Send invisible/tiny bubble
+    -- Send bubble via Chat service (replicates to all clients!)
+    -- Non-script users will see an empty/blank bubble
+    -- Script users can detect and parse the hidden message
     pcall(function()
-        TextChatService:DisplayBubble(HRP, message)
+        ChatService:Chat(HRP, message, Enum.ChatColor.White)
     end)
 end
 
 local function ParseBubbleMessage(message, otherPlayerData)
     -- Parse encoded bubble message and update effects
-    if not message or not message:match("^⚡") then return end
+    -- Check for invisible prefix (zero-width characters)
+    local invisiblePrefix = "⁠⁠⁠" -- U+2060 Word Joiner
+    if not message or not message:match("^" .. invisiblePrefix) then return end
     
-    local code = message:sub(2) -- Remove ⚡ prefix
+    -- Remove invisible prefix (3 characters)
+    local code = message:sub(4)
     
     if code:sub(1,1) == "S" then
         -- Speed state
@@ -1712,7 +1721,9 @@ local function SyncOtherPlayerEffects(otherPlayer)
                             local textLabel = desc:FindFirstChildOfClass("TextLabel")
                             if textLabel and textLabel.Text then
                                 local text = textLabel.Text
-                                if text:match("^⚡") then
+                                -- Check for invisible prefix (zero-width characters)
+                                local invisiblePrefix = "⁠⁠⁠"
+                                if text:match("^" .. invisiblePrefix) then
                                     -- This is our sync message!
                                     ParseBubbleMessage(text, otherPlayerData)
                                 end
