@@ -322,17 +322,17 @@ local function createTrail(part, color, props, offsetAmount)
 end
 
 local function SetupAllTrails()
-    -- Clean up invalid trails first
-    local validTrails = {}
+    -- Always clear and destroy old trails to ensure fresh creation
     for _, t in pairs(allTrails) do
         if t and t.Parent then
-            table.insert(validTrails, t)
+            pcall(function()
+                t:Destroy()
+            end)
         end
     end
-    allTrails = validTrails
+    allTrails = {}
     playerData.allTrails = allTrails
     
-    if #allTrails > 0 then return end
     if not CharacterRef or not CharacterRef.Parent then return end
     
     for _, partName in pairs(parts) do
@@ -345,28 +345,40 @@ local function SetupAllTrails()
             createTrail(part, nil, trailProps2, 0.25)
         end
     end
+    
+    print("✓ Created " .. #allTrails .. " trails for " .. player.Name)
 end
 
 local function EnableAllCoolStuff()
     SetupAllTrails()
+    local enabledCount = 0
     for _, t in pairs(allTrails) do
         if t and t.Parent then
             pcall(function()
                 t.Enabled = true
+                enabledCount = enabledCount + 1
             end)
         end
     end
+    print("✓ Enabled " .. enabledCount .. " trails for " .. player.Name)
 end
 
 local function DisableCoolStuff()
+    local disabledCount = 0
     for _, t in pairs(allTrails) do
         if t and t.Parent then
             pcall(function()
                 t.Enabled = false
+                disabledCount = disabledCount + 1
             end)
         end
     end
+    print("✓ Disabled " .. disabledCount .. " trails for " .. player.Name)
 end
+
+-- Store these functions in playerData so sync listener can access them
+playerData.EnableAllCoolStuff = EnableAllCoolStuff
+playerData.DisableCoolStuff = DisableCoolStuff
 
 local l = game:GetService('Lighting')
 
@@ -1850,13 +1862,14 @@ local function SetupSyncListener()
         if msgText == ".1" then
 
             print("🔄 " .. textSource.Name .. " enabled speed!")
-            if senderData.allTrails then
-                for _, t in pairs(senderData.allTrails) do
-                    if t and t.Parent then
-                        pcall(function() t.Enabled = true end)
-                    end
-                end
+            
+            -- Call the player's EnableAllCoolStuff function to set up and enable their trails on our client
+            if senderData.EnableAllCoolStuff then
+                pcall(function()
+                    senderData.EnableAllCoolStuff()
+                end)
             end
+            
             if senderData.ParticleRef and senderData.ParticleRef.Parent then
                 senderData.ParticleRef.Enabled = true
             end
@@ -1869,13 +1882,14 @@ local function SetupSyncListener()
         elseif msgText == ".3" then
 
             print("🔄 " .. textSource.Name .. " stopped all effects!")
-            if senderData.allTrails then
-                for _, t in pairs(senderData.allTrails) do
-                    if t and t.Parent then
-                        pcall(function() t.Enabled = false end)
-                    end
-                end
+            
+            -- Call the player's DisableCoolStuff function to disable their trails on our client
+            if senderData.DisableCoolStuff then
+                pcall(function()
+                    senderData.DisableCoolStuff()
+                end)
             end
+            
             if senderData.ParticleRef and senderData.ParticleRef.Parent then
                 senderData.ParticleRef.Enabled = false
             end
