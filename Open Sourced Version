@@ -322,6 +322,16 @@ local function createTrail(part, color, props, offsetAmount)
 end
 
 local function SetupAllTrails()
+    -- Clean up invalid trails first
+    local validTrails = {}
+    for _, t in pairs(allTrails) do
+        if t and t.Parent then
+            table.insert(validTrails, t)
+        end
+    end
+    allTrails = validTrails
+    playerData.allTrails = allTrails
+    
     if #allTrails > 0 then return end
     if not CharacterRef or not CharacterRef.Parent then return end
     
