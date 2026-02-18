@@ -703,7 +703,7 @@ if shouldWrite then
 end
 
 local rfCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))})
-local zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(160,220,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))})
+local zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(100,168,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(26,144,255))})
 local godCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(200,200,200)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))})
 local nwaCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(200,100,255))})
 local kidCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))})
@@ -729,8 +729,8 @@ if speedsterType == "RF" then
     )
     elseif speedsterType == "Zoom" then
         x.Color = ColorSequence.new(
-            Color3.fromRGB(160,220,255),
-            Color3.fromRGB(0,120,255)
+            Color3.fromRGB(100,168,255),
+            Color3.fromRGB(26,144,255)
         )
     elseif speedsterType == "GodOfSpeed" then
         x.Color = ColorSequence.new(
@@ -1017,8 +1017,8 @@ local function getColor()
         })
     elseif speedsterType == "Zoom" then
         return ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(160,220,255)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(100,168,255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(26,144,255))
         })
     elseif speedsterType == "GodOfSpeed" then
         return ColorSequence.new({
@@ -1279,8 +1279,8 @@ if speedsterType == "RF" then
         )
     elseif speedsterType == "Zoom" then
         Trail.Color = ColorSequence.new(
-            Color3.fromRGB(160,220,255),
-            Color3.fromRGB(0,120,255)
+            Color3.fromRGB(100,168,255),
+            Color3.fromRGB(26,144,255)
         )
     elseif speedsterType == "GodOfSpeed" then
         Trail.Color = ColorSequence.new(
@@ -2513,8 +2513,8 @@ local nwaCS2 = ColorSequence.new({
 })
 
 local zoomCS2 = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(160,220,255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(100,168,255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(26,144,255))
 })
 
 local kidCS = ColorSequence.new({
@@ -2548,7 +2548,7 @@ local colorUpdateThread = task.spawn(function()
                 spot = Color3.fromRGB(255,255,0)
             elseif speedsterType == "Zoom" then
                 cs = zoomCS2
-                spot = Color3.fromRGB(0,120,255)
+                spot = Color3.fromRGB(26,144,255)
             elseif speedsterType == "GodOfSpeed" then
                 cs = godCS2
                 spot = Color3.fromRGB(255,220,0)
