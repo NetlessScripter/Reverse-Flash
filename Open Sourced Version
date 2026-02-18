@@ -2058,7 +2058,7 @@ V87()
         if heartbeatConnection then heartbeatConnection:Disconnect() end
         heartbeatConnection = RunService.Heartbeat:Connect(function()
             if h and h.Parent then
-                h.WalkSpeed = 1000
+                h.WalkSpeed = 375
             end
         end)
 
@@ -2286,7 +2286,7 @@ V87()
         if heartbeatConnection then heartbeatConnection:Disconnect() end
         heartbeatConnection = RunService.Heartbeat:Connect(function()
             if h and h.Parent then
-                h.WalkSpeed = 1000
+                h.WalkSpeed = 375
             end
         end)
 
