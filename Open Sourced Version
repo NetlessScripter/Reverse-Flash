@@ -2735,3 +2735,308 @@ end)
 print("⚡ SendAsync() SYNC SYSTEM LOADED!")
 print("📡 Commands: .1 = Speed | .2 = Phase | .3 = Stop")
 print("✅ Multiplayer sync: ACTIVE")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+
+local CurrentCamera = workspace.CurrentCamera
+
+local Blur = CurrentCamera:FindFirstChild("Blur")
+if not Blur then
+	Blur = Instance.new("BlurEffect", CurrentCamera)
+end
+Blur.Size = 0
+
+local isR15 = Character:FindFirstChild("UpperTorso") ~= nil
+local R15 = {"Head","UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot","HumanoidRootPart"}
+local R6 = {"Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg","HumanoidRootPart"}
+
+local bodyParts = {}
+for _, n in ipairs(isR15 and R15 or R6) do
+	local p = Character:FindFirstChild(n)
+	if p and p:IsA("BasePart") then
+		bodyParts[#bodyParts + 1] = p
+	end
+end
+
+for _, part in ipairs(bodyParts) do
+	do
+		local e = Instance.new("ParticleEmitter")
+		e.Brightness = 7
+		e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
+		e.LightEmission = 0.5
+		e.LightInfluence = 1
+		e.Orientation = Enum.ParticleOrientation.VelocityParallel
+		e.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,10,0)})
+		e.Squash = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+		e.Texture = "rbxassetid://4770542473"
+		e.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.91299998760223389,0),NumberSequenceKeypoint.new(1,1,0)})
+		e.ZOffset = 0
+		e.EmissionDirection = Enum.NormalId.Top
+		e.Enabled = false
+		e.Lifetime = NumberRange.new(0.25,0.5)
+		e.Rate = 250
+		e.RotSpeed = NumberRange.new(-50,50)
+		e.Rotation = NumberRange.new(-180,180)
+		e.Speed = NumberRange.new(50,200)
+		e.SpreadAngle = Vector2.new(0,500)
+		e.TimeScale = 1
+		e.Acceleration = Vector3.new(0,0,500)
+		e.Drag = 5
+		e.VelocityInheritance = 0
+		e.WindAffectsDrag = false
+		e.Shape = Enum.ParticleEmitterShape.Box
+		e.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+		e.ShapePartial = 1
+		e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		e.FlipbookFramerate = NumberRange.new(1,1)
+		e.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+		e.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+		e.FlipbookStartRandom = false
+		e.LockedToPart = true
+		e.Name = "Wind1"
+		e:Emit(15)
+		e.Parent = part
+	end
+	do
+		local e = Instance.new("ParticleEmitter")
+		e.Brightness = 7
+		e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
+		e.LightEmission = 0.5
+		e.LightInfluence = 1
+		e.Orientation = Enum.ParticleOrientation.VelocityParallel
+		e.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,3,1.8124997615814209)})
+		e.Squash = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,3,0)})
+		e.Texture = "rbxassetid://4770542473"
+		e.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.85000002384185791,0),NumberSequenceKeypoint.new(1,1,0)})
+		e.ZOffset = 0
+		e.EmissionDirection = Enum.NormalId.Top
+		e.Enabled = false
+		e.Lifetime = NumberRange.new(0.25,0.5)
+		e.Rate = 250
+		e.RotSpeed = NumberRange.new(0,0)
+		e.Rotation = NumberRange.new(-90,-90)
+		e.Speed = NumberRange.new(50,200)
+		e.SpreadAngle = Vector2.new(0,500)
+		e.TimeScale = 1
+		e.Acceleration = Vector3.new(0,0,500)
+		e.Drag = 5
+		e.VelocityInheritance = 0
+		e.WindAffectsDrag = false
+		e.Shape = Enum.ParticleEmitterShape.Box
+		e.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+		e.ShapePartial = 1
+		e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		e.FlipbookFramerate = NumberRange.new(1,1)
+		e.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+		e.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+		e.FlipbookStartRandom = false
+		e.LockedToPart = true
+		e.Name = "Wind2"
+		e:Emit(15)
+		e.Parent = part
+	end
+	do
+		local e = Instance.new("ParticleEmitter")
+		e.Brightness = 7
+		e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
+		e.LightEmission = 0.5
+		e.LightInfluence = 1
+		e.Orientation = Enum.ParticleOrientation.VelocityParallel
+		e.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,10,0)})
+		e.Squash = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+		e.Texture = "rbxassetid://4770542473"
+		e.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.81300002336502075,0),NumberSequenceKeypoint.new(1,1,0)})
+		e.ZOffset = 0
+		e.EmissionDirection = Enum.NormalId.Back
+		e.Enabled = false
+		e.Lifetime = NumberRange.new(0.5,1)
+		e.Rate = 150
+		e.RotSpeed = NumberRange.new(-50,50)
+		e.Rotation = NumberRange.new(-180,180)
+		e.Speed = NumberRange.new(30,100)
+		e.SpreadAngle = Vector2.new(50,50)
+		e.TimeScale = 1
+		e.Acceleration = Vector3.new(0,0,100)
+		e.Drag = 0
+		e.VelocityInheritance = 0
+		e.WindAffectsDrag = false
+		e.Shape = Enum.ParticleEmitterShape.Box
+		e.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+		e.ShapePartial = 1
+		e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		e.FlipbookFramerate = NumberRange.new(1,1)
+		e.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+		e.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+		e.FlipbookStartRandom = false
+		e.LockedToPart = true
+		e.Name = "Wind3"
+		e:Emit(15)
+		e.Parent = part
+	end
+end
+
+local wndPart = Instance.new("Part")
+wndPart.Transparency = 1
+wndPart.Anchored = true
+wndPart.CanCollide = false
+wndPart.Massless = true
+wndPart.Size = Vector3.new(1,1,1)
+wndPart.Name = "wnd"
+wndPart.Parent = workspace
+
+local wndAttachment = Instance.new("Attachment", wndPart)
+wndAttachment.Name = "Attachment"
+
+local function makeWind(name, emissionDir, lifetimeMin, lifetimeMax, rate, rotSpeedMin, rotSpeedMax, rotMin, rotMax, speedMin, speedMax, spreadAngle, acceleration, drag, sizeSeq, squashSeq, transparencySeq)
+	local e = Instance.new("ParticleEmitter")
+	e.Brightness = 7
+	e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
+	e.LightEmission = 0.5
+	e.LightInfluence = 1
+	e.Orientation = Enum.ParticleOrientation.VelocityParallel
+	e.Size = sizeSeq
+	e.Squash = squashSeq
+	e.Texture = "rbxassetid://4770542473"
+	e.Transparency = transparencySeq
+	e.ZOffset = 0
+	e.EmissionDirection = emissionDir
+	e.Enabled = false
+	e.Lifetime = NumberRange.new(lifetimeMin, lifetimeMax)
+	e.Rate = rate
+	e.RotSpeed = NumberRange.new(rotSpeedMin, rotSpeedMax)
+	e.Rotation = NumberRange.new(rotMin, rotMax)
+	e.Speed = NumberRange.new(speedMin, speedMax)
+	e.SpreadAngle = spreadAngle
+	e.TimeScale = 1
+	e.Acceleration = acceleration
+	e.Drag = drag
+	e.VelocityInheritance = 0
+	e.WindAffectsDrag = false
+	e.Shape = Enum.ParticleEmitterShape.Box
+	e.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+	e.ShapePartial = 1
+	e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	e.FlipbookFramerate = NumberRange.new(1,1)
+	e.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+	e.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+	e.FlipbookStartRandom = false
+	e.LockedToPart = true
+	e.Name = name
+	e.Parent = wndAttachment
+end
+
+makeWind(
+	"Wind1", Enum.NormalId.Top, 0.25, 0.5, 250, -50, 50, -180, 180, 50, 200,
+	Vector2.new(0,500), Vector3.new(0,0,500), 5,
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,10,0)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.91299998760223389,0),NumberSequenceKeypoint.new(1,1,0)})
+)
+
+makeWind(
+	"Wind2", Enum.NormalId.Top, 0.25, 0.5, 250, 0, 0, -90, -90, 50, 200,
+	Vector2.new(0,500), Vector3.new(0,0,500), 5,
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,3,1.8124997615814209)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,3,0)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.85000002384185791,0),NumberSequenceKeypoint.new(1,1,0)})
+)
+
+makeWind(
+	"Wind3", Enum.NormalId.Back, 0.5, 1, 150, -50, 50, -180, 180, 30, 100,
+	Vector2.new(50,50), Vector3.new(0,0,100), 0,
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,10,0)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.81300002336502075,0),NumberSequenceKeypoint.new(1,1,0)})
+)
+
+local Part_upvr = Instance.new("Part", Character)
+Part_upvr.Transparency = 1
+Part_upvr.Anchored = true
+Part_upvr.CanCollide = false
+Part_upvr.Massless = true
+Part_upvr.Size = Vector3.new()
+
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Humanoid = Character:WaitForChild("Humanoid")
+
+local tick = 0
+
+RunService.RenderStepped:Connect(function()
+	local Magnitude = HumanoidRootPart.Velocity.Magnitude
+
+	if 0 < Magnitude then
+		Part_upvr.CFrame = CFrame.new(CurrentCamera.CFrame.Position, CurrentCamera.CFrame.Position + HumanoidRootPart.Velocity * 5)
+	else
+		Part_upvr.Position = CurrentCamera.CFrame.Position
+	end
+
+	tick += 1
+
+	Blur.Size = math.clamp(Magnitude / 70, 0, 9)
+
+	local wndPos = CurrentCamera.CFrame.Position + CurrentCamera.CFrame.LookVector * 15
+	wndPart.CFrame = CFrame.new(wndPos, wndPos + CurrentCamera.CFrame.LookVector)
+
+	if 80 <= Magnitude and tick % math.max(1, math.floor(50 / Magnitude)) == 0 then
+		local Part = Instance.new("Part")
+		Part.CastShadow = false
+		Part.Color = Color3.new(1,1,1)
+		Part.Material = Enum.Material.ForceField
+		Part.Transparency = 1
+		Part.Size = Vector3.new(0.03, 0.03, Magnitude / 60)
+		Part.CanCollide = false
+		Part.Massless = true
+		Part.Parent = workspace
+
+		local SpecialMesh = Instance.new("SpecialMesh")
+		SpecialMesh.MeshType = Enum.MeshType.Sphere
+		SpecialMesh.Parent = Part
+
+		local cframe = CFrame.new(math.random(-300,300)/100, math.random(-200,200)/100, -math.floor(Magnitude/50)*2)
+
+		local Weld = Instance.new("Weld", Part)
+		Weld.Part0 = Part_upvr
+		Weld.Part1 = Part
+		Weld.C0 = cframe
+
+		for _, v in pairs(wndAttachment:GetDescendants()) do
+			if v:IsA("ParticleEmitter") then
+				v.Enabled = true
+				if v.Name ~= "Wind3" then
+					v.Speed = NumberRange.new(math.clamp(5*Magnitude/40,-100,50), math.clamp(20*Magnitude/40,-100,200))
+					v.Rate = math.clamp(2*Magnitude/4, 0, 2000)
+				elseif v.Name == "Wind3" then
+					local lock = false
+					if Humanoid.FloorMaterial == Enum.Material.Air then
+						if 250 >= Magnitude then
+							lock = false
+						else
+							lock = true
+						end
+					end
+					v.LockedToPart = lock
+				end
+			end
+		end
+
+		Debris:AddItem(Part, 0.6)
+
+		TweenService:Create(Part, TweenInfo.new(0.05, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 0.8}):Play()
+		TweenService:Create(Weld, TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {C0 = CFrame.new(cframe.Position.X, cframe.Position.Y, math.floor(Magnitude/100)*4)}):Play()
+
+		wait(0.225)
+
+		TweenService:Create(Part, TweenInfo.new(0.095, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 1}):Play()
+	else
+		for _, v in pairs(wndAttachment:GetChildren()) do
+			if v:IsA("ParticleEmitter") then
+				v.Enabled = false
+			end
+		end
+	end
+end)
