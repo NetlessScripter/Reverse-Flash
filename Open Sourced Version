@@ -760,7 +760,7 @@ if speedsterType == "RF" then
     x.LightEmission = 1
     x.LightInfluence = 0
     x.Texture = "rbxassetid://10583327833"
-    x.TextureLength = 60
+    x.TextureLength = 0.5
     x.TextureMode = Enum.TextureMode.Stretch
     x.Transparency = NumberSequence.new({
         NumberSequenceKeypoint.new(0,0),
