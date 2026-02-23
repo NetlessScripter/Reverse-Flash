@@ -2849,6 +2849,16 @@ if not Blur then
 end
 Blur.Size = 0
 
+-- RunBlur: tiny blur that fires at max when running starts, then tweens to 0
+local RunBlur = CurrentCamera:FindFirstChild("RunBlur")
+if not RunBlur then
+	RunBlur = Instance.new("BlurEffect", CurrentCamera)
+	RunBlur.Name = "RunBlur"
+end
+RunBlur.Size = 0
+local runBlurTween = nil
+local wasMoving = false
+
 local isR15 = Character:FindFirstChild("UpperTorso") ~= nil
 local R15 = {"Head","UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot","HumanoidRootPart"}
 local R6 = {"Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg","HumanoidRootPart"}
@@ -3076,6 +3086,23 @@ RunService.RenderStepped:Connect(function()
 	tick += 1
 
 	Blur.Size = math.clamp(Magnitude / 70, 0, 9)
+
+	-- RunBlur: triggers at max when player starts moving, fades out over 0.3s
+	local isMovingNow = Magnitude > 8
+	if isMovingNow and not wasMoving then
+		if runBlurTween then runBlurTween:Cancel() end
+		RunBlur.Size = 20
+		runBlurTween = TweenService:Create(
+			RunBlur,
+			TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{Size = 0}
+		)
+		runBlurTween:Play()
+	elseif not isMovingNow then
+		if runBlurTween then runBlurTween:Cancel() end
+		RunBlur.Size = 0
+	end
+	wasMoving = isMovingNow
 
 	local wndPos = CurrentCamera.CFrame.Position + CurrentCamera.CFrame.LookVector * 15
 	wndPart.CFrame = CFrame.new(wndPos, wndPos + CurrentCamera.CFrame.LookVector)
