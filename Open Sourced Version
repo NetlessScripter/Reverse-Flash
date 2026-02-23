@@ -826,6 +826,102 @@ local uis = game:GetService("UserInputService")
 local cam = workspace.CurrentCamera
 local ts = game:GetService("TweenService")
 
+local CameraShakeState = {FadingIn=0,FadingOut=1,Sustained=2,Inactive=3}
+local function newCameraShakeInstance(magnitude,roughness,fadeInTime,fadeOutTime)
+	fadeInTime=fadeInTime or 0
+	fadeOutTime=fadeOutTime or 0
+	local inst={}
+	inst.Magnitude=magnitude
+	inst.Roughness=roughness
+	inst.PositionInfluence=Vector3.new()
+	inst.RotationInfluence=Vector3.new()
+	inst.DeleteOnInactive=true
+	inst.roughMod=1
+	inst.magnMod=1
+	inst.fadeOutDuration=fadeOutTime
+	inst.fadeInDuration=fadeInTime
+	inst.sustain=(fadeInTime>0)
+	inst.currentFadeTime=(fadeInTime>0) and 0 or 1
+	inst.tick=Random.new():NextNumber(-100,100)
+	function inst:UpdateShake(dt)
+		local tk=self.tick
+		local ft=self.currentFadeTime
+		if self.fadeInDuration>0 and self.sustain then
+			if ft<1 then ft=ft+dt/self.fadeInDuration
+			elseif self.fadeOutDuration>0 then self.sustain=false end
+		end
+		if not self.sustain then ft=ft-dt/self.fadeOutDuration end
+		self.tick=self.sustain and (tk+dt*self.Roughness*self.roughMod) or (tk+dt*self.Roughness*self.roughMod*ft)
+		self.currentFadeTime=ft
+		return Vector3.new(math.noise(tk,0)*0.5,math.noise(0,tk)*0.5,math.noise(tk,tk)*0.5)*self.Magnitude*self.magnMod*ft
+	end
+	function inst:StartFadeOut(t) if t==0 then self.currentFadeTime=0 end self.fadeOutDuration=t self.fadeInDuration=0 self.sustain=false end
+	function inst:StartFadeIn(t) if t==0 then self.currentFadeTime=1 end self.fadeInDuration=t or self.fadeInDuration self.fadeOutDuration=0 self.sustain=true end
+	function inst:IsShaking() return self.currentFadeTime>0 or self.sustain end
+	function inst:IsFadingOut() return (not self.sustain) and self.currentFadeTime>0 end
+	function inst:IsFadingIn() return self.currentFadeTime<1 and self.sustain and self.fadeInDuration>0 end
+	function inst:GetState()
+		if self:IsFadingIn() then return CameraShakeState.FadingIn
+		elseif self:IsFadingOut() then return CameraShakeState.FadingOut
+		elseif self:IsShaking() then return CameraShakeState.Sustained
+		else return CameraShakeState.Inactive end
+	end
+	return inst
+end
+local ShakePresets={
+	HeavyHit=function()
+		local s=newCameraShakeInstance(8,14,0,1.25)
+		s.PositionInfluence=Vector3.new(0.5,0.5,0)
+		s.RotationInfluence=Vector3.new(0,0,0)
+		return s
+	end
+}
+local CurrentShaker=(function()
+	local shaker={}
+	shaker._running=false
+	shaker._renderName="CameraShaker_"..player.Name
+	shaker._renderPriority=Enum.RenderPriority.Camera.Value
+	shaker._camShakeInstances={}
+	shaker._removeInstances={}
+	function shaker:Start()
+		if self._running then return end
+		self._running=true
+		RunService:BindToRenderStep(self._renderName,self._renderPriority,function(dt)
+			local instances=self._camShakeInstances
+			local pos=Vector3.new()
+			local rot=Vector3.new()
+			for i=1,#instances do
+				local inst=instances[i]
+				local state=inst:GetState()
+				if state==CameraShakeState.Inactive and inst.DeleteOnInactive then
+					table.insert(self._removeInstances,i)
+				elseif state~=CameraShakeState.Inactive then
+					local offset=inst:UpdateShake(dt)
+					pos=pos+offset*inst.PositionInfluence
+					rot=rot+offset*inst.RotationInfluence
+				end
+			end
+			for i=#self._removeInstances,1,-1 do
+				table.remove(instances,self._removeInstances[i])
+				self._removeInstances[i]=nil
+			end
+			cam.CFrame=cam.CFrame*CFrame.new(pos)*CFrame.Angles(0,math.rad(rot.Y),0)*CFrame.Angles(math.rad(rot.X),0,math.rad(rot.Z))
+		end)
+	end
+	function shaker:Stop()
+		if not self._running then return end
+		RunService:UnbindFromRenderStep(self._renderName)
+		self._running=false
+	end
+	function shaker:Shake(shakeInst)
+		table.insert(self._camShakeInstances,shakeInst)
+		return shakeInst
+	end
+	return shaker
+end)()
+CurrentShaker:Start()
+table.insert(playerData.cleanupObjects,{Destroy=function() CurrentShaker:Stop() end})
+
 local dir={-0.1,0,0.1,0}
 local i=1
 local vibrateRunning=false
@@ -2086,6 +2182,7 @@ StopEffect()
                     t = true
 
                     PlayRandomRunStartSound()
+                    CurrentShaker:Shake(ShakePresets.HeavyHit())
                     if x then x:Destroy() end
                     task.delay(0.3, function() t = false end)
                 end
@@ -2314,6 +2411,7 @@ StopEffect()
                     t = true
 
                     PlayRandomRunStartSound()
+                    CurrentShaker:Shake(ShakePresets.HeavyHit())
                     if x then x:Destroy() end
                     task.delay(0.3, function() t = false end)
                 end
