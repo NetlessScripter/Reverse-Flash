@@ -1299,14 +1299,10 @@ local CurrentTween
 
 local BodyParts = {
 
-    "Torso",
     "Left Arm",
     "Right Arm",
     "Left Leg",
     "Right Leg",
-
-    "UpperTorso",
-    "LowerTorso",
 
     "LeftUpperArm",
     "LeftLowerArm",
@@ -2571,14 +2567,10 @@ end
 local b = {
 
     "Head",
-    "Torso",
     "Left Arm",
     "Right Arm",
     "Left Leg",
     "Right Leg",
-
-    "UpperTorso",
-    "LowerTorso",
 
     "LeftUpperArm",
     "LeftLowerArm",
@@ -2860,8 +2852,8 @@ local runBlurTween = nil
 local wasMoving = false
 
 local isR15 = Character:FindFirstChild("UpperTorso") ~= nil
-local R15 = {"Head","UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot","HumanoidRootPart"}
-local R6 = {"Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg","HumanoidRootPart"}
+local R15 = {"Head","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}
+local R6 = {"Head","Left Arm","Right Arm","Left Leg","Right Leg"}
 
 local bodyParts = {}
 for _, n in ipairs(isR15 and R15 or R6) do
