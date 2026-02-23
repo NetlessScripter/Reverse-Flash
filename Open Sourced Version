@@ -653,7 +653,7 @@ for _,v in pairs(CharacterRef:GetChildren()) do
 		x.FaceCamera = false
 		x.LightEmission = 1
 		x.LightInfluence = 1
-		x.Lifetime = 1
+		x.Lifetime = 0.4
 		x.MaxLength = 0
 		x.MinLength = 0.1
 		x.Color = col
@@ -772,7 +772,7 @@ if speedsterType == "RF" then
     x.Attachment0 = a[1]
     x.Attachment1 = a[2]
     x.Enabled = false
-    x.Lifetime = 1
+    x.Lifetime = 0.4
     x.Parent = v
     t[#t+1] = x
 end
@@ -1315,7 +1315,7 @@ if speedsterType == "RF" then
     Trail.Attachment1 = Attach1
     Trail.Parent = Part
     Trail.Enabled = true
-    Trail.Lifetime = 1.5
+    Trail.Lifetime = 0.5
 
     return Trail
 end
