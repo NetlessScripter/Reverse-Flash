@@ -640,8 +640,13 @@ local wsSeq = NumberSequence.new({
 
 local tlist = {}
 
+local noTrailParts = {
+	["Torso"] = true, ["UpperTorso"] = true, ["LowerTorso"] = true,
+	["HumanoidRootPart"] = true, ["Head"] = true
+}
+
 for _,v in pairs(CharacterRef:GetChildren()) do
-	if v:IsA("BasePart") then
+	if v:IsA("BasePart") and not noTrailParts[v.Name] then
 		local a0 = Instance.new("Attachment",v)
 		local a1 = Instance.new("Attachment",v)
 		a1.Position = Vector3.new(0,0,-1)
