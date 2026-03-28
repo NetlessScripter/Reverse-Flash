@@ -1,9 +1,9 @@
 --[[
-    REVERSE FLASH SCRIPT - MULTIPLAYER VERSION (UPGRADED)
+    REVERSE FLASH SCRIPT - MULTIPLAYER VERSION
     
     _G.NightMode = true  -- Set to false for day mode
     _G.TODC = true  -- TimeOfDayChange: Set to false to disable ALL lighting changes
-    _G.G_Optimized = false  -- Set to true for performance mode (reduces lightning density)
+    _G.LightningStyle = "both"  -- Lightning style: "both" (regular + DCEU) or "DCEU" (DCEU only)
     
     AllowedPlayers = {
         ["Hitmeforgamepass"] = "RF",
@@ -15,21 +15,8 @@
     
     CONTROLS: Q = Speed | C = Phase | B = Angular Mirage | X = Disable
     STATES: RF, Zoom, KidFlash, GodOfSpeed, NWA, Regular
-    
-    LIGHTNING UPGRADE NOTES:
-    - DCEU-style ground arc lightning via Raycast + Beam (starts from torso/limbs, snaps to ground)
-    - Dynamic flicker engine: each limb group flickers at its own phase/rate
-    - Trail lifetime, enabled state, and width vary per-tick for "barely contained energy" look
-    - Branching secondary arcs fire at 35% chance alongside main arc
-    - HeartbeatUpdate no longer clone/destroys trails every frame (was 960+ instance ops/sec)
-    - idleParticleConnection bug fixed: no longer re-enables effects when speed is off
-    - G_Optimized mode: reduced arc density, longer intervals, lower particle rates
 --]]
 
-
--- ================================================================
--- GLOBAL CONFIG
--- ================================================================
 
 if _G.TODC == nil then
     _G.TODC = true
@@ -39,9 +26,10 @@ if _G.NightMode == nil then
     _G.NightMode = true
 end
 
-if _G.G_Optimized == nil then
-    _G.G_Optimized = false
+if _G.LightningStyle == nil then
+    _G.LightningStyle = "both"
 end
+
 
 if not _G.TODC then
     print("⏰ TimeOfDayChange DISABLED - ClockTime will NOT be modified")
@@ -49,11 +37,7 @@ else
     print("⏰ TimeOfDayChange ENABLED - Lighting mode: " .. (_G.NightMode and "NIGHT" or "DAY"))
 end
 
-if _G.G_Optimized then
-    print("⚡ G_Optimized ENABLED - Performance mode active (reduced lightning density)")
-else
-    print("⚡ G_Optimized DISABLED - Full dynamic lightning quality")
-end
+print("⚡ LightningStyle: " .. tostring(_G.LightningStyle))
 
 AllowedPlayers = AllowedPlayers or {}
 
@@ -70,18 +54,12 @@ local function CleanupPlayer(player)
     local userId = player.UserId
     if PlayerData[userId] then
         local data = PlayerData[userId]
-
-        -- Stop new dynamic systems first
-        if data.StopLightningFlicker then
-            pcall(function() data.StopLightningFlicker() end)
-        end
-        if data.StopGroundArcs then
-            pcall(function() data.StopGroundArcs() end)
-        end
+        
 
         if data.stopColorUpdate then
             pcall(function() data.stopColorUpdate() end)
         end
+        
 
         if data.connections then
             for _, conn in pairs(data.connections) do
@@ -123,8 +101,10 @@ local function SetupSpeedster(player)
     local speedsterType = AllowedPlayers[player.Name]
     local userId = player.UserId
     
+
     CleanupPlayer(player)
     
+
     PlayerData[userId] = {
         character = character,
         player = player,
@@ -172,7 +152,7 @@ ParticleRef.LightEmission = 1
 ParticleRef.LightInfluence = 0
 ParticleRef.LockedToPart = false
 ParticleRef.Orientation = Enum.ParticleOrientation.VelocityParallel
-ParticleRef.Rate = _G.G_Optimized and 6 or 12
+ParticleRef.Rate = 12
 ParticleRef.RotSpeed = NumberRange.new(0,0)
 ParticleRef.Rotation = NumberRange.new(-360,360)
 ParticleRef.Shape = Enum.ParticleEmitterShape.Box
@@ -222,6 +202,7 @@ elseif speedsterType == "RF" then
         ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
     })
 else
+
     ParticleRef.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.new(1,0.231,0.129)),
         ColorSequenceKeypoint.new(1, Color3.new(1,0.231,0.129))
@@ -348,6 +329,7 @@ local function createTrail(part, color, props, offsetAmount)
 end
 
 local function SetupAllTrails()
+    -- Always clear and destroy old trails to ensure fresh creation
     for _, t in pairs(allTrails) do
         if t and t.Parent then
             pcall(function()
@@ -401,6 +383,7 @@ local function DisableCoolStuff()
     print("✓ Disabled " .. disabledCount .. " trails for " .. player.Name)
 end
 
+-- Store these functions in playerData so sync listener can access them
 playerData.EnableAllCoolStuff = EnableAllCoolStuff
 playerData.DisableCoolStuff = DisableCoolStuff
 
@@ -966,6 +949,7 @@ local function LoadPhaseSound()
     local soundFileName = "phase_vibration.wav"
     local soundUrl = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Body%20vibration%2001.wav"
     
+
     if not isfile(soundFileName) then
         local success, soundData = pcall(function()
             return game:HttpGet(soundUrl)
@@ -980,6 +964,7 @@ local function LoadPhaseSound()
         end
     end
     
+
     phaseSound = Instance.new("Sound")
     phaseSound.Name = "PhaseVibrationSound"
     phaseSound.SoundId = getcustomasset(soundFileName)
@@ -1012,6 +997,7 @@ local runStartSoundsLoaded = false
 local function LoadRunStartSounds()
     if runStartSoundsLoaded then return end
     
+
     local sound1FileName = "run_start_01.wav"
     local sound1Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2001.wav"
     
@@ -1028,6 +1014,7 @@ local function LoadRunStartSounds()
         end
     end
     
+
     local sound2FileName = "run_start_02.wav"
     local sound2Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2002.wav"
     
@@ -1044,6 +1031,7 @@ local function LoadRunStartSounds()
         end
     end
     
+
     runStartSound1 = Instance.new("Sound")
     runStartSound1.Name = "RunStartSound1"
     runStartSound1.SoundId = getcustomasset(sound1FileName)
@@ -1067,6 +1055,7 @@ local function PlayRandomRunStartSound()
         LoadRunStartSounds() 
     end
     
+
     local selectedSound = math.random(1, 2) == 1 and runStartSound1 or runStartSound2
     
     if selectedSound and not selectedSound.IsPlaying then
@@ -1075,8 +1064,10 @@ local function PlayRandomRunStartSound()
 end
 
 local function StopAllPlayerSounds()
+
     StopPhaseSound()
     
+
     if HRP then
         for _, sound in pairs(HRP:GetChildren()) do
             if sound:IsA("Sound") and sound.IsPlaying then
@@ -1091,6 +1082,7 @@ local function StartVibrate()
     if vibrateRunning then return end
     vibrateRunning=true
     
+
     PlayPhaseSound()
     
     vibrateConn=RunService.RenderStepped:Connect(function()
@@ -1103,10 +1095,13 @@ local function StartVibrate()
 end
 
 local function StopVibrate()
+    
+
     StopAllPlayerSounds()
     if not vibrateRunning then return end
     vibrateRunning=false
     
+
     StopPhaseSound()
     
     if vibrateConn then
@@ -1149,6 +1144,7 @@ local function getColor()
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
         })
     else
+
         return nil
     end
 end
@@ -1159,7 +1155,7 @@ local function createEmitter(part)
 
     local e = Instance.new("ParticleEmitter")
     e.Texture = "rbxassetid://99013781938083"
-    e.Rate = _G.G_Optimized and 120 or 240
+    e.Rate = 240
     e.SpreadAngle = Vector2.new(360,360)
     e.Speed = NumberRange.new(0,2)
     e.Lifetime = NumberRange.new(0.07,0.11)
@@ -1179,7 +1175,7 @@ end
 
 local activeEmitters = {}
 local effectRunning = false
-local maxEmitters = _G.G_Optimized and 4 or 8
+local maxEmitters = 8
 local spawnThread
 
 local function StartEffect()
@@ -1188,7 +1184,7 @@ local function StartEffect()
 
     spawnThread = task.spawn(function()
         while effectRunning do
-            task.wait(_G.G_Optimized and 0.15 or 0.1)
+            task.wait(0.1)
             if not effectRunning then break end
 
             local part = effectParts[math.random(1,#effectParts)]
@@ -1259,7 +1255,7 @@ local function EnableDarkAura()
             e.ZOffset = 1
             e.EmissionDirection = Enum.NormalId.Top
             e.Lifetime = NumberRange.new(0.18,0.18)
-            e.Rate = _G.G_Optimized and 200 or 400
+            e.Rate = 400
             e.Shape = Enum.ParticleEmitterShape.Box
             e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
             e.ShapePartial = 1
@@ -1291,9 +1287,9 @@ local function DisableDarkAura()
 
     local b = ld:FindFirstChild("DarkAuraBlur")
     if b then
-        local tw = ts:Create(b, TweenInfo.new(0.5), {Size = 0})
-        tw:Play()
-        tw.Completed:Once(function()
+        local t = ts:Create(b, TweenInfo.new(0.5), {Size = 0})
+        t:Play()
+        t.Completed:Once(function()
             b:Destroy()
         end)
     end
@@ -1342,6 +1338,7 @@ local heartbeatConnection
 local enabled = false
 local runState = false
 local defaultWalkSpeed = 20
+
 
 
 
@@ -1405,6 +1402,7 @@ if speedsterType == "RF" then
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
         })
     else
+
         Trail.Color = ColorSequence.new(Color3.fromRGB(255,59,0))
     end
 
@@ -1454,48 +1452,37 @@ local function CreateInvisibleWater(Part)
     Clone.Parent = workspace
 end
 
--- ================================================================
--- FIX: HeartbeatUpdate no longer clone/destroys trails every frame
--- Original was ~960+ Instance operations/sec at 16 body parts × 60fps
--- Now it just toggles Enabled once per 2 frames for the flicker feel
--- Water detection and TODC are preserved exactly
--- ================================================================
-local heartbeatFrame = 0
-
 local function HeartbeatUpdate()
-    heartbeatFrame += 1
-
-    -- Lightweight trail "pop" flicker: toggle enabled state briefly
-    -- This resets trail segments (same visual effect as the old clone/destroy)
-    -- but costs nearly nothing compared to Clone() + Destroy()
-    if heartbeatFrame % 2 == 0 then
-        for Part, Data in pairs(TrailsPerPart) do
-            local T1, T2 = Data[1], Data[2]
-            -- Randomly pick one trail to snap-reset per frame
-            local target = (math.random(1,2) == 1) and T1 or T2
-            if target and target.Parent then
-                -- Brief toggle clears the existing trail segment history
-                target.Enabled = false
-                target.Enabled = true
-                -- Vary the lifetime for a non-uniform, organic look
-                target.Lifetime = math.random(5, 22) / 100
-            end
+    for Part, Data in pairs(TrailsPerPart) do
+        local T1, T2, A0, A1 = Data[1], Data[2], Data[3], Data[4]
+        local DestroyTrail = math.random(1,2) == 1 and T1 or T2
+        DestroyTrail:Destroy()
+        local KeepTrail = DestroyTrail == T1 and T2 or T1
+        local NewTrail = KeepTrail:Clone()
+        NewTrail.Parent = Part
+        if DestroyTrail == T1 then
+            TrailsPerPart[Part][1] = NewTrail
+        else
+            TrailsPerPart[Part][2] = NewTrail
         end
     end
 
-    -- Water detection (original behavior preserved)
-    if heartbeatFrame % 30 == 0 then
-        for _, Part in pairs(workspace:GetChildren()) do
-            if Part.Name == "Water" and Part:IsA("BasePart") then
-                CreateInvisibleWater(Part)
-            end
+    for _, Part in pairs(workspace:GetChildren()) do
+        if Part.Name == "Water" and Part:IsA("BasePart") then
+            CreateInvisibleWater(Part)
         end
     end
+    
 
     if _G.TODC then
         game:GetService('Lighting').TimeOfDay = "00:00:00"
     end
 end
+
+
+
+
+
 
 
 local generalEnableSound = Instance.new("Sound")
@@ -1552,6 +1539,11 @@ runSound5.RollOffMaxDistance = 200
 runSound5.RollOffMinDistance = 10
 runSound5.Parent = HRP
 
+
+
+
+
+
 local stopSound = Instance.new("Sound")
 stopSound.SoundId = "rbxassetid://4944377949"
 stopSound.Volume = 0.5
@@ -1560,6 +1552,10 @@ stopSound.RollOffMode = Enum.RollOffMode.Linear
 stopSound.RollOffMaxDistance = 200
 stopSound.RollOffMinDistance = 10
 stopSound.Parent = HRP
+stopSound.Volume = 0.5
+stopSound.Looped = false
+stopSound.Parent = HRP
+
 
 local wasRunning = false
 local lastWalkSpeed = 0
@@ -1572,8 +1568,10 @@ local function UpdateSounds()
     local isMoving = Humanoid.MoveDirection.Magnitude > 0
     local isRunning = isMoving and currentSpeed > 0
     
+
     if isRunning then
         if not wasRunning then
+
             if not runSound1.IsPlaying then runSound1:Play() end
             if not runSound3.IsPlaying then runSound3:Play() end
             if not runSound4.IsPlaying then runSound4:Play() end
@@ -1582,6 +1580,7 @@ local function UpdateSounds()
         if not runSound2.IsPlaying then runSound2:Play() end
         if not runSound5.IsPlaying then runSound5:Play() end
     else
+
         if wasRunning or (not isMoving and currentSpeed == 0) then
             if runSound1.IsPlaying then runSound1:Stop() end
             if runSound2.IsPlaying then runSound2:Stop() end
@@ -1591,12 +1590,14 @@ local function UpdateSounds()
         end
     end
     
+
     if not isMoving and currentSpeed == 0 and wasRunning then
         if not stopSound.IsPlaying then
             stopSound:Play()
         end
     end
     
+
     wasRunning = isRunning
     lastWalkSpeed = currentSpeed
 end
@@ -1618,6 +1619,7 @@ local function UpdateAnimationsAndFOV()
         end
         RunAnimTrack:AdjustSpeed(14)
         
+
         if Camera.FieldOfView ~= 140 then
             if CurrentTween then CurrentTween:Cancel() end
             CurrentTween = TweenService:Create(Camera, FOVTweenInfo, {FieldOfView = 140})
@@ -1627,12 +1629,14 @@ local function UpdateAnimationsAndFOV()
 
         if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
         
+
         if not isFalling and not IdleAnimTrack.IsPlaying then 
             IdleAnimTrack:Play() 
         elseif isFalling and IdleAnimTrack.IsPlaying then
             IdleAnimTrack:Stop()
         end
         
+
         if Camera.FieldOfView ~= 70 then
             if CurrentTween then CurrentTween:Cancel() end
             CurrentTween = TweenService:Create(Camera, FOVTweenInfo, {FieldOfView = 70})
@@ -1652,10 +1656,12 @@ local function enableAll()
 
     animConnection = RunService.RenderStepped:Connect(UpdateAnimationsAndFOV)
     
+
     if not generalEnableSound.IsPlaying then
         generalEnableSound:Play()
     end
     
+
     soundConnection = RunService.RenderStepped:Connect(UpdateSounds)
     
     if Humanoid.MoveDirection.Magnitude == 0 then
@@ -1671,6 +1677,7 @@ local function disableAll()
     if animConnection then animConnection:Disconnect() animConnection = nil end
     if soundConnection then soundConnection:Disconnect() soundConnection = nil end
     
+
     if generalEnableSound.IsPlaying then generalEnableSound:Stop() end
     if runSound1.IsPlaying then runSound1:Stop() end
     if runSound2.IsPlaying then runSound2:Stop() end
@@ -1679,12 +1686,13 @@ local function disableAll()
     if runSound5.IsPlaying then runSound5:Stop() end
     if stopSound.IsPlaying then stopSound:Stop() end
     
+
     wasRunning = false
     
     for Part, Data in pairs(TrailsPerPart) do
-        for ii=1,2 do
-            if Data[ii] and Data[ii].Parent then
-                Data[ii]:Destroy()
+        for i=1,2 do
+            if Data[i] and Data[i].Parent then
+                Data[i]:Destroy()
             end
         end
     end
@@ -1857,469 +1865,33 @@ local function disableRunEvents()
 end
 
 
--- ================================================================
--- LIGHTNING SYSTEM - COLOR UTILITIES
--- ================================================================
-
-local function GetLightningColor()
-    if speedsterType == "RF" then
-        return Color3.fromRGB(255, 50, 50)
-    elseif speedsterType == "Zoom" then
-        return Color3.fromRGB(26, 144, 255)
-    elseif speedsterType == "GodOfSpeed" then
-        return Color3.fromRGB(220, 220, 255)
-    elseif speedsterType == "NWA" then
-        return Color3.fromRGB(200, 100, 255)
-    elseif speedsterType == "KidFlash" then
-        return Color3.fromRGB(255, 245, 40)
-    else
-        return Color3.fromRGB(255, 70, 20)
-    end
-end
-
--- ================================================================
--- LIGHTNING SYSTEM 1: DYNAMIC TRAIL FLICKER ENGINE
---
--- Research basis: DCEU/Arrowverse Flash lightning is "barely contained
--- energy". Each limb group crackles at its own rhythm — legs are most
--- active (ground contact), arms flicker mid-rate, torso most stable.
--- The key is ASYMMETRY and IRREGULARITY. Real lightning never pulses
--- uniformly. It snaps on/off at different times across the body.
---
--- Implementation:
--- - Three independent flicker loops run on offset timers
--- - Each loop owns a "group" of body-part trails
--- - Lifetime varies per tick (shorter = crisper, longer = smoother)
--- - math.sin wave + random spike = organic non-repeating pattern
--- - When G_Optimized: slower intervals, higher on-chance (less spam)
--- ================================================================
-
-local flickerActive = false
-local flickerThread = nil
-
-local function StartLightningFlicker()
-    if flickerActive then return end
-    flickerActive = true
-
-    flickerThread = task.spawn(function()
-        local tick_leg = 0
-        local tick_arm = 7  -- offset so arms and legs don't sync
-        local tick_all = 3  -- offset for allTrails
-
-        while flickerActive do
-            tick_leg += 1
-            tick_arm += 1
-            tick_all += 1
-
-            local speed = (h and h.Parent and h.WalkSpeed) or 0
-            -- intensity: 0.2 at idle (lightning still crackles slightly), 1.0 at full speed
-            local intensity = math.clamp(speed / 375, 0.2, 1.0)
-
-            -- === tlist: BASE body trails - the most visible layer ===
-            -- These are the trails from the simple loop at the top of setup.
-            -- They flicker fast and form the "electricity wrapping the body" look.
-            for idx, trail in ipairs(tlist) do
-                if trail and trail.Parent then
-                    -- Sine wave base creates a slow pulse, random spikes create jitter
-                    local sineWave = math.sin(tick_leg * 0.4 + idx * 0.9) * 0.25 + 0.75
-                    local rand = math.random()
-                    if rand < intensity * sineWave then
-                        trail.Enabled = true
-                        -- Vary lifetime: short = sharp bolt feel, long = glow trail feel
-                        -- Mix both for that DCEU "energy crackling with spikes" look
-                        if rand < 0.15 then
-                            trail.Lifetime = math.random(5, 10) / 100   -- short crackle spike
-                        else
-                            trail.Lifetime = math.random(12, 28) / 100  -- normal trail
-                        end
-                    elseif rand < (0.08 * intensity) then
-                        -- Snap-off: this is the "lightning bolt pops" effect
-                        -- A small percentage of the time, a trail turns off completely
-                        -- creating the visual of a bolt vanishing and reappearing
-                        trail.Enabled = false
-                    end
-                    -- else: leave as-is (no unnecessary writes)
-                end
-            end
-
-            -- === t trails: SECONDARY lightning layer ===
-            -- These use the lightning texture and are slightly slower to flicker
-            -- creating a layered depth effect (fast crackle on top of slower glow)
-            if tick_arm % 2 == 0 then
-                for idx, trail in ipairs(t) do
-                    if trail and trail.Parent then
-                        local sineArm = math.sin(tick_arm * 0.3 + idx * 1.1) * 0.2 + 0.8
-                        local rand = math.random()
-                        if rand < intensity * sineArm * 0.9 then
-                            trail.Enabled = true
-                            trail.Lifetime = math.random(15, 40) / 100
-                        elseif rand < 0.05 * intensity then
-                            trail.Enabled = false
-                        end
-                    end
-                end
-            end
-
-            -- === allTrails: THIRD layer (from createTrail) ===
-            -- Slowest flicker rate — these provide the "corona glow" around limbs
-            if tick_all % 3 == 0 then
-                for idx, trail in ipairs(allTrails) do
-                    if trail and trail.Parent then
-                        if math.random() < intensity * 0.85 then
-                            trail.Enabled = true
-                        elseif math.random() < 0.04 then
-                            trail.Enabled = false
-                        end
-                    end
-                end
-            end
-
-            -- Dynamic wait: G_Optimized uses longer intervals
-            task.wait(_G.G_Optimized and (math.random(4, 8) / 100) or (math.random(2, 5) / 100))
-        end
-    end)
-end
-
-local function StopLightningFlicker()
-    flickerActive = false
-    if flickerThread then
-        task.cancel(flickerThread)
-        flickerThread = nil
-    end
-    -- Note: caller is responsible for setting trails to correct enabled/disabled state
-end
-
-playerData.StopLightningFlicker = StopLightningFlicker
 
 
--- ================================================================
--- LIGHTNING SYSTEM 2: DCEU GROUND ARC SYSTEM
---
--- Research basis:
--- DCEU Flash (Justice League, The Flash 2023): Lightning originates
--- FROM the speedster's core/torso and arcs DOWN to random ground
--- contact points. It doesn't just trail behind — it actively reaches
--- OUT and SNAPS to the ground like a Tesla coil discharge.
---
--- Unity/Unreal technique: Procedural noise-displaced line segments.
--- In Roblox equivalent: Beam instance with:
---   - High Segments count (10-24) = more control points = more jagged
---   - Random CurveSize0/CurveSize1 (positive AND negative values)
---     = S-curve deformation = zigzag lightning shape
---   - Very thin Width (0.03-0.15 studs) = realistic bolt thickness
---   - Very short Lifetime (30-180ms) = the "pop and vanish" feel
---   - ColorSequence: white core → speedster color → white tip
---
--- Raycast: fires from multiple body parts at slight downward angles
--- to find the ground. If it hits, places a temporary invisible anchor
--- part at the hit position, connects a Beam, then Debris cleans it up.
--- A secondary "branch" arc fires at 35% chance to simulate branching.
---
--- Bugs avoided:
--- - Position error: bodyAttach is parented to the part (not workspace)
---   so it moves with the character and needs no position updates
--- - groundAttach is at fixed world position (anchored part) so the
---   Beam naturally stretches as the character moves — looks correct
--- ================================================================
-
-local groundArcActive = false
-local groundArcThread = nil
-local groundRayParams = RaycastParams.new()
-groundRayParams.FilterType = Enum.RaycastFilterType.Exclude
-
--- Parts to arc FROM — prioritizes feet/legs (most visible ground contact)
--- then arms and hands, then torso as fallback
-local GROUND_ARC_SOURCE_PARTS = {
-    "LeftFoot", "RightFoot",
-    "LeftLowerLeg", "RightLowerLeg",
-    "Left Leg", "Right Leg",
-    "LeftUpperLeg", "RightUpperLeg",
-    "HumanoidRootPart",
-    "UpperTorso", "LowerTorso", "Torso",
-    "LeftHand", "RightHand",
-    "LeftLowerArm", "RightLowerArm",
-}
-
-local Debris = game:GetService("Debris")
-
-local function FireGroundArc(originPart, lightColor)
-    if not originPart or not originPart.Parent then return end
-    if not CharacterRef or not CharacterRef.Parent then return end
-    if not HRP or not HRP.Parent then return end
-
-    -- Update raycast exclusion list each call (character may have changed)
-    groundRayParams.FilterDescendantsInstances = {CharacterRef}
-
-    -- Variable spread: mostly downward, with horizontal deviation
-    -- This makes lightning fan outward from feet rather than always going straight down
-    local spreadX = (math.random() - 0.5) * 5
-    local spreadZ = (math.random() - 0.5) * 5
-    local rayLength = math.random(5, 20)
-    local rayDir = Vector3.new(spreadX * 0.3, -rayLength, spreadZ * 0.3)
-
-    local result = workspace:Raycast(originPart.Position, rayDir, groundRayParams)
-    if not result then return end
-
-    local groundPos = result.Position
-    -- Slight random offset at ground contact = simulates lightning branching
-    -- to a point slightly away from direct hit (like real ground strikes)
-    groundPos = groundPos + Vector3.new(
-        (math.random() - 0.5) * 2.5,
-        0.02,  -- tiny upward offset so beam doesn't clip into floor
-        (math.random() - 0.5) * 2.5
-    )
-
-    -- Temporary invisible anchor at ground position
-    -- Anchored = true means it stays in world space while character moves
-    -- This is intentional: the ground point is FIXED, the body end moves
-    -- This creates the "lightning stretching as you run past" feel
-    local groundPart = Instance.new("Part")
-    groundPart.Anchored = true
-    groundPart.CanCollide = false
-    groundPart.CastShadow = false
-    groundPart.Transparency = 1
-    groundPart.Size = Vector3.new(0.05, 0.05, 0.05)
-    groundPart.Position = groundPos
-    groundPart.Parent = workspace
-
-    local groundAttach = Instance.new("Attachment", groundPart)
-
-    -- Body attachment with small random offset from part center
-    -- Simulates lightning originating from different points on the limb
-    local bodyAttach = Instance.new("Attachment", originPart)
-    bodyAttach.Position = Vector3.new(
-        (math.random() - 0.5) * 0.6,
-        (math.random() - 0.5) * 0.5,
-        (math.random() - 0.5) * 0.4
-    )
-
-    local whiteColor = Color3.new(1, 1, 1)
-
-    -- === MAIN BEAM ARC ===
-    local beam = Instance.new("Beam")
-    beam.Attachment0 = bodyAttach   -- body end (moves with character)
-    beam.Attachment1 = groundAttach  -- ground end (fixed)
-    beam.FaceCamera = true
-    beam.LightEmission = 1
-    beam.LightInfluence = 0
-    beam.Brightness = math.random(6, 14)
-    -- Segments: more = more control points = more jagged zigzag path
-    -- 10-24 gives good DCEU-style jaggedness without performance issues
-    beam.Segments = math.random(10, 24)
-    -- Width: very thin for realistic bolt appearance
-    beam.Width0 = math.random(4, 14) / 100   -- origin end (body) slightly thicker
-    beam.Width1 = math.random(1, 7) / 100    -- ground end thinner (tapers to point)
-    -- CurveSize: THIS IS THE KEY TO JAGGEDNESS
-    -- Positive + negative values on the two ends create an S-curve.
-    -- Beam then interpolates across Segments creating the zigzag.
-    -- Larger absolute values = more extreme zigzag.
-    beam.CurveSize0 = (math.random() - 0.5) * 7
-    beam.CurveSize1 = (math.random() - 0.5) * 7
-    beam.Texture = "rbxassetid://16607923"  -- lightning bolt texture (from trailProps1)
-    beam.TextureLength = math.random(1, 4)
-    beam.TextureMode = Enum.TextureMode.Static
-    -- Color: white core → speedster color → white tip (matches DCEU look)
-    beam.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, whiteColor),
-        ColorSequenceKeypoint.new(0.25, lightColor),
-        ColorSequenceKeypoint.new(0.75, lightColor),
-        ColorSequenceKeypoint.new(1, whiteColor)
-    })
-    -- Transparency: mostly opaque in middle, fades at ends
-    beam.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.15),
-        NumberSequenceKeypoint.new(0.4, 0),
-        NumberSequenceKeypoint.new(0.6, 0),
-        NumberSequenceKeypoint.new(1, 0.6)
-    })
-    beam.Parent = groundPart
-
-    -- Lifetime: 30ms–180ms. The wide range gives unpredictable "pop" timing.
-    -- Short bolts feel like sharp cracks; longer ones feel like sustained arcs.
-    local lifetime = math.random(3, 18) / 100
-
-    -- Schedule cleanup
-    Debris:AddItem(groundPart, lifetime + 0.08)
-    Debris:AddItem(bodyAttach, lifetime + 0.08)
-
-    -- Fade-out tween: starts at 40% of lifetime, finishes by end
-    -- This creates the "lightning dissipates" effect rather than hard-cutting
-    task.delay(lifetime * 0.35, function()
-        if beam and beam.Parent then
-            ts:Create(beam, TweenInfo.new(lifetime * 0.65, Enum.EasingStyle.Expo, Enum.EasingDirection.Out), {
-                Transparency = NumberSequence.new(1),
-                Width0 = 0,
-                Width1 = 0
-            }):Play()
-        end
-    end)
-
-    -- === BRANCH ARC (35% chance) ===
-    -- Secondary thinner bolt that fires from same origin to a nearby ground point
-    -- Simulates lightning branching — the single most recognizable DCEU Flash trait
-    if math.random() < 0.35 and not _G.G_Optimized then
-        task.delay(math.random(1, 3) / 100, function()  -- tiny delay so branch appears slightly after main
-            if not CharacterRef or not CharacterRef.Parent then return end
-            if not originPart or not originPart.Parent then return end
-
-            local branchPart = Instance.new("Part")
-            branchPart.Anchored = true
-            branchPart.CanCollide = false
-            branchPart.CastShadow = false
-            branchPart.Transparency = 1
-            branchPart.Size = Vector3.new(0.05, 0.05, 0.05)
-            -- Branch lands at a different spot from the main arc
-            branchPart.Position = groundPos + Vector3.new(
-                (math.random() - 0.5) * 4,
-                0.02,
-                (math.random() - 0.5) * 4
-            )
-            branchPart.Parent = workspace
-
-            local bAttach0 = Instance.new("Attachment", originPart)
-            bAttach0.Position = bodyAttach.Position + Vector3.new(
-                (math.random() - 0.5) * 0.4, 0, 0
-            )
-            local bAttach1 = Instance.new("Attachment", branchPart)
-
-            local branchBeam = Instance.new("Beam")
-            branchBeam.Attachment0 = bAttach0
-            branchBeam.Attachment1 = bAttach1
-            branchBeam.FaceCamera = true
-            branchBeam.LightEmission = 1
-            branchBeam.LightInfluence = 0
-            branchBeam.Brightness = math.random(3, 8)
-            branchBeam.Segments = math.random(6, 16)
-            -- Branches are thinner than main arc
-            branchBeam.Width0 = math.random(1, 6) / 100
-            branchBeam.Width1 = math.random(1, 3) / 100
-            branchBeam.CurveSize0 = (math.random() - 0.5) * 5
-            branchBeam.CurveSize1 = (math.random() - 0.5) * 5
-            branchBeam.Texture = "rbxassetid://16607923"
-            branchBeam.TextureLength = 2
-            branchBeam.TextureMode = Enum.TextureMode.Static
-            branchBeam.Color = ColorSequence.new(lightColor, whiteColor)
-            branchBeam.Transparency = NumberSequence.new({
-                NumberSequenceKeypoint.new(0, 0.4),
-                NumberSequenceKeypoint.new(0.5, 0.1),
-                NumberSequenceKeypoint.new(1, 1)
-            })
-            branchBeam.Parent = branchPart
-
-            local bLifetime = lifetime * 0.55
-            Debris:AddItem(branchPart, bLifetime + 0.05)
-            Debris:AddItem(bAttach0, bLifetime + 0.05)
-
-            ts:Create(branchBeam, TweenInfo.new(bLifetime, Enum.EasingStyle.Expo, Enum.EasingDirection.Out), {
-                Transparency = NumberSequence.new(1),
-                Width0 = 0,
-                Width1 = 0
-            }):Play()
-        end)
-    end
-end
-
-local function StartGroundArcs()
-    if groundArcActive then return end
-    groundArcActive = true
-
-    -- Build available source parts list (only parts that actually exist on this character)
-    local arcPartsList = {}
-    for _, name in ipairs(GROUND_ARC_SOURCE_PARTS) do
-        local p = CharacterRef:FindFirstChild(name)
-        if p and p:IsA("BasePart") then
-            table.insert(arcPartsList, p)
-        end
-    end
-    if #arcPartsList == 0 then
-        table.insert(arcPartsList, HRP)
-    end
-
-    groundArcThread = task.spawn(function()
-        while groundArcActive and CharacterRef and CharacterRef.Parent do
-            local isMoving = h and h.Parent and h.MoveDirection.Magnitude > 0
-            local speed = h and h.Parent and h.WalkSpeed or 0
-
-            if speed > 30 then
-                local lightColor = GetLightningColor()
-
-                if isMoving then
-                    -- Running: fire 1-4 simultaneous arcs from random body parts
-                    -- G_Optimized: always 1 arc; Normal: 1-3 arcs
-                    local numArcs = _G.G_Optimized and 1 or math.random(1, 3)
-                    for i = 1, numArcs do
-                        local part = arcPartsList[math.random(1, #arcPartsList)]
-                        -- Each arc is spawned independently so they don't block each other
-                        task.spawn(FireGroundArc, part, lightColor)
-                    end
-                else
-                    -- Standing still at high speed: occasional single torso arc
-                    -- Simulates the "idle lightning crackling" seen in DCEU scenes
-                    if math.random() < 0.35 then
-                        task.spawn(FireGroundArc, HRP, lightColor)
-                    end
-                end
-            end
-
-            -- Arc interval scales with speed:
-            -- At full speed (375): fires every ~30-70ms = ~15-30 arcs/second
-            -- At low speed (100): fires every ~60-110ms = ~9-16 arcs/second
-            -- G_Optimized: fires every ~80-150ms regardless of speed
-            local interval
-            if _G.G_Optimized then
-                interval = math.random(8, 15) / 100
-            else
-                local speedFactor = math.clamp(speed / 375, 0, 1)
-                local minMs = math.floor(3 + (1 - speedFactor) * 4)
-                local maxMs = math.floor(7 + (1 - speedFactor) * 7)
-                interval = math.random(minMs, maxMs) / 100
-            end
-            task.wait(interval)
-        end
-        groundArcActive = false
-    end)
-end
-
-local function StopGroundArcs()
-    groundArcActive = false
-    if groundArcThread then
-        task.cancel(groundArcThread)
-        groundArcThread = nil
-    end
-end
-
--- Store on playerData so CleanupPlayer can reach them
-playerData.StopLightningFlicker = StopLightningFlicker
-playerData.StopGroundArcs = StopGroundArcs
-
--- ================================================================
--- FIX: idleParticleConnection bug
--- Original: h.Running fired EnableLightningGlobal() even when spd=false
--- This caused the lightning particle to re-enable itself after X/Stop
--- Fix: guard with playerData.spd check
--- ================================================================
 local idleParticleConnection
 local lastRunningState = false
 
+
 idleParticleConnection = h.Running:Connect(function(speed)
-    -- BUG FIX: Do not re-enable lightning effects if speed mode is off
-    if not playerData.spd then
-        DisableLightningGlobal()
-        return
-    end
 
     if h.WalkSpeed > 100 then
         if speed > 0 then
+
             DisableLightningGlobal()
             lastRunningState = true
         else
-            EnableLightningGlobal()
+
+            if _G.LightningStyle ~= "DCEU" then
+                EnableLightningGlobal()
+            end
             lastRunningState = false
         end
     else
+
         DisableLightningGlobal()
     end
 end)
+
+
 
 
 local TextChatService = game:GetService("TextChatService")
@@ -2343,6 +1915,7 @@ local function InitializeTextChannel()
 end
 
 local function BroadcastState(stateType, value)
+
     if not textChannel and not InitializeTextChannel() then return end
     
     local message = ""
@@ -2357,6 +1930,7 @@ local function BroadcastState(stateType, value)
         return
     end
     
+
     pcall(function()
         textChannel:SendAsync(message)
     end)
@@ -2365,6 +1939,7 @@ end
 local syncConnection
 
 local function SetupSyncListener()
+
     if not textChannel and not InitializeTextChannel() then return end
     
     print("👂 Listening for speedster commands (.1, .2, .3)...")
@@ -2379,17 +1954,22 @@ local function SetupSyncListener()
         local senderUserId = textSource.UserId
         if senderUserId == player.UserId then return end
         
+
         local senderPlayer = Players:GetPlayerByUserId(senderUserId)
         if not senderPlayer or not IsAllowed(senderPlayer) then 
             return 
         end
         
+
         local senderData = PlayerData[senderUserId]
         if not senderData then return end
         
+
         if msgText == ".1" then
+
             print("🔄 " .. textSource.Name .. " enabled speed!")
             
+            -- Call the player's EnableAllCoolStuff function to set up and enable their trails on our client
             if senderData.EnableAllCoolStuff then
                 pcall(function()
                     senderData.EnableAllCoolStuff()
@@ -2401,11 +1981,15 @@ local function SetupSyncListener()
             end
             
         elseif msgText == ".2" then
+
             print("🔄 " .. textSource.Name .. " enabled phase!")
+
             
         elseif msgText == ".3" then
+
             print("🔄 " .. textSource.Name .. " stopped all effects!")
             
+            -- Call the player's DisableCoolStuff function to disable their trails on our client
             if senderData.DisableCoolStuff then
                 pcall(function()
                     senderData.DisableCoolStuff()
@@ -2484,8 +2068,8 @@ V88()
 
     angle+=dt*speed/radius
     local o=Vector3.new(math.cos(angle)*radius,0,math.sin(angle)*radius)
-    local tp=ocf.Position+o
-    local d=tp-HRP.Position
+    local t=ocf.Position+o
+    local d=t-HRP.Position
     HRP.AssemblyLinearVelocity=d/dt
     if d.Magnitude>0.1 then
         HRP.CFrame=CFrame.new(HRP.Position,HRP.Position+Vector3.new(d.X,0,d.Z))
@@ -2503,6 +2087,7 @@ mirb.MouseButton1Click:Connect(function()
 
 StopVibrate()
     
+
     StopAllPlayerSounds()
 
     DisableDarkAura()
@@ -2536,23 +2121,26 @@ StartVibrate()
 
         EnableDarkAura()
         
+
         BroadcastState("phase", true)
     else
 
 StopVibrate()
     
+
     StopAllPlayerSounds()
 
         sn(false)
         DisableDarkAura()
         
+
         BroadcastState("phase", false)
     end
 end)
 
 local a
 local x
-local tFlag = false
+local t = false
 local b = "rbxassetid://897"
 
 local heartbeatConnection
@@ -2564,55 +2152,17 @@ local function storeConnection(conn)
     return conn
 end
 
--- ================================================================
--- MASTER DISABLE FUNCTION
--- Called by all stop paths to guarantee a clean shutdown every time.
--- Fixes the "doesn't properly disable" bug: all trail tables and
--- all dynamic systems are stopped in a single deterministic sequence.
--- ================================================================
-local function MasterDisableAll()
-    -- 1. Stop dynamic systems FIRST (they may be enabling trails)
-    StopLightningFlicker()
-    StopGroundArcs()
-
-    -- 2. Stop the particle effect system
-    StopEffect()
-
-    -- 3. Disable ALL trail tables explicitly
-    V88()   -- t trails
-    V90()   -- tlist trails
-    DisableCoolStuff()   -- allTrails
-    DisableLightningGlobal()   -- particle emitter on HRP
-
-    -- 4. Stop running connections
-    if runningConnection then
-        runningConnection:Disconnect()
-        runningConnection = nil
-    end
-    if heartbeatConnection then
-        heartbeatConnection:Disconnect()
-        heartbeatConnection = nil
-    end
-
-    -- 5. Disable the enableAll system (TrailsPerPart + animations + sounds)
-    disableRunEvents()
-    disableAll()
-
-    -- 6. Reset flags
-    spd = false
-    playerData.spd = false
-end
-
 spb.MouseButton1Click:Connect(function()
     spd = not spd
     playerData.spd = spd
 
-    if spd then
-        -- === ENABLE SPEED ===
-        V89()
-        V87()
+if _G.LightningStyle ~= "DCEU" then
+V89()
 
-        -- Start heartbeat speed lock
+V87()
+end
+
+    if spd then
         if heartbeatConnection then heartbeatConnection:Disconnect() end
         heartbeatConnection = RunService.Heartbeat:Connect(function()
             if h and h.Parent then
@@ -2620,13 +2170,16 @@ spb.MouseButton1Click:Connect(function()
             end
         end)
 
-        -- Enable all visual systems
-        EnableLightningGlobal()
-        EnableAllCoolStuff()
-        StartLightningFlicker()
-        StartGroundArcs()
+if _G.LightningStyle ~= "DCEU" then
+EnableLightningGlobal()
+
+EnableAllCoolStuff()
+end
+
 
         BroadcastState("speed", true)
+
+
 
         if runningConnection then
             runningConnection:Disconnect()
@@ -2636,17 +2189,19 @@ spb.MouseButton1Click:Connect(function()
         runningConnection = h.Running:Connect(function(s)
             if not spd then return end
 
-            StopEffect()
+StopEffect() 
 
             if s > 0 then
-                if not tFlag then
-                    tFlag = true
+                if not t then
+                    t = true
+
                     PlayRandomRunStartSound()
                     CurrentShaker:Shake(ShakePresets.HeavyHit())
                     if x then x:Destroy() end
-                    task.delay(0.3, function() tFlag = false end)
+                    task.delay(0.3, function() t = false end)
                 end
             else
+
                 StartEffect()
             end
         end)
@@ -2654,23 +2209,49 @@ spb.MouseButton1Click:Connect(function()
         enableRunEvents()
         enableAll()
     else
-        -- === DISABLE SPEED — use master disable to guarantee clean shutdown ===
-        MasterDisableAll()
 
+DisableLightningGlobal()
+
+StopEffect() 
+
+DisableCoolStuff()
+
+        if heartbeatConnection then
+            heartbeatConnection:Disconnect()
+            heartbeatConnection = nil
+        end
         h.WalkSpeed = ws0
-        if x then pcall(function() x:Destroy() end) end
-        if a then pcall(function() a:Destroy() end) end
+
+        if x then x:Destroy() end
+        if a then a:Destroy() end
+
+V88()
+
+V90()
+
+        StopEffect()
+        if runningConnection then
+            runningConnection:Disconnect()
+            runningConnection = nil
+        end
+
+        disableRunEvents()
+        disableAll()
     end
 end)
 
 sb.MouseButton1Click:Connect(function()
-    -- STOP button: full master disable
-    MasterDisableAll()
-
-    ang = false
-    phs = false
-    playerData.ang = false
-    playerData.phs = false
+    StopEffect()
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
+        heartbeatConnection = nil
+    end
+    if runningConnection then
+        runningConnection:Disconnect()
+        runningConnection = nil
+    end
+    disableRunEvents()
+    disableAll()
 
     if HRP and HRP.Parent then
         HRP.AssemblyLinearVelocity = Vector3.new()
@@ -2678,16 +2259,30 @@ sb.MouseButton1Click:Connect(function()
     if h and h.Parent then
         h.WalkSpeed = ws0
     end
+    
+
+    playerData.ang = false
+    playerData.phs = false
+    playerData.spd = false
+    ang = false
+    phs = false
+    spd = false
 
     if x then pcall(function() x:Destroy() end) end
     if a then pcall(function() a:Destroy() end) end
 
+    DisableLightningGlobal()
+    DisableCoolStuff()
+    
+
     BroadcastState("stop")
+    V88()
+    V90()
     StopVibrate()
+    
+
     StopAllPlayerSounds()
     DisableDarkAura()
-
-    sn(false)
 
     if cam then
         cam.CameraType = Enum.CameraType.Custom
@@ -2716,7 +2311,6 @@ end
 local mainHeartbeat = RunService.Heartbeat:Connect(function(dt)
     if not CharacterRef or not CharacterRef.Parent then return end
     if nc then
-        -- FIX: cache descendants to avoid GetDescendants() every frame
         for _,v in next,CharacterRef:GetDescendants() do
             if v:IsA("BasePart") then 
                 pcall(function() v.CanCollide=false end)
@@ -2736,6 +2330,7 @@ local animPlayedConn = h.AnimationPlayed:Connect(function(animTrack)
 end)
 table.insert(playerData.connections, animPlayedConn)
 V88()
+
 V90()
 
 
@@ -2789,19 +2384,18 @@ uis.InputBegan:Connect(function(input, gameProcessed)
 
     if input.UserInputType == Enum.UserInputType.Keyboard then
         local key = input.KeyCode
-
-        -- ============================================================
-        -- Q KEY: TOGGLE SPEED
-        -- ============================================================
         if key == Enum.KeyCode.Q then
 
     spd = not spd
     playerData.spd = spd
 
-    if spd then
-        V89()
-        V87()
+if _G.LightningStyle ~= "DCEU" then
+V89()
 
+V87()
+end
+
+    if spd then
         if heartbeatConnection then heartbeatConnection:Disconnect() end
         heartbeatConnection = RunService.Heartbeat:Connect(function()
             if h and h.Parent then
@@ -2809,12 +2403,16 @@ uis.InputBegan:Connect(function(input, gameProcessed)
             end
         end)
 
-        EnableAllCoolStuff()
-        EnableLightningGlobal()
-        StartLightningFlicker()
-        StartGroundArcs()
+if _G.LightningStyle ~= "DCEU" then
+EnableAllCoolStuff()
+
+EnableLightningGlobal()
+end
+
 
         BroadcastState("speed", true)
+
+
 
         if runningConnection then
             runningConnection:Disconnect()
@@ -2824,35 +2422,57 @@ uis.InputBegan:Connect(function(input, gameProcessed)
         runningConnection = h.Running:Connect(function(s)
             if not spd then return end
 
-            StopEffect()
+StopEffect() 
 
             if s > 0 then
-                if not tFlag then
-                    tFlag = true
+                if not t then
+                    t = true
+
                     PlayRandomRunStartSound()
                     CurrentShaker:Shake(ShakePresets.HeavyHit())
                     if x then x:Destroy() end
-                    task.delay(0.3, function() tFlag = false end)
+                    task.delay(0.3, function() t = false end)
                 end
             else
+
                 StartEffect()
             end
         end)
 
         enableRunEvents()
+
         enableAll()
     else
-        -- Use master disable to guarantee clean shutdown
-        MasterDisableAll()
 
+StopEffect() 
+
+DisableLightningGlobal()
+
+DisableCoolStuff()
+
+        if heartbeatConnection then
+            heartbeatConnection:Disconnect()
+            heartbeatConnection = nil
+        end
         h.WalkSpeed = ws0
-        if x then pcall(function() x:Destroy() end) end
-        if a then pcall(function() a:Destroy() end) end
+
+        if x then x:Destroy() end
+        if a then a:Destroy() end
+
+V88()
+
+V90()
+
+        StopEffect()
+        if runningConnection then
+            runningConnection:Disconnect()
+            runningConnection = nil
+        end
+
+        disableRunEvents()
+        disableAll()
     end
 
-        -- ============================================================
-        -- C KEY: TOGGLE PHASE
-        -- ============================================================
         elseif key == Enum.KeyCode.C then
 
     phs=not phs
@@ -2864,60 +2484,62 @@ StartVibrate()
 
         EnableDarkAura()
         
+
         BroadcastState("phase", true)
     else
 
 StopVibrate()
     
+
     StopAllPlayerSounds()
 
         sn(false)
         DisableDarkAura()
         
+
         BroadcastState("phase", false)
     end
 
-        -- ============================================================
-        -- B KEY: TOGGLE ANGULAR MIRAGE
-        -- ============================================================
         elseif key == Enum.KeyCode.B then
 
 StopVibrate()
     
-StopAllPlayerSounds()
 
-DisableDarkAura()
-ang=not ang
-playerData.ang = ang
-if ang then
+    StopAllPlayerSounds()
+
+    DisableDarkAura()
+    ang=not ang
+    playerData.ang = ang
+    if ang then
 
 V88()
 
-    ocf=HRP.CFrame
-    occ=cam.CameraType
-    cam.CameraType=Enum.CameraType.Scriptable
-    sn(true)
-else
+        ocf=r.CFrame
+        occ=cam.CameraType
+        cam.CameraType=Enum.CameraType.Scriptable
+        sn(true)
+    else
 
 V87()
 
-    HRP.AssemblyLinearVelocity=Vector3.new()
-    cam.CameraType=occ
-    sn(false)
-end
+        HRP.AssemblyLinearVelocity=Vector3.new()
+        cam.CameraType=occ
+        sn(false)
+    end
 
-        -- ============================================================
-        -- X KEY: FULL STOP — guaranteed clean shutdown via MasterDisableAll
-        -- ============================================================
-        elseif key == Enum.KeyCode.X then
+elseif key == Enum.KeyCode.X then
 
-    -- Full master disable covers everything
-    MasterDisableAll()
-
-    ang = false
-    phs = false
-    playerData.ang = false
-    playerData.phs = false
+    StopEffect()
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
+        heartbeatConnection = nil
+    end
+    if runningConnection then
+        runningConnection:Disconnect()
+        runningConnection = nil
+    end
+    disableRunEvents()
+    disableAll()
 
     if HRP and HRP.Parent then
         HRP.AssemblyLinearVelocity = Vector3.new()
@@ -2925,16 +2547,30 @@ end
     if h and h.Parent then
         h.WalkSpeed = ws0
     end
+    
+
+    playerData.ang = false
+    playerData.phs = false
+    playerData.spd = false
+    ang = false
+    phs = false
+    spd = false
 
     if x then pcall(function() x:Destroy() end) end
     if a then pcall(function() a:Destroy() end) end
 
+    DisableLightningGlobal()
+    DisableCoolStuff()
+    
+
     BroadcastState("stop")
+    V88()
+    V90()
     StopVibrate()
+    
+
     StopAllPlayerSounds()
     DisableDarkAura()
-
-    sn(false)
 
     if cam then
         cam.CameraType = Enum.CameraType.Custom
@@ -2950,7 +2586,7 @@ end
 end)
 end
 
-local bNames = {
+local b = {
 
     "Head",
     "Left Arm",
@@ -2993,7 +2629,7 @@ local zoomCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(1, Color3.fromRGB(26,144,255))
 })
 
-local kidCS2 = ColorSequence.new({
+local kidCS = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
 })
@@ -3008,11 +2644,7 @@ local regularCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(1, Color3.fromRGB(255,59,33))
 })
 
--- ================================================================
--- COLOR UPDATE THREAD
--- FIX: Increased wait interval in G_Optimized mode (0.5s vs 0.1s)
--- This was running every 0.1s even when nothing needed updating
--- ================================================================
+
 local colorUpdateRunning = true
 local colorUpdateThread = task.spawn(function()
     while colorUpdateRunning and player and player.Parent and CharacterRef and CharacterRef.Parent do
@@ -3024,7 +2656,7 @@ local colorUpdateThread = task.spawn(function()
                 cs = rfCS2
                 spot = Color3.fromRGB(255,0,0)
             elseif speedsterType == "KidFlash" then
-                cs = kidCS2
+                cs = kidCS
                 spot = Color3.fromRGB(255,255,0)
             elseif speedsterType == "Zoom" then
                 cs = zoomCS2
@@ -3039,6 +2671,7 @@ local colorUpdateThread = task.spawn(function()
                 cs = regularCS2
                 spot = Color3.fromRGB(255,59,33)
             else
+
                 cs = regularCS2
                 spot = Color3.fromRGB(255,59,33)
             end
@@ -3046,12 +2679,12 @@ local colorUpdateThread = task.spawn(function()
             if cs and CharacterRef and CharacterRef.Parent then
                 mk()
 
-                for _,n in pairs(bNames) do
+                for _,n in pairs(b) do
                     local pr = CharacterRef:FindFirstChild(n)
                     if pr and pr.Parent then
-                        for _,tr in pairs(pr:GetChildren()) do
-                            if tr:IsA("Trail") and tr.Parent then
-                                tr.Color = cs
+                        for _,t in pairs(pr:GetChildren()) do
+                            if t:IsA("Trail") and t.Parent then
+                                t.Color = cs
                             end
                         end
                     end
@@ -3092,9 +2725,7 @@ local colorUpdateThread = task.spawn(function()
             warn("Color update error for " .. player.Name .. ": " .. tostring(err))
         end
 
-        -- G_Optimized: update color less frequently (0.5s vs 0.1s)
-        -- Color rarely changes so 0.1s was waste; 0.5s is imperceptible
-        task.wait(_G.G_Optimized and 0.5 or 0.1)
+        task.wait(0.1)
     end
     colorUpdateRunning = false
 end)
@@ -3103,6 +2734,8 @@ end)
 playerData.stopColorUpdate = function()
     colorUpdateRunning = false
 end
+
+
 
 
 if isLocalPlayer then
@@ -3142,9 +2775,10 @@ if isLocalPlayer then
 end
 
 
-local humanoidForDeath = CharacterRef:FindFirstChildOfClass("Humanoid")
-if humanoidForDeath then
-    local diedConnection = humanoidForDeath.Died:Connect(function()
+local humanoid = CharacterRef:FindFirstChildOfClass("Humanoid")
+if humanoid then
+
+    local diedConnection = humanoid.Died:Connect(function()
         CleanupPlayer(player)
     end)
     table.insert(playerData.connections, diedConnection)
@@ -3161,9 +2795,58 @@ table.insert(playerData.connections, ancestryConnection)
 end
 
 
--- ================================================================
--- WIND SYSTEM (original, preserved exactly)
--- ================================================================
+local function CheckGameMode()
+    local allowedPlayersInGame = 0
+    for _, player in ipairs(Players:GetPlayers()) do
+        if IsAllowed(player) then
+            allowedPlayersInGame = allowedPlayersInGame + 1
+        end
+    end
+    
+    if allowedPlayersInGame == 1 then
+        print("🎮 SINGLE PLAYER MODE - Running solo!")
+    else
+        print("👥 MULTIPLAYER MODE - " .. allowedPlayersInGame .. " speedsters active!")
+    end
+    return allowedPlayersInGame
+end
+
+
+local allowedCount = CheckGameMode()
+for _, player in ipairs(Players:GetPlayers()) do
+    if IsAllowed(player) and player.Character then
+        SetupSpeedster(player)
+    end
+end
+
+
+Players.PlayerAdded:Connect(function(player)
+    if IsAllowed(player) then
+        CheckGameMode()
+        player.CharacterAdded:Connect(function()
+            SetupSpeedster(player)
+        end)
+    end
+end)
+
+for _, player in ipairs(Players:GetPlayers()) do
+    if IsAllowed(player) then
+        player.CharacterAdded:Connect(function()
+            SetupSpeedster(player)
+        end)
+    end
+end
+
+
+Players.PlayerRemoving:Connect(function(player)
+    CleanupPlayer(player)
+    CheckGameMode()
+end)
+
+
+print("⚡ SendAsync() SYNC SYSTEM LOADED!")
+print("📡 Commands: .1 = Speed | .2 = Phase | .3 = Stop")
+print("✅ Multiplayer sync: ACTIVE")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
@@ -3180,6 +2863,7 @@ if not Blur then
 end
 Blur.Size = 0
 
+-- RunBlur: tiny blur that fires at max when running starts, then tweens to 0
 local RunBlur = CurrentCamera:FindFirstChild("RunBlur")
 if not RunBlur then
 	RunBlur = Instance.new("BlurEffect", CurrentCamera)
@@ -3217,7 +2901,7 @@ for _, part in ipairs(bodyParts) do
 		e.EmissionDirection = Enum.NormalId.Top
 		e.Enabled = false
 		e.Lifetime = NumberRange.new(0.25,0.5)
-		e.Rate = _G.G_Optimized and 125 or 250
+		e.Rate = 250
 		e.RotSpeed = NumberRange.new(-50,50)
 		e.Rotation = NumberRange.new(-180,180)
 		e.Speed = NumberRange.new(50,200)
@@ -3255,7 +2939,7 @@ for _, part in ipairs(bodyParts) do
 		e.EmissionDirection = Enum.NormalId.Top
 		e.Enabled = false
 		e.Lifetime = NumberRange.new(0.25,0.5)
-		e.Rate = _G.G_Optimized and 125 or 250
+		e.Rate = 250
 		e.RotSpeed = NumberRange.new(0,0)
 		e.Rotation = NumberRange.new(-90,-90)
 		e.Speed = NumberRange.new(50,200)
@@ -3293,7 +2977,7 @@ for _, part in ipairs(bodyParts) do
 		e.EmissionDirection = Enum.NormalId.Back
 		e.Enabled = false
 		e.Lifetime = NumberRange.new(0.5,1)
-		e.Rate = _G.G_Optimized and 75 or 150
+		e.Rate = 150
 		e.RotSpeed = NumberRange.new(-50,50)
 		e.Rotation = NumberRange.new(-180,180)
 		e.Speed = NumberRange.new(30,100)
@@ -3345,7 +3029,7 @@ local function makeWind(name, emissionDir, lifetimeMin, lifetimeMax, rate, rotSp
 	e.EmissionDirection = emissionDir
 	e.Enabled = false
 	e.Lifetime = NumberRange.new(lifetimeMin, lifetimeMax)
-	e.Rate = _G.G_Optimized and math.floor(rate * 0.5) or rate
+	e.Rate = rate
 	e.RotSpeed = NumberRange.new(rotSpeedMin, rotSpeedMax)
 	e.Rotation = NumberRange.new(rotMin, rotMax)
 	e.Speed = NumberRange.new(speedMin, speedMax)
@@ -3402,7 +3086,7 @@ Part_upvr.Size = Vector3.new()
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local Humanoid = Character:WaitForChild("Humanoid")
 
-local tickW = 0
+local tick = 0
 
 RunService.RenderStepped:Connect(function()
 	local Magnitude = HumanoidRootPart.Velocity.Magnitude
@@ -3413,7 +3097,7 @@ RunService.RenderStepped:Connect(function()
 		Part_upvr.Position = CurrentCamera.CFrame.Position
 	end
 
-	tickW += 1
+	tick += 1
 
 	Blur.Size = math.clamp(Magnitude / 70, 0, 9)
 
@@ -3437,7 +3121,7 @@ RunService.RenderStepped:Connect(function()
 	local wndPos = CurrentCamera.CFrame.Position + CurrentCamera.CFrame.LookVector * 15
 	wndPart.CFrame = CFrame.new(wndPos, wndPos + CurrentCamera.CFrame.LookVector)
 
-	if 80 <= Magnitude and tickW % math.max(1, math.floor(50 / Magnitude)) == 0 then
+	if 80 <= Magnitude and tick % math.max(1, math.floor(50 / Magnitude)) == 0 then
 		local Part = Instance.new("Part")
 		Part.CastShadow = false
 		Part.Color = Color3.new(1,1,1)
@@ -3464,7 +3148,7 @@ RunService.RenderStepped:Connect(function()
 				v.Enabled = true
 				if v.Name ~= "Wind3" then
 					v.Speed = NumberRange.new(math.clamp(5*Magnitude/40,-100,50), math.clamp(20*Magnitude/40,-100,200))
-					v.Rate = math.clamp(2*Magnitude/4, 0, _G.G_Optimized and 1000 or 2000)
+					v.Rate = math.clamp(2*Magnitude/4, 0, 2000)
 				elseif v.Name == "Wind3" then
 					local lock = false
 					if Humanoid.FloorMaterial == Enum.Material.Air then
@@ -3495,65 +3179,3 @@ RunService.RenderStepped:Connect(function()
 		end
 	end
 end)
-
-
--- ================================================================
--- MULTIPLAYER SETUP (original, preserved exactly)
--- ================================================================
-local function CheckGameMode()
-    local allowedPlayersInGame = 0
-    for _, player in ipairs(Players:GetPlayers()) do
-        if IsAllowed(player) then
-            allowedPlayersInGame = allowedPlayersInGame + 1
-        end
-    end
-    
-    if allowedPlayersInGame == 1 then
-        print("🎮 SINGLE PLAYER MODE - Running solo!")
-    else
-        print("👥 MULTIPLAYER MODE - " .. allowedPlayersInGame .. " speedsters active!")
-    end
-    return allowedPlayersInGame
-end
-
-
-local allowedCount = CheckGameMode()
-for _, player in ipairs(Players:GetPlayers()) do
-    if IsAllowed(player) and player.Character then
-        SetupSpeedster(player)
-    end
-end
-
-
-Players.PlayerAdded:Connect(function(player)
-    if IsAllowed(player) then
-        CheckGameMode()
-        player.CharacterAdded:Connect(function()
-            SetupSpeedster(player)
-        end)
-    end
-end)
-
-for _, player in ipairs(Players:GetPlayers()) do
-    if IsAllowed(player) then
-        player.CharacterAdded:Connect(function()
-            SetupSpeedster(player)
-        end)
-    end
-end
-
-
-Players.PlayerRemoving:Connect(function(player)
-    CleanupPlayer(player)
-    CheckGameMode()
-end)
-
-
-print("⚡ SendAsync() SYNC SYSTEM LOADED!")
-print("📡 Commands: .1 = Speed | .2 = Phase | .3 = Stop")
-print("✅ Multiplayer sync: ACTIVE")
-print("⚡ DYNAMIC LIGHTNING SYSTEM ACTIVE")
-print("   - DCEU Ground Arc System: Beam + Raycast (ENABLED)")
-print("   - Dynamic Trail Flicker Engine: 3-layer async (ENABLED)")
-print("   - HeartbeatUpdate: Optimized (no clone/destroy spam)")
-print("   - G_Optimized: " .. (_G.G_Optimized and "ENABLED (performance mode)" or "DISABLED (full quality)"))
