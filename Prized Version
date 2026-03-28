@@ -4,7 +4,6 @@
     _G.NightMode = true  -- Set to false for day mode
     _G.TODC = true  -- TimeOfDayChange: Set to false to disable ALL lighting changes
     _G.G_Optimized = false  -- Set to true for performance mode (reduces lightning density)
-    _G.LightningType = "DCEU"  -- "DCEU" = ground arc Beams only (no trails) | "Regular" = trails & particles only (no ground arcs)
     
     AllowedPlayers = {
         ["Hitmeforgamepass"] = "RF",
@@ -42,19 +41,6 @@ end
 
 if _G.G_Optimized == nil then
     _G.G_Optimized = false
-end
-
-if _G.LightningType == nil then
-    _G.LightningType = "DCEU"
-end
-
-if _G.LightningType == "DCEU" then
-    print("⚡ LightningType: DCEU (ground arc Beams only — trails DISABLED)")
-elseif _G.LightningType == "Regular" then
-    print("⚡ LightningType: Regular (trails & particles only — ground arcs DISABLED)")
-else
-    warn("⚡ LightningType: Unknown value '" .. tostring(_G.LightningType) .. "' — defaulting to DCEU")
-    _G.LightningType = "DCEU"
 end
 
 if not _G.TODC then
@@ -2404,7 +2390,7 @@ local function SetupSyncListener()
         if msgText == ".1" then
             print("🔄 " .. textSource.Name .. " enabled speed!")
             
-            if _G.LightningType == "Regular" and senderData.EnableAllCoolStuff then
+            if senderData.EnableAllCoolStuff then
                 pcall(function()
                     senderData.EnableAllCoolStuff()
                 end)
@@ -2532,7 +2518,7 @@ V88()
         sn(true)
     else
 
-if _G.LightningType == "Regular" then V87() end
+V87()
 
         HRP.AssemblyLinearVelocity=Vector3.new()
         cam.CameraType=occ
@@ -2623,6 +2609,8 @@ spb.MouseButton1Click:Connect(function()
 
     if spd then
         -- === ENABLE SPEED ===
+        V89()
+        V87()
 
         -- Start heartbeat speed lock
         if heartbeatConnection then heartbeatConnection:Disconnect() end
@@ -2632,18 +2620,11 @@ spb.MouseButton1Click:Connect(function()
             end
         end)
 
-        -- Enable visual systems based on LightningType:
-        -- DCEU    = ground arc Beams ONLY (no trails, no particles, no flicker engine)
-        -- Regular = trails + particles + flicker engine ONLY (no ground arcs)
-        if _G.LightningType == "DCEU" then
-            StartGroundArcs()
-        else
-            V89()
-            V87()
-            EnableLightningGlobal()
-            EnableAllCoolStuff()
-            StartLightningFlicker()
-        end
+        -- Enable all visual systems
+        EnableLightningGlobal()
+        EnableAllCoolStuff()
+        StartLightningFlicker()
+        StartGroundArcs()
 
         BroadcastState("speed", true)
 
@@ -2671,9 +2652,7 @@ spb.MouseButton1Click:Connect(function()
         end)
 
         enableRunEvents()
-        if _G.LightningType == "Regular" then
-            enableAll()
-        end
+        enableAll()
     else
         -- === DISABLE SPEED — use master disable to guarantee clean shutdown ===
         MasterDisableAll()
@@ -2820,6 +2799,9 @@ uis.InputBegan:Connect(function(input, gameProcessed)
     playerData.spd = spd
 
     if spd then
+        V89()
+        V87()
+
         if heartbeatConnection then heartbeatConnection:Disconnect() end
         heartbeatConnection = RunService.Heartbeat:Connect(function()
             if h and h.Parent then
@@ -2827,18 +2809,10 @@ uis.InputBegan:Connect(function(input, gameProcessed)
             end
         end)
 
-        -- Enable visual systems based on LightningType:
-        -- DCEU    = ground arc Beams ONLY (no trails, no particles, no flicker engine)
-        -- Regular = trails + particles + flicker engine ONLY (no ground arcs)
-        if _G.LightningType == "DCEU" then
-            StartGroundArcs()
-        else
-            V89()
-            V87()
-            EnableLightningGlobal()
-            EnableAllCoolStuff()
-            StartLightningFlicker()
-        end
+        EnableAllCoolStuff()
+        EnableLightningGlobal()
+        StartLightningFlicker()
+        StartGroundArcs()
 
         BroadcastState("speed", true)
 
@@ -2866,9 +2840,7 @@ uis.InputBegan:Connect(function(input, gameProcessed)
         end)
 
         enableRunEvents()
-        if _G.LightningType == "Regular" then
-            enableAll()
-        end
+        enableAll()
     else
         -- Use master disable to guarantee clean shutdown
         MasterDisableAll()
@@ -2927,7 +2899,7 @@ V88()
     sn(true)
 else
 
-if _G.LightningType == "Regular" then V87() end
+V87()
 
     HRP.AssemblyLinearVelocity=Vector3.new()
     cam.CameraType=occ
@@ -3581,12 +3553,7 @@ print("⚡ SendAsync() SYNC SYSTEM LOADED!")
 print("📡 Commands: .1 = Speed | .2 = Phase | .3 = Stop")
 print("✅ Multiplayer sync: ACTIVE")
 print("⚡ DYNAMIC LIGHTNING SYSTEM ACTIVE")
-if _G.LightningType == "DCEU" then
-    print("   - DCEU Ground Arc System: Beam + Raycast (ENABLED)")
-    print("   - Trails: DISABLED (DCEU mode — arcs only)")
-else
-    print("   - DCEU Ground Arc System: DISABLED (LightningType = Regular)")
-    print("   - Regular Mode: Trails & Particles only")
-end
+print("   - DCEU Ground Arc System: Beam + Raycast (ENABLED)")
+print("   - Dynamic Trail Flicker Engine: 3-layer async (ENABLED)")
 print("   - HeartbeatUpdate: Optimized (no clone/destroy spam)")
 print("   - G_Optimized: " .. (_G.G_Optimized and "ENABLED (performance mode)" or "DISABLED (full quality)"))
