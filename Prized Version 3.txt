@@ -3429,15 +3429,15 @@ makeWind(
 	NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.81300002336502075,0),NumberSequenceKeypoint.new(1,1,0)})
 )
 
-local Part_upvr = Instance.new("Part", CharacterRef)
+local Part_upvr = Instance.new("Part", Character)
 Part_upvr.Transparency = 1
 Part_upvr.Anchored = true
 Part_upvr.CanCollide = false
 Part_upvr.Massless = true
 Part_upvr.Size = Vector3.new()
 
-local HumanoidRootPart = CharacterRef:WaitForChild("HumanoidRootPart")
-local Humanoid = CharacterRef:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Humanoid = Character:WaitForChild("Humanoid")
 
 local tickW = 0
 
