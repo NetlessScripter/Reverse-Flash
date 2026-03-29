@@ -1,0 +1,107 @@
+local za=game:GetService("ReplicatedStorage")
+local ora=game:GetService("TweenService")
+local muda=require(za.Template.HitService.StunHandlerV2)
+
+local swings={
+	CFrame.new(1.9,-2.1,-6.4),
+	CFrame.new(0.3,-2.5,-7.3),
+	CFrame.new(2.2,-2.7,-6.1),
+	CFrame.new(0.5,-2,-7.9),
+	CFrame.new(2,-2.4,-6.7),
+	CFrame.new(0.4,-2.6,-7.1),
+}
+
+script.Parent.OnServerEvent:Connect(function(plr)
+	local dio=plr.Character
+	if not dio then return end
+	local jotaro=dio.Humanoid
+	local star=dio.HumanoidRootPart
+
+	local wry=jotaro:LoadAnimation(script.Windup)
+	wry:Play()
+
+	jotaro.WalkSpeed=0
+	jotaro.JumpPower=0
+
+	task.spawn(function()
+		dio.CanAttack.Value=false
+		task.wait(2.7)
+		dio.CanAttack.Value=true
+	end)
+
+	local s=Instance.new("Sound",star)
+	s.SoundId="rbxassetid://117325822482865"
+	s.Volume=2
+	s:Play()
+	game.Debris:AddItem(s,3)
+
+	local stand=star.Stand
+	local hum=stand.Humanoid
+	local root=stand.HumanoidRootPart
+
+	task.delay(1.6,function()
+		jotaro.WalkSpeed=16
+		jotaro.JumpPower=50
+		wry:Stop()
+	end)
+
+	local box=za.Template.Normal.Punch.BeemHitbox:Clone()
+	box.Parent=workspace
+	local bw=Instance.new("Weld",box)
+	bw.Part0=root
+	bw.Part1=box
+	bw.C0=CFrame.new(0,0,-8)
+	game.Debris:AddItem(box,2)
+
+	stand.Parent=star
+	local w=Instance.new("Weld",root)
+	w.Part0=root
+	w.Part1=star
+	w.C0=CFrame.new(1.5,-2.5,-3)
+
+	ora:Create(w,TweenInfo.new(.13,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{C0=swings[1]}):Play()
+	hum:LoadAnimation(script.Stand):Play()
+
+	for i=1,17 do
+		task.wait(.1)
+
+		local slot=swings[((i-1)%#swings)+1]
+		local spd=math.max(.025,.065-i*.0022)
+		local prog=i/17
+		local final=i==17
+
+		ora:Create(w,TweenInfo.new(spd,Enum.EasingStyle.Sine,Enum.EasingDirection.Out),{C0=slot}):Play()
+
+		local wide=8+prog*5
+		local dmg=final and 12 or (1.5+prog*2.2)
+
+		for _,v in pairs(workspace:GetPartBoundsInBox(box.CFrame,Vector3.new(wide,8,12+prog*3))) do
+			local m=v.Parent
+			if m and m~=dio and m:FindFirstChild("Humanoid") and not m.HumanoidRootPart.Anchored then
+				m.Humanoid:TakeDamage(dmg)
+				muda.Stun(m.Humanoid,final and 2.5 or .5)
+
+				local vel=Instance.new("BodyVelocity",m.HumanoidRootPart)
+				vel.MaxForce=Vector3.new(1,1,1)*1e6
+				if final then
+					vel.Velocity=star.CFrame.LookVector*55+Vector3.new(0,28,0)
+				else
+					local kick=math.random(2,5)+prog*4
+					vel.Velocity=star.CFrame.LookVector*kick+Vector3.new(0,math.random(0,3+math.floor(prog*3)),0)
+				end
+				game.Debris:AddItem(vel,final and .75 or .2)
+
+				if final then
+					local gyro=Instance.new("BodyGyro",m.HumanoidRootPart)
+					gyro.MaxTorque=Vector3.new(1,1,1)*1e5
+					gyro.CFrame=CFrame.lookAt(m.HumanoidRootPart.Position,m.HumanoidRootPart.Position+star.CFrame.LookVector)
+					game.Debris:AddItem(gyro,.5)
+				end
+
+				local ha=m.Humanoid:LoadAnimation(script.Hit1)
+				local hb=m.Humanoid:LoadAnimation(script.Hit2)
+				if math.random(1,2)==1 then ha:Play() else hb:Play() end
+			end
+		end
+	end
+end)
