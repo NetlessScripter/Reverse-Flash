@@ -13,7 +13,7 @@
     
     loadstring(game:HttpGet("https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Open%20Sourced%20Version"))()
     
-    CONTROLS: Q = Speed | C = Phase | B = Angular Mirage | X = Disable
+    CONTROLS: Q = Speed | C = Phase | X = Disable
     STATES: RF, Zoom, KidFlash, GodOfSpeed, NWA, Regular
     
     LIGHTNING UPGRADE NOTES:
@@ -133,7 +133,6 @@ local function SetupSpeedster(player)
         cleanupObjects = {},
         spd = false,
         phs = false,
-        ang = false,
         Running = false
     }
     
@@ -150,8 +149,6 @@ if not HRP then
 end
 
 local RunService = game:GetService("RunService")
-local WorkspaceRef = workspace
-local u = player.Name
 
 local lightningAttachment = Instance.new("Attachment")
 lightningAttachment.Name = "LightningAttachment_" .. player.Name
@@ -251,26 +248,12 @@ end
 
 
 
-local parts = {
-
-    "Left Arm",
-    "Right Arm",
-    "Left Leg",
-    "Right Leg",
-
-    "LeftUpperArm",
-    "LeftLowerArm",
-    "LeftHand",
-    "RightUpperArm",
-    "RightLowerArm",
-    "RightHand",
-
-    "LeftUpperLeg",
-    "LeftLowerLeg",
-    "LeftFoot",
-    "RightUpperLeg",
-    "RightLowerLeg",
-    "RightFoot"
+local LIMBS = {
+    "Left Arm", "Right Arm", "Left Leg", "Right Leg",
+    "LeftUpperArm", "LeftLowerArm", "LeftHand",
+    "RightUpperArm", "RightLowerArm", "RightHand",
+    "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+    "RightUpperLeg", "RightLowerLeg", "RightFoot"
 }
 
 local trailProps1 = {
@@ -360,7 +343,7 @@ local function SetupAllTrails()
     
     if not CharacterRef or not CharacterRef.Parent then return end
     
-    for _, partName in pairs(parts) do
+    for _, partName in pairs(LIMBS) do
         local part = CharacterRef:FindFirstChild(partName)
         if part and part.Parent then
 
@@ -407,126 +390,101 @@ playerData.DisableCoolStuff = DisableCoolStuff
 local l = game:GetService('Lighting')
 
 -- Lighting effects always apply regardless of TODC
+local _li
 if _G.NightMode then
 
-    do
-    local i = Instance.new('Sky')
-    i.SkyboxBk = "rbxassetid://6444884337"
-    i.SkyboxDn = "rbxassetid://6444884785"
-    i.SkyboxFt = "rbxassetid://6444884337"
-    i.SkyboxLf = "rbxassetid://6444884337"
-    i.SkyboxRt = "rbxassetid://6444884337"
-    i.SkyboxUp = "rbxassetid://6412503613"
-    i.MoonAngularSize = 11
-    i.MoonTextureId = "rbxassetid://6444320592"
-    i.SunAngularSize = 11
-    i.SunTextureId = "rbxassetid://6196665106"
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('SunRaysEffect')
-    i.Intensity = 0.009999999776482582
-    i.Spread = 0.10000000149011612
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('Atmosphere')
-    i.Density = 0.30000001192092896
-    i.Offset = 0.25
-    i.Color = Color3.new(0.7803921699523926,0.7803921699523926,0.7803921699523926)
-    i.Decay = Color3.new(0.4156862795352936,0.43921568989753723,0.4901960790157318)
-    i.Glare = 0
-    i.Haze = 0
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('BloomEffect')
-    i.Intensity = 1
-    i.Size = 24
-    i.Threshold = 2
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('DepthOfFieldEffect')
-    i.FarIntensity = 0.10000000149011612
-    i.FocusDistance = 0.05000000074505806
-    i.InFocusRadius = 30
-    i.NearIntensity = 0.75
-    i.Enabled = false
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('SunRaysEffect')
-    i.Intensity = 0.16899999976158142
-    i.Spread = 1
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('Atmosphere')
-    i.Density = 0.3009999990463257
-    i.Offset = 0.32499998807907104
-    i.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
-    i.Decay = Color3.new(0.3607843220233917,0.23529411852359772,0.05098039284348488)
-    i.Glare = 0
-    i.Haze = 0
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('BloomEffect')
-    i.Intensity = 3
-    i.Size = 100
-    i.Threshold = 1.2000000476837158
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('BlurEffect')
-    i.Size = 4
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('ColorCorrectionEffect')
-    i.Brightness = 0
-    i.Contrast = 0.10000003129243851
-    i.Saturation = 0.15000000596046448
-    i.TintColor = Color3.new(1,1,1)
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('SunRaysEffect')
-    i.Intensity = 0.03200000151991844
-    i.Spread = 0.7160000205039978
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('Sky')
-    i.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
-    i.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
-    i.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
-    i.SkyboxLf = "http://www.roblox.com/asset/?id=11389739259"
-    i.SkyboxRt = "http://www.roblox.com/asset/?id=11389735910"
-    i.SkyboxUp = "http://www.roblox.com/asset/?id=11389742333"
-    i.MoonAngularSize = 7
-    i.MoonTextureId = "rbxasset://sky/moon.jpg"
-    i.SunAngularSize = 2
-    i.SunTextureId = "rbxasset://sky/sun.jpg"
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('DepthOfFieldEffect')
-    i.FarIntensity = 0.30000001192092896
-    i.FocusDistance = 250
-    i.InFocusRadius = 38.79999923706055
-    i.NearIntensity = 0
-    i.Enabled = true
-    i.Parent = l
-    end
+    _li = Instance.new('Sky')
+    _li.SkyboxBk = "rbxassetid://6444884337"
+    _li.SkyboxDn = "rbxassetid://6444884785"
+    _li.SkyboxFt = "rbxassetid://6444884337"
+    _li.SkyboxLf = "rbxassetid://6444884337"
+    _li.SkyboxRt = "rbxassetid://6444884337"
+    _li.SkyboxUp = "rbxassetid://6412503613"
+    _li.MoonAngularSize = 11
+    _li.MoonTextureId = "rbxassetid://6444320592"
+    _li.SunAngularSize = 11
+    _li.SunTextureId = "rbxassetid://6196665106"
+    _li.Parent = l
+    _li = Instance.new('SunRaysEffect')
+    _li.Intensity = 0.009999999776482582
+    _li.Spread = 0.10000000149011612
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('Atmosphere')
+    _li.Density = 0.30000001192092896
+    _li.Offset = 0.25
+    _li.Color = Color3.new(0.7803921699523926,0.7803921699523926,0.7803921699523926)
+    _li.Decay = Color3.new(0.4156862795352936,0.43921568989753723,0.4901960790157318)
+    _li.Glare = 0
+    _li.Haze = 0
+    _li.Parent = l
+    _li = Instance.new('BloomEffect')
+    _li.Intensity = 1
+    _li.Size = 24
+    _li.Threshold = 2
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('DepthOfFieldEffect')
+    _li.FarIntensity = 0.10000000149011612
+    _li.FocusDistance = 0.05000000074505806
+    _li.InFocusRadius = 30
+    _li.NearIntensity = 0.75
+    _li.Enabled = false
+    _li.Parent = l
+    _li = Instance.new('SunRaysEffect')
+    _li.Intensity = 0.16899999976158142
+    _li.Spread = 1
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('Atmosphere')
+    _li.Density = 0.3009999990463257
+    _li.Offset = 0.32499998807907104
+    _li.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
+    _li.Decay = Color3.new(0.3607843220233917,0.23529411852359772,0.05098039284348488)
+    _li.Glare = 0
+    _li.Haze = 0
+    _li.Parent = l
+    _li = Instance.new('BloomEffect')
+    _li.Intensity = 3
+    _li.Size = 100
+    _li.Threshold = 1.2000000476837158
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('BlurEffect')
+    _li.Size = 4
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('ColorCorrectionEffect')
+    _li.Brightness = 0
+    _li.Contrast = 0.10000003129243851
+    _li.Saturation = 0.15000000596046448
+    _li.TintColor = Color3.new(1,1,1)
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('SunRaysEffect')
+    _li.Intensity = 0.03200000151991844
+    _li.Spread = 0.7160000205039978
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('Sky')
+    _li.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
+    _li.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
+    _li.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
+    _li.SkyboxLf = "http://www.roblox.com/asset/?id=11389739259"
+    _li.SkyboxRt = "http://www.roblox.com/asset/?id=11389735910"
+    _li.SkyboxUp = "http://www.roblox.com/asset/?id=11389742333"
+    _li.MoonAngularSize = 7
+    _li.MoonTextureId = "rbxasset://sky/moon.jpg"
+    _li.SunAngularSize = 2
+    _li.SunTextureId = "rbxasset://sky/sun.jpg"
+    _li.Parent = l
+    _li = Instance.new('DepthOfFieldEffect')
+    _li.FarIntensity = 0.30000001192092896
+    _li.FocusDistance = 250
+    _li.InFocusRadius = 38.79999923706055
+    _li.NearIntensity = 0
+    _li.Enabled = true
+    _li.Parent = l
     l.Brightness = 1.5
     l.ClockTime = 0
     l.FogEnd = 100000
@@ -546,81 +504,63 @@ if _G.NightMode then
     l.TimeOfDay = "00:00:00"
 else
 
-    do
-    local i = Instance.new('ColorGradingEffect')
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('SunRaysEffect')
-    i.Intensity = 0.16899999976158142
-    i.Spread = 1
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('Atmosphere')
-    i.Density = 0.3009999990463257
-    i.Offset = 0.32499998807907104
-    i.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
-    i.Decay = Color3.new(0.3607843220233917,0.23529411852359772,0.05098039284348488)
-    i.Glare = 0
-    i.Haze = 0
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('BloomEffect')
-    i.Intensity = 3
-    i.Size = 100
-    i.Threshold = 1.2000000476837158
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('BlurEffect')
-    i.Size = 4
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('ColorCorrectionEffect')
-    i.Brightness = 0
-    i.Contrast = 0.10000003129243851
-    i.Saturation = 0.15000000596046448
-    i.TintColor = Color3.new(1,1,1)
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('SunRaysEffect')
-    i.Intensity = 0.03200000151991844
-    i.Spread = 0.7160000205039978
-    i.Enabled = true
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('Sky')
-    i.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
-    i.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
-    i.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
-    i.SkyboxLf = "http://www.roblox.com/asset/?id=11389739259"
-    i.SkyboxRt = "http://www.roblox.com/asset/?id=11389735910"
-    i.SkyboxUp = "http://www.roblox.com/asset/?id=11389742333"
-    i.MoonAngularSize = 7
-    i.MoonTextureId = "rbxasset://sky/moon.jpg"
-    i.SunAngularSize = 2
-    i.SunTextureId = "rbxasset://sky/sun.jpg"
-    i.Parent = l
-    end
-    do
-    local i = Instance.new('DepthOfFieldEffect')
-    i.FarIntensity = 0.30000001192092896
-    i.FocusDistance = 250
-    i.InFocusRadius = 38.79999923706055
-    i.NearIntensity = 0
-    i.Enabled = true
-    i.Parent = l
-    end
+    _li = Instance.new('ColorGradingEffect')
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('SunRaysEffect')
+    _li.Intensity = 0.16899999976158142
+    _li.Spread = 1
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('Atmosphere')
+    _li.Density = 0.3009999990463257
+    _li.Offset = 0.32499998807907104
+    _li.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
+    _li.Decay = Color3.new(0.3607843220233917,0.23529411852359772,0.05098039284348488)
+    _li.Glare = 0
+    _li.Haze = 0
+    _li.Parent = l
+    _li = Instance.new('BloomEffect')
+    _li.Intensity = 3
+    _li.Size = 100
+    _li.Threshold = 1.2000000476837158
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('BlurEffect')
+    _li.Size = 4
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('ColorCorrectionEffect')
+    _li.Brightness = 0
+    _li.Contrast = 0.10000003129243851
+    _li.Saturation = 0.15000000596046448
+    _li.TintColor = Color3.new(1,1,1)
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('SunRaysEffect')
+    _li.Intensity = 0.03200000151991844
+    _li.Spread = 0.7160000205039978
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('Sky')
+    _li.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
+    _li.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
+    _li.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
+    _li.SkyboxLf = "http://www.roblox.com/asset/?id=11389739259"
+    _li.SkyboxRt = "http://www.roblox.com/asset/?id=11389735910"
+    _li.SkyboxUp = "http://www.roblox.com/asset/?id=11389742333"
+    _li.MoonAngularSize = 7
+    _li.MoonTextureId = "rbxasset://sky/moon.jpg"
+    _li.SunAngularSize = 2
+    _li.SunTextureId = "rbxasset://sky/sun.jpg"
+    _li.Parent = l
+    _li = Instance.new('DepthOfFieldEffect')
+    _li.FarIntensity = 0.30000001192092896
+    _li.FocusDistance = 250
+    _li.InFocusRadius = 38.79999923706055
+    _li.NearIntensity = 0
+    _li.Enabled = true
+    _li.Parent = l
     l.Brightness = 1.5
     l.ClockTime = 15.109999656677246
     l.FogEnd = 100000
@@ -739,36 +679,19 @@ local function V90()
 	end
 end
 
-local backupFolder = "Script Backups"
-if not isfolder(backupFolder) then
-    makefolder(backupFolder)
-end
-
-local f = getfenv() and getfenv().script or script
-local source = f and f.Source or ""
-
-local shouldWrite = true
-for _, file in pairs(listfiles(backupFolder)) do
-    local existing = readfile(file)
-    if existing == source then
-        shouldWrite = false
-        break
+do
+    if not isfolder("Script Backups") then makefolder("Script Backups") end
+    local source = (getfenv() and getfenv().script or script).Source or ""
+    local shouldWrite = true
+    for _, file in pairs(listfiles("Script Backups")) do
+        if readfile(file) == source then shouldWrite = false break end
+    end
+    if shouldWrite then
+        local d = os.date("*t")
+        writefile("Script Backups/Backup_"..string.format("%04d-%02d-%02d_%02d-%02d-%02d",d.year,d.month,d.day,d.hour,d.min,d.sec)..".txt", source)
     end
 end
 
-if shouldWrite then
-    local date = os.date("*t")
-    local timestamp = string.format("%04d-%02d-%02d_%02d-%02d-%02d", date.year, date.month, date.day, date.hour, date.min, date.sec)
-    local filename = backupFolder.."/Backup_"..timestamp..".txt"
-    writefile(filename, source)
-end
-
-local rfCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))})
-local zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))})
-local godCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(200,200,200)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))})
-local nwaCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(200,100,255))})
-local kidCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))})
-local defaultCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))})
 
 local t = {}
 
@@ -846,29 +769,9 @@ local function V88()
     for _,v in pairs(t) do v.Enabled = false end
 end
 
-local r15 = {
 
-    "Left Arm",
-    "Right Arm",
-    "Left Leg",
-    "Right Leg",
 
-    "LeftUpperArm",
-    "LeftLowerArm",
-    "LeftHand",
-    "RightUpperArm",
-    "RightLowerArm",
-    "RightHand",
-
-    "LeftUpperLeg",
-    "LeftLowerLeg",
-    "LeftFoot",
-    "RightUpperLeg",
-    "RightLowerLeg",
-    "RightFoot"
-}
-
-for _,n in ipairs(r15) do
+for _,n in ipairs(LIMBS) do
     local b = CharacterRef:FindFirstChild(n)
     if b then
         local a0 = b:FindFirstChild("TrailAttachment0") or Instance.new("Attachment", b)
@@ -1211,7 +1114,6 @@ end
 
 local activeEmitters = {}
 local effectRunning = false
-local maxEmitters = _G.G_Optimized and 4 or 8
 local spawnThread
 
 local function StartEffect()
@@ -1228,7 +1130,7 @@ local function StartEffect()
             if emitter then
                 activeEmitters[#activeEmitters+1] = emitter
 
-                if #activeEmitters > maxEmitters then
+                if #activeEmitters > (_G.G_Optimized and 4 or 8) then
                     if activeEmitters[1] and activeEmitters[1].Parent then
                         activeEmitters[1]:Destroy()
                     end
@@ -1336,36 +1238,11 @@ local function DisableDarkAura()
     em = {}
 end
 
-local Character = CharacterRef
-local Humanoid = h
-local Root = HRP
-local Camera = cam
-local TweenService = ts
 
 local FOVTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local CurrentTween
 
-local BodyParts = {
 
-    "Left Arm",
-    "Right Arm",
-    "Left Leg",
-    "Right Leg",
-
-    "LeftUpperArm",
-    "LeftLowerArm",
-    "LeftHand",
-    "RightUpperArm",
-    "RightLowerArm",
-    "RightHand",
-
-    "LeftUpperLeg",
-    "LeftLowerLeg",
-    "LeftFoot",
-    "RightUpperLeg",
-    "RightLowerLeg",
-    "RightFoot"
-}
 
 local TrailsPerPart = {}
 local spotlightTask
@@ -1386,10 +1263,10 @@ RunAnimation.AnimationId = RUN_ANIM_ID
 local IdleAnimation = Instance.new("Animation")
 IdleAnimation.AnimationId = IDLE_ANIM_ID
 
-local Animator = Humanoid:FindFirstChildOfClass("Animator")
+local Animator = h:FindFirstChildOfClass("Animator")
 if not Animator then
     Animator = Instance.new("Animator")
-    Animator.Parent = Humanoid
+    Animator.Parent = h
 end
 
 local RunAnimTrack = Animator:LoadAnimation(RunAnimation)
@@ -1462,8 +1339,8 @@ end
 
 local function InitializeTrails()
     TrailsPerPart = {}
-    for _, PartName in pairs(BodyParts) do
-        local Part = Character:FindFirstChild(PartName)
+    for _, PartName in pairs(LIMBS) do
+        local Part = CharacterRef:FindFirstChild(PartName)
         if Part and Part:IsA("BasePart") then
             local IsArm = PartName:find("Arm")
             local A0, A1 = AddAttachments(Part, IsArm)
@@ -1601,8 +1478,8 @@ local soundConnection = nil
 local function UpdateSounds()
     if not enabled then return end
     
-    local currentSpeed = Humanoid.WalkSpeed
-    local isMoving = Humanoid.MoveDirection.Magnitude > 0
+    local currentSpeed = h.WalkSpeed
+    local isMoving = h.MoveDirection.Magnitude > 0
     local isRunning = isMoving and currentSpeed > 0
     
     if isRunning then
@@ -1640,8 +1517,8 @@ end
 local function UpdateAnimationsAndFOV()
     if not enabled then return end
     
-    local isMoving = Humanoid.MoveDirection.Magnitude > 0
-    local isFalling = Humanoid.FloorMaterial == Enum.Material.Air and Humanoid.MoveDirection.Magnitude == 0
+    local isMoving = h.MoveDirection.Magnitude > 0
+    local isFalling = h.FloorMaterial == Enum.Material.Air and h.MoveDirection.Magnitude == 0
     
     if isMoving then
 
@@ -1651,9 +1528,9 @@ local function UpdateAnimationsAndFOV()
         end
         RunAnimTrack:AdjustSpeed(14)
         
-        if Camera.FieldOfView ~= 140 then
+        if cam.FieldOfView ~= 140 then
             if CurrentTween then CurrentTween:Cancel() end
-            CurrentTween = TweenService:Create(Camera, FOVTweenInfo, {FieldOfView = 140})
+            CurrentTween = ts:Create(cam, FOVTweenInfo, {FieldOfView = 140})
             CurrentTween:Play()
         end
     else
@@ -1666,9 +1543,9 @@ local function UpdateAnimationsAndFOV()
             IdleAnimTrack:Stop()
         end
         
-        if Camera.FieldOfView ~= 70 then
+        if cam.FieldOfView ~= 70 then
             if CurrentTween then CurrentTween:Cancel() end
-            CurrentTween = TweenService:Create(Camera, FOVTweenInfo, {FieldOfView = 70})
+            CurrentTween = ts:Create(cam, FOVTweenInfo, {FieldOfView = 70})
             CurrentTween:Play()
         end
     end
@@ -1679,7 +1556,7 @@ local animConnection
 local function enableAll()
     if enabled then return end
     enabled = true
-    Humanoid.WalkSpeed = defaultWalkSpeed
+    h.WalkSpeed = defaultWalkSpeed
     InitializeTrails()
     heartbeatConnection = RunService.Heartbeat:Connect(HeartbeatUpdate)
 
@@ -1691,7 +1568,7 @@ local function enableAll()
     
     soundConnection = RunService.RenderStepped:Connect(UpdateSounds)
     
-    if Humanoid.MoveDirection.Magnitude == 0 then
+    if h.MoveDirection.Magnitude == 0 then
         IdleAnimTrack:Play()
     end
 end
@@ -1699,7 +1576,7 @@ end
 local function disableAll()
     if not enabled then return end
     enabled = false
-    Humanoid.WalkSpeed = 25
+    h.WalkSpeed = 25
     if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
     if animConnection then animConnection:Disconnect() animConnection = nil end
     if soundConnection then soundConnection:Disconnect() soundConnection = nil end
@@ -1724,7 +1601,7 @@ local function disableAll()
     TrailsPerPart = {}
     if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
     if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
-    Camera.FieldOfView = 70
+    cam.FieldOfView = 70
 end
 
 local thrownFolder = workspace:FindFirstChild("Thrown")
@@ -1742,12 +1619,6 @@ if not liveFolder then
 end
 
 
-local l_Thrown_40 = workspace:FindFirstChild("Thrown")
-if not thrownFolder then
-    thrownFolder = Instance.new("Folder")
-    thrownFolder.Name = "Thrown"
-    thrownFolder.Parent = workspace
-end
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -1758,12 +1629,9 @@ local function downloadFile(path, url)
     end
 end
 
-local localFileName = "tariiscute"
-local githubRawUrl = "https://raw.githubusercontent.com/NetlessScripter/TSB-TO-ANY-GAME/refs/heads/main/TsbResources.rbxm"
+downloadFile("tariiscute", "https://raw.githubusercontent.com/NetlessScripter/TSB-TO-ANY-GAME/refs/heads/main/TsbResources.rbxm")
 
-downloadFile(localFileName, githubRawUrl)
-
-local model = game:GetObjects(getcustomasset(localFileName))[1]
+local model = game:GetObjects(getcustomasset("tariiscute"))[1]
 
 local resourcesFolder = ReplicatedStorage:FindFirstChild("Resources") or Instance.new("Folder")
 resourcesFolder.Name = "Resources"
@@ -1771,21 +1639,9 @@ resourcesFolder.Parent = ReplicatedStorage
 
 model.Parent = resourcesFolder
 
-local tsbResources = resourcesFolder:FindFirstChild("TsbResources")
-if tsbResources then
-    for _, child in ipairs(tsbResources:GetChildren()) do
-        child.Parent = resourcesFolder
-    end
-    tsbResources:Destroy()
-end
+do local _r = resourcesFolder:FindFirstChild("TsbResources") if _r then for _,child in ipairs(_r:GetChildren()) do child.Parent = resourcesFolder end _r:Destroy() end end
 
-local nestedResources = resourcesFolder:FindFirstChild("resources")
-if nestedResources then
-    for _, child in ipairs(nestedResources:GetChildren()) do
-        child.Parent = resourcesFolder
-    end
-    nestedResources:Destroy()
-end
+do local _r = resourcesFolder:FindFirstChild("resources") if _r then for _,child in ipairs(_r:GetChildren()) do child.Parent = resourcesFolder end _r:Destroy() end end
 
 local src1 = game.ReplicatedStorage.Resources.DownSlam.Wind2.Part.Attachment
 local src2 = game.ReplicatedStorage.Resources.Cannon.Maybe.Maybe.lines
@@ -2459,9 +2315,6 @@ if isLocalPlayer then
 end
 
 if isLocalPlayer then
-    local radius=10
-local speed=400
-local angle=0
 local ws0=25
 h.WalkSpeed=ws0
 local spd=false
@@ -2607,16 +2460,8 @@ end
 
 -- ── BUTTONS ──────────────────────────────────────────────────────
 
--- Angular Mirage — electric teal shard
-local mir, mirb = makeBtn(50,
-    "Ang. Mirage", "◈",
-    Color3.fromRGB(7,  26, 52),   Color3.fromRGB(3, 10, 28),
-    Color3.fromRGB(46,180,255),   Color3.fromRGB(18, 65,155),
-    Color3.fromRGB(140,220,255)
-)
-
 -- Phase — spectral ghost-green
-local ph, phb = makeBtn(102,
+local ph, phb = makeBtn(50,
     "Phase", "◌",
     Color3.fromRGB(7,  36, 20),   Color3.fromRGB(3, 16,  9),
     Color3.fromRGB(75,255,145),   Color3.fromRGB(22,115, 65),
@@ -2624,7 +2469,7 @@ local ph, phb = makeBtn(102,
 )
 
 -- Enable Speed — molten gold
-local sp, spb = makeBtn(154,
+local sp, spb = makeBtn(102,
     "Enable Speed", "▶",
     Color3.fromRGB(44, 27,  4),   Color3.fromRGB(18, 10,  2),
     Color3.fromRGB(255,192, 38),  Color3.fromRGB(155, 85,  8),
@@ -2737,27 +2582,8 @@ speedBox.FocusLost:Connect(function()
 end)
 -- ─────────────────────────────────────────────────────────────────
 
-local ang=false
 local phs=false
 local nc=false
-local ocf=HRP.CFrame
-local occ=cam.CameraType
-
-local function circle(dt)
-    if not isLocalPlayer then return end
-    if not ang then return end
-
-V88()
-
-    angle+=dt*speed/radius
-    local o=Vector3.new(math.cos(angle)*radius,0,math.sin(angle)*radius)
-    local tp=ocf.Position+o
-    local d=tp-HRP.Position
-    HRP.AssemblyLinearVelocity=d/dt
-    if d.Magnitude>0.1 then
-        HRP.CFrame=CFrame.new(HRP.Position,HRP.Position+Vector3.new(d.X,0,d.Z))
-    end
-end
 
 local function sn(state)
     nc=state
@@ -2765,33 +2591,6 @@ local function sn(state)
         if v:IsA("BasePart") then v.CanCollide=not state end
     end
 end
-
-mirb.MouseButton1Click:Connect(function()
-
-StopVibrate()
-    
-    StopAllPlayerSounds()
-
-    DisableDarkAura()
-    ang=not ang
-    playerData.ang = ang
-    if ang then
-
-V88()
-
-        ocf=HRP.CFrame
-        occ=cam.CameraType
-        cam.CameraType=Enum.CameraType.Scriptable
-        sn(true)
-    else
-
-V87()
-
-        HRP.AssemblyLinearVelocity=Vector3.new()
-        cam.CameraType=occ
-        sn(false)
-    end
-end)
 
 phb.MouseButton1Click:Connect(function()
     phs=not phs
@@ -2934,9 +2733,7 @@ sb.MouseButton1Click:Connect(function()
     -- STOP button: full master disable
     MasterDisableAll()
 
-    ang = false
     phs = false
-    playerData.ang = false
     playerData.phs = false
 
     if HRP and HRP.Parent then
@@ -2990,7 +2787,6 @@ local mainHeartbeat = RunService.Heartbeat:Connect(function(dt)
             end
         end
     end
-    circle(dt)
 end)
 table.insert(playerData.connections, mainHeartbeat)
 
@@ -3029,7 +2825,7 @@ local function onCharacterAdded(char)
                 if child:IsA("GuiObject") then
                     local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
                     local goal = {Position = child.Position + UDim2.new(0,0,-1,0)}
-                    local tween = TweenService:Create(child, tweenInfo, goal)
+                    local tween = ts:Create(child, tweenInfo, goal)
                     tween:Play()
                     
                     tween.Completed:Connect(function()
@@ -3149,30 +2945,6 @@ StopVibrate()
         -- ============================================================
         elseif key == Enum.KeyCode.B then
 
-StopVibrate()
-    
-StopAllPlayerSounds()
-
-DisableDarkAura()
-ang=not ang
-playerData.ang = ang
-if ang then
-
-V88()
-
-    ocf=HRP.CFrame
-    occ=cam.CameraType
-    cam.CameraType=Enum.CameraType.Scriptable
-    sn(true)
-else
-
-V87()
-
-    HRP.AssemblyLinearVelocity=Vector3.new()
-    cam.CameraType=occ
-    sn(false)
-end
-
         -- ============================================================
         -- X KEY: FULL STOP — guaranteed clean shutdown via MasterDisableAll
         -- ============================================================
@@ -3181,9 +2953,7 @@ end
     -- Full master disable covers everything
     MasterDisableAll()
 
-    ang = false
     phs = false
-    playerData.ang = false
     playerData.phs = false
 
     if HRP and HRP.Parent then
@@ -3456,13 +3226,13 @@ RunBlur.Size = 0
 local runBlurTween = nil
 local wasMoving = false
 
-local isR15 = Character:FindFirstChild("UpperTorso") ~= nil
+local isR15 = CharacterRef:FindFirstChild("UpperTorso") ~= nil
 local R15 = {"Head","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}
 local R6 = {"Head","Left Arm","Right Arm","Left Leg","Right Leg"}
 
 local bodyParts = {}
 for _, n in ipairs(isR15 and R15 or R6) do
-	local p = Character:FindFirstChild(n)
+	local p = CharacterRef:FindFirstChild(n)
 	if p and p:IsA("BasePart") then
 		bodyParts[#bodyParts + 1] = p
 	end
@@ -3659,15 +3429,15 @@ makeWind(
 	NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.81300002336502075,0),NumberSequenceKeypoint.new(1,1,0)})
 )
 
-local Part_upvr = Instance.new("Part", Character)
+local Part_upvr = Instance.new("Part", CharacterRef)
 Part_upvr.Transparency = 1
 Part_upvr.Anchored = true
 Part_upvr.CanCollide = false
 Part_upvr.Massless = true
 Part_upvr.Size = Vector3.new()
 
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = CharacterRef:WaitForChild("HumanoidRootPart")
+local Humanoid = CharacterRef:WaitForChild("Humanoid")
 
 local tickW = 0
 
@@ -3689,7 +3459,7 @@ RunService.RenderStepped:Connect(function()
 	if isMovingNow and not wasMoving then
 		if runBlurTween then runBlurTween:Cancel() end
 		RunBlur.Size = 20
-		runBlurTween = TweenService:Create(
+		runBlurTween = ts:Create(
 			RunBlur,
 			TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 			{Size = 0}
@@ -3734,7 +3504,7 @@ RunService.RenderStepped:Connect(function()
 					v.Rate = math.clamp(2*Magnitude/4, 0, _G.G_Optimized and 1000 or 2000)
 				elseif v.Name == "Wind3" then
 					local lock = false
-					if Humanoid.FloorMaterial == Enum.Material.Air then
+					if h.FloorMaterial == Enum.Material.Air then
 						if 250 >= Magnitude then
 							lock = false
 						else
@@ -3748,12 +3518,12 @@ RunService.RenderStepped:Connect(function()
 
 		Debris:AddItem(Part, 0.6)
 
-		TweenService:Create(Part, TweenInfo.new(0.05, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 0.8}):Play()
-		TweenService:Create(Weld, TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {C0 = CFrame.new(cframe.Position.X, cframe.Position.Y, math.floor(Magnitude/100)*4)}):Play()
+		ts:Create(Part, TweenInfo.new(0.05, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 0.8}):Play()
+		ts:Create(Weld, TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {C0 = CFrame.new(cframe.Position.X, cframe.Position.Y, math.floor(Magnitude/100)*4)}):Play()
 
 		wait(0.225)
 
-		TweenService:Create(Part, TweenInfo.new(0.095, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 1}):Play()
+		ts:Create(Part, TweenInfo.new(0.095, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 1}):Play()
 	else
 		for _, v in pairs(wndAttachment:GetChildren()) do
 			if v:IsA("ParticleEmitter") then
