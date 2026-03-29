@@ -3201,16 +3201,14 @@ end
 -- ================================================================
 -- WIND SYSTEM (original, preserved exactly)
 -- ================================================================
+task.spawn(function()
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 
 local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character
-if not Character then
-    Character = LocalPlayer.CharacterAdded:Wait()
-end
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 if not Character then
     warn("Wind System: Character not found, skipping wind setup")
     return
@@ -3539,6 +3537,8 @@ RunService.RenderStepped:Connect(function()
 		end
 	end
 end)
+
+end) -- end task.spawn (Wind System)
 
 
 -- ================================================================
