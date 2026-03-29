@@ -57,19 +57,19 @@ end
 
 AllowedPlayers = AllowedPlayers or {}
 
-local Players = game:GetService("Players")
-local PlayerData = {}
+Players = game:GetService("Players")
+PlayerData = {}
 
-local function IsAllowed(player)
+function IsAllowed(player)
     if not player then return false end
     return AllowedPlayers[player.Name] ~= nil
 end
 
-local function CleanupPlayer(player)
+function CleanupPlayer(player)
     if not player then return end
-    local userId = player.UserId
+    userId = player.UserId
     if PlayerData[userId] then
-        local data = PlayerData[userId]
+        data = PlayerData[userId]
 
         -- Stop new dynamic systems first
         if data.StopLightningFlicker then
@@ -105,15 +105,15 @@ local function CleanupPlayer(player)
 end
 
 
-local function SetupSpeedster(player)
+function SetupSpeedster(player)
     if not IsAllowed(player) then return end
     if not player or not player.Parent then return end
     
-    local character = player.Character or player.CharacterAdded:Wait()
+    character = player.Character or player.CharacterAdded:Wait()
     if not character then return end
     
-    local speedsterType = AllowedPlayers[player.Name]
-    local userId = player.UserId
+    speedsterType = AllowedPlayers[player.Name]
+    userId = player.UserId
     
     CleanupPlayer(player)
     
@@ -129,29 +129,29 @@ local function SetupSpeedster(player)
         Running = false
     }
     
-    local playerData = PlayerData[userId]
+    playerData = PlayerData[userId]
     
     print("✓ Loading " .. speedsterType .. " for " .. player.Name)
 
-local CharacterRef = character
-local HRP = CharacterRef:WaitForChild("HumanoidRootPart", 10)
+CharacterRef = character
+HRP = CharacterRef:WaitForChild("HumanoidRootPart", 10)
 if not HRP then 
     warn("Failed to find HumanoidRootPart for " .. player.Name)
     CleanupPlayer(player)
     return 
 end
 
-local RunService = game:GetService("RunService")
-local WorkspaceRef = workspace
-local u = player.Name
+RunService = game:GetService("RunService")
+WorkspaceRef = workspace
+u = player.Name
 
-local lightningAttachment = Instance.new("Attachment")
+lightningAttachment = Instance.new("Attachment")
 lightningAttachment.Name = "LightningAttachment_" .. player.Name
 lightningAttachment.Parent = HRP
 table.insert(playerData.cleanupObjects, lightningAttachment)
 
 
-local ParticleRef = Instance.new("ParticleEmitter")
+ParticleRef = Instance.new("ParticleEmitter")
 ParticleRef.Name = "SpeedsterParticle_" .. player.Name
 ParticleRef.Brightness = 10
 ParticleRef.Drag = 0
@@ -224,7 +224,7 @@ end
 playerData.ParticleRef = ParticleRef
 table.insert(playerData.cleanupObjects, ParticleRef)
 
-local function EnableLightningGlobal()
+function EnableLightningGlobal()
     if playerData.Running then return end
     playerData.Running = true
     if playerData.ParticleRef and playerData.ParticleRef.Parent then
@@ -233,7 +233,7 @@ local function EnableLightningGlobal()
     end
 end
 
-local function DisableLightningGlobal()
+function DisableLightningGlobal()
     if not playerData.Running then return end
     playerData.Running = false
     if playerData.ParticleRef and playerData.ParticleRef.Parent then
@@ -243,7 +243,7 @@ end
 
 
 
-local parts = {
+parts = {
 
     "Left Arm",
     "Right Arm",
@@ -265,7 +265,7 @@ local parts = {
     "RightFoot"
 }
 
-local trailProps1 = {
+trailProps1 = {
     Texture = "rbxassetid://16607923",
     TextureLength = 15,
     TextureMode = Enum.TextureMode.Static,
@@ -275,7 +275,7 @@ local trailProps1 = {
     Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.5,0),NumberSequenceKeypoint.new(1,1,0)})
 }
 
-local trailProps2 = {
+trailProps2 = {
     Texture = "rbxassetid://14485918528",
     TextureLength = 8,
     TextureMode = Enum.TextureMode.Static,
@@ -286,25 +286,25 @@ local trailProps2 = {
     Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.5,0),NumberSequenceKeypoint.new(0.063,0,0),NumberSequenceKeypoint.new(0.599,0,0),NumberSequenceKeypoint.new(1,1,0)})
 }
 
-local partColors = {
+partColors = {
     arms = Color3.fromRGB(102,21,20),
     legs = Color3.fromRGB(189,141,70)
 }
 
 
-local allTrails = {}
+allTrails = {}
 playerData.allTrails = allTrails
 
-local function createTrail(part, color, props, offsetAmount)
+function createTrail(part, color, props, offsetAmount)
     if not part or not part.Parent then return end
     
     for i=1,2 do
-        local success, err = pcall(function()
-            local t = Instance.new("Trail")
-            local a0 = Instance.new("Attachment", part)
-            local a1 = Instance.new("Attachment", part)
+        success, err = pcall(function()
+            t = Instance.new("Trail")
+            a0 = Instance.new("Attachment", part)
+            a1 = Instance.new("Attachment", part)
 
-            local offset = (i == 1) and Vector3.new(0, offsetAmount, 0) or Vector3.new(0, -offsetAmount, 0)
+            offset = (i == 1) and Vector3.new(0, offsetAmount, 0) or Vector3.new(0, -offsetAmount, 0)
             a0.Position = offset
             a1.Position = offset * -1
             a0.Visible = false
@@ -339,7 +339,7 @@ local function createTrail(part, color, props, offsetAmount)
     end
 end
 
-local function SetupAllTrails()
+function SetupAllTrails()
     for _, t in pairs(allTrails) do
         if t and t.Parent then
             pcall(function()
@@ -353,11 +353,11 @@ local function SetupAllTrails()
     if not CharacterRef or not CharacterRef.Parent then return end
     
     for _, partName in pairs(parts) do
-        local part = CharacterRef:FindFirstChild(partName)
+        part = CharacterRef:FindFirstChild(partName)
         if part and part.Parent then
 
-            local isArm = partName:find("Arm") or partName:find("Hand")
-            local color = isArm and partColors.arms or partColors.legs
+            isArm = partName:find("Arm") or partName:find("Hand")
+            color = isArm and partColors.arms or partColors.legs
             createTrail(part, color, trailProps1, 0.2)
             createTrail(part, nil, trailProps2, 0.25)
         end
@@ -366,9 +366,9 @@ local function SetupAllTrails()
     print("✓ Created " .. #allTrails .. " trails for " .. player.Name)
 end
 
-local function EnableAllCoolStuff()
+function EnableAllCoolStuff()
     SetupAllTrails()
-    local enabledCount = 0
+    enabledCount = 0
     for _, t in pairs(allTrails) do
         if t and t.Parent then
             pcall(function()
@@ -380,8 +380,8 @@ local function EnableAllCoolStuff()
     print("✓ Enabled " .. enabledCount .. " trails for " .. player.Name)
 end
 
-local function DisableCoolStuff()
-    local disabledCount = 0
+function DisableCoolStuff()
+    disabledCount = 0
     for _, t in pairs(allTrails) do
         if t and t.Parent then
             pcall(function()
@@ -396,13 +396,13 @@ end
 playerData.EnableAllCoolStuff = EnableAllCoolStuff
 playerData.DisableCoolStuff = DisableCoolStuff
 
-local l = game:GetService('Lighting')
+l = game:GetService('Lighting')
 
 -- Lighting effects always apply regardless of TODC
 if _G.NightMode then
 
     do
-    local i = Instance.new('Sky')
+    i = Instance.new('Sky')
     i.SkyboxBk = "rbxassetid://6444884337"
     i.SkyboxDn = "rbxassetid://6444884785"
     i.SkyboxFt = "rbxassetid://6444884337"
@@ -416,14 +416,14 @@ if _G.NightMode then
     i.Parent = l
     end
     do
-    local i = Instance.new('SunRaysEffect')
+    i = Instance.new('SunRaysEffect')
     i.Intensity = 0.009999999776482582
     i.Spread = 0.10000000149011612
     i.Enabled = true
     i.Parent = l
     end
     do
-    local i = Instance.new('Atmosphere')
+    i = Instance.new('Atmosphere')
     i.Density = 0.30000001192092896
     i.Offset = 0.25
     i.Color = Color3.new(0.7803921699523926,0.7803921699523926,0.7803921699523926)
@@ -433,7 +433,7 @@ if _G.NightMode then
     i.Parent = l
     end
     do
-    local i = Instance.new('BloomEffect')
+    i = Instance.new('BloomEffect')
     i.Intensity = 1
     i.Size = 24
     i.Threshold = 2
@@ -441,7 +441,7 @@ if _G.NightMode then
     i.Parent = l
     end
     do
-    local i = Instance.new('DepthOfFieldEffect')
+    i = Instance.new('DepthOfFieldEffect')
     i.FarIntensity = 0.10000000149011612
     i.FocusDistance = 0.05000000074505806
     i.InFocusRadius = 30
@@ -450,14 +450,14 @@ if _G.NightMode then
     i.Parent = l
     end
     do
-    local i = Instance.new('SunRaysEffect')
+    i = Instance.new('SunRaysEffect')
     i.Intensity = 0.16899999976158142
     i.Spread = 1
     i.Enabled = true
     i.Parent = l
     end
     do
-    local i = Instance.new('Atmosphere')
+    i = Instance.new('Atmosphere')
     i.Density = 0.3009999990463257
     i.Offset = 0.32499998807907104
     i.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
@@ -467,7 +467,7 @@ if _G.NightMode then
     i.Parent = l
     end
     do
-    local i = Instance.new('BloomEffect')
+    i = Instance.new('BloomEffect')
     i.Intensity = 3
     i.Size = 100
     i.Threshold = 1.2000000476837158
@@ -475,13 +475,13 @@ if _G.NightMode then
     i.Parent = l
     end
     do
-    local i = Instance.new('BlurEffect')
+    i = Instance.new('BlurEffect')
     i.Size = 4
     i.Enabled = true
     i.Parent = l
     end
     do
-    local i = Instance.new('ColorCorrectionEffect')
+    i = Instance.new('ColorCorrectionEffect')
     i.Brightness = 0
     i.Contrast = 0.10000003129243851
     i.Saturation = 0.15000000596046448
@@ -490,14 +490,14 @@ if _G.NightMode then
     i.Parent = l
     end
     do
-    local i = Instance.new('SunRaysEffect')
+    i = Instance.new('SunRaysEffect')
     i.Intensity = 0.03200000151991844
     i.Spread = 0.7160000205039978
     i.Enabled = true
     i.Parent = l
     end
     do
-    local i = Instance.new('Sky')
+    i = Instance.new('Sky')
     i.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
     i.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
     i.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
@@ -511,7 +511,7 @@ if _G.NightMode then
     i.Parent = l
     end
     do
-    local i = Instance.new('DepthOfFieldEffect')
+    i = Instance.new('DepthOfFieldEffect')
     i.FarIntensity = 0.30000001192092896
     i.FocusDistance = 250
     i.InFocusRadius = 38.79999923706055
@@ -539,19 +539,19 @@ if _G.NightMode then
 else
 
     do
-    local i = Instance.new('ColorGradingEffect')
+    i = Instance.new('ColorGradingEffect')
     i.Enabled = true
     i.Parent = l
     end
     do
-    local i = Instance.new('SunRaysEffect')
+    i = Instance.new('SunRaysEffect')
     i.Intensity = 0.16899999976158142
     i.Spread = 1
     i.Enabled = true
     i.Parent = l
     end
     do
-    local i = Instance.new('Atmosphere')
+    i = Instance.new('Atmosphere')
     i.Density = 0.3009999990463257
     i.Offset = 0.32499998807907104
     i.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
@@ -561,7 +561,7 @@ else
     i.Parent = l
     end
     do
-    local i = Instance.new('BloomEffect')
+    i = Instance.new('BloomEffect')
     i.Intensity = 3
     i.Size = 100
     i.Threshold = 1.2000000476837158
@@ -569,13 +569,13 @@ else
     i.Parent = l
     end
     do
-    local i = Instance.new('BlurEffect')
+    i = Instance.new('BlurEffect')
     i.Size = 4
     i.Enabled = true
     i.Parent = l
     end
     do
-    local i = Instance.new('ColorCorrectionEffect')
+    i = Instance.new('ColorCorrectionEffect')
     i.Brightness = 0
     i.Contrast = 0.10000003129243851
     i.Saturation = 0.15000000596046448
@@ -584,14 +584,14 @@ else
     i.Parent = l
     end
     do
-    local i = Instance.new('SunRaysEffect')
+    i = Instance.new('SunRaysEffect')
     i.Intensity = 0.03200000151991844
     i.Spread = 0.7160000205039978
     i.Enabled = true
     i.Parent = l
     end
     do
-    local i = Instance.new('Sky')
+    i = Instance.new('Sky')
     i.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
     i.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
     i.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
@@ -605,7 +605,7 @@ else
     i.Parent = l
     end
     do
-    local i = Instance.new('DepthOfFieldEffect')
+    i = Instance.new('DepthOfFieldEffect')
     i.FarIntensity = 0.30000001192092896
     i.FocusDistance = 250
     i.InFocusRadius = 38.79999923706055
@@ -646,34 +646,34 @@ else
 end
 
 
-local col = ColorSequence.new(Color3.new(1,0.231373,0.129412),Color3.new(1,0.231373,0.129412))
+col = ColorSequence.new(Color3.new(1,0.231373,0.129412),Color3.new(1,0.231373,0.129412))
 
-local wsSeq = NumberSequence.new({
+wsSeq = NumberSequence.new({
 	NumberSequenceKeypoint.new(0,0),
 	NumberSequenceKeypoint.new(0.1,0),
 	NumberSequenceKeypoint.new(1,0.1)
 })
 
-local tlist = {}
+tlist = {}
 
-local noTrailParts = {
+noTrailParts = {
 	["Torso"] = true, ["UpperTorso"] = true, ["LowerTorso"] = true,
 	["HumanoidRootPart"] = true, ["Head"] = true
 }
 
 for _,v in pairs(CharacterRef:GetChildren()) do
 	if v:IsA("BasePart") and not noTrailParts[v.Name] then
-		local a0 = Instance.new("Attachment",v)
-		local a1 = Instance.new("Attachment",v)
+		a0 = Instance.new("Attachment",v)
+		a1 = Instance.new("Attachment",v)
 
 		-- DCEU-style: a1 fans outward from the character instead of trailing behind.
 		-- Origin (a0) sits at the part center; endpoint (a1) is pushed far out
 		-- horizontally so the trail slices AWAY from the body to the ground.
-		local isLeft  = v.Name:find("Left")  ~= nil
-		local isRight = v.Name:find("Right") ~= nil
-		local spreadDist = math.random(35, 80) / 10  -- 3.5–8.0 studs outward
-		local offsetY = -1.5  -- slight downward for ground-skimming look
-		local offsetX, offsetZ
+		isLeft  = v.Name:find("Left")  ~= nil
+		isRight = v.Name:find("Right") ~= nil
+		spreadDist = math.random(35, 80) / 10  -- 3.5–8.0 studs outward
+		offsetY = -1.5  -- slight downward for ground-skimming look
+		offsetX, offsetZ
 
 		if math.random() < 0.5 then
 			-- Side-biased: follows which side the limb is on
@@ -685,13 +685,13 @@ for _,v in pairs(CharacterRef:GetChildren()) do
 				offsetZ = (math.random() - 0.5) * 3
 			else
 				-- Centre parts: random flat direction
-				local ang = math.random() * math.pi * 2
+				ang = math.random() * math.pi * 2
 				offsetX = math.cos(ang) * spreadDist
 				offsetZ = math.sin(ang) * spreadDist
 			end
 		else
 			-- 50 % chance: fully random horizontal direction (no up/down)
-			local ang = math.random() * math.pi * 2
+			ang = math.random() * math.pi * 2
 			offsetX = math.cos(ang) * spreadDist
 			offsetZ = math.sin(ang) * spreadDist
 		end
@@ -699,7 +699,7 @@ for _,v in pairs(CharacterRef:GetChildren()) do
 		a0.Position = Vector3.new(0, 0, 0)
 		a1.Position = Vector3.new(offsetX, offsetY, offsetZ)
 
-		local x = Instance.new("Trail")
+		x = Instance.new("Trail")
 		x.Attachment0 = a0
 		x.Attachment1 = a1
 		x.Brightness = 1
@@ -719,29 +719,29 @@ for _,v in pairs(CharacterRef:GetChildren()) do
 	end
 end
 
-local function V89()
+function V89()
 	for _,x in pairs(tlist) do
 		x.Enabled = true
 	end
 end
 
-local function V90()
+function V90()
 	for _,x in pairs(tlist) do
 		x.Enabled = false
 	end
 end
 
-local backupFolder = "Script Backups"
+backupFolder = "Script Backups"
 if not isfolder(backupFolder) then
     makefolder(backupFolder)
 end
 
-local f = getfenv() and getfenv().script or script
-local source = f and f.Source or ""
+f = getfenv() and getfenv().script or script
+source = f and f.Source or ""
 
-local shouldWrite = true
+shouldWrite = true
 for _, file in pairs(listfiles(backupFolder)) do
-    local existing = readfile(file)
+    existing = readfile(file)
     if existing == source then
         shouldWrite = false
         break
@@ -749,23 +749,23 @@ for _, file in pairs(listfiles(backupFolder)) do
 end
 
 if shouldWrite then
-    local date = os.date("*t")
-    local timestamp = string.format("%04d-%02d-%02d_%02d-%02d-%02d", date.year, date.month, date.day, date.hour, date.min, date.sec)
-    local filename = backupFolder.."/Backup_"..timestamp..".txt"
+    date = os.date("*t")
+    timestamp = string.format("%04d-%02d-%02d_%02d-%02d-%02d", date.year, date.month, date.day, date.hour, date.min, date.sec)
+    filename = backupFolder.."/Backup_"..timestamp..".txt"
     writefile(filename, source)
 end
 
-local rfCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))})
-local zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))})
-local godCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(200,200,200)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))})
-local nwaCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(200,100,255))})
-local kidCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))})
-local defaultCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))})
+rfCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))})
+zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))})
+godCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(200,200,200)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))})
+nwaCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(200,100,255))})
+kidCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))})
+defaultCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))})
 
-local t = {}
+t = {}
 
-local function m(v)
-    local a = {}
+function m(v)
+    a = {}
     for _,k in pairs(v:GetChildren()) do
         if k:IsA("Attachment") then
             a[#a+1] = k
@@ -773,7 +773,7 @@ local function m(v)
     end
     if #a < 2 then return end
 
-    local x = Instance.new("Trail")
+    x = Instance.new("Trail")
 
 if speedsterType == "RF" then
     x.Color = ColorSequence.new(
@@ -830,15 +830,15 @@ if speedsterType == "RF" then
     t[#t+1] = x
 end
 
-local function V87()
+function V87()
     for _,v in pairs(t) do v.Enabled = true end
 end
 
-local function V88()
+function V88()
     for _,v in pairs(t) do v.Enabled = false end
 end
 
-local r15 = {
+r15 = {
 
     "Left Arm",
     "Right Arm",
@@ -861,11 +861,11 @@ local r15 = {
 }
 
 for _,n in ipairs(r15) do
-    local b = CharacterRef:FindFirstChild(n)
+    b = CharacterRef:FindFirstChild(n)
     if b then
-        local a0 = b:FindFirstChild("TrailAttachment0") or Instance.new("Attachment", b)
+        a0 = b:FindFirstChild("TrailAttachment0") or Instance.new("Attachment", b)
         a0.Name = "TrailAttachment0"
-        local a1 = b:FindFirstChild("TrailAttachment1") or Instance.new("Attachment", b)
+        a1 = b:FindFirstChild("TrailAttachment1") or Instance.new("Attachment", b)
         a1.Name = "TrailAttachment1"
         m(b)
     end
@@ -873,17 +873,17 @@ end
 
 loadstring(game:GetObjects("rbxassetid://10463761851")[1].Source)()
 
-local isLocalPlayer = (player == Players.LocalPlayer)
+isLocalPlayer = (player == Players.LocalPlayer)
 
-local uis = game:GetService("UserInputService")
-local cam = workspace.CurrentCamera
-local ts = game:GetService("TweenService")
+uis = game:GetService("UserInputService")
+cam = workspace.CurrentCamera
+ts = game:GetService("TweenService")
 
-local CameraShakeState = {FadingIn=0,FadingOut=1,Sustained=2,Inactive=3}
-local function newCameraShakeInstance(magnitude,roughness,fadeInTime,fadeOutTime)
+CameraShakeState = {FadingIn=0,FadingOut=1,Sustained=2,Inactive=3}
+function newCameraShakeInstance(magnitude,roughness,fadeInTime,fadeOutTime)
 	fadeInTime=fadeInTime or 0
 	fadeOutTime=fadeOutTime or 0
-	local inst={}
+	inst={}
 	inst.Magnitude=magnitude
 	inst.Roughness=roughness
 	inst.PositionInfluence=Vector3.new()
@@ -897,8 +897,8 @@ local function newCameraShakeInstance(magnitude,roughness,fadeInTime,fadeOutTime
 	inst.currentFadeTime=(fadeInTime>0) and 0 or 1
 	inst.tick=Random.new():NextNumber(-100,100)
 	function inst:UpdateShake(dt)
-		local tk=self.tick
-		local ft=self.currentFadeTime
+		tk=self.tick
+		ft=self.currentFadeTime
 		if self.fadeInDuration>0 and self.sustain then
 			if ft<1 then ft=ft+dt/self.fadeInDuration
 			elseif self.fadeOutDuration>0 then self.sustain=false end
@@ -921,16 +921,16 @@ local function newCameraShakeInstance(magnitude,roughness,fadeInTime,fadeOutTime
 	end
 	return inst
 end
-local ShakePresets={
+ShakePresets={
 	HeavyHit=function()
-		local s=newCameraShakeInstance(8,14,0,1.25)
+		s=newCameraShakeInstance(8,14,0,1.25)
 		s.PositionInfluence=Vector3.new(0.5,0.5,0)
 		s.RotationInfluence=Vector3.new(0,0,0)
 		return s
 	end
 }
-local CurrentShaker=(function()
-	local shaker={}
+CurrentShaker=(function()
+	shaker={}
 	shaker._running=false
 	shaker._renderName="CameraShaker_"..player.Name
 	shaker._renderPriority=Enum.RenderPriority.Camera.Value
@@ -940,16 +940,16 @@ local CurrentShaker=(function()
 		if self._running then return end
 		self._running=true
 		RunService:BindToRenderStep(self._renderName,self._renderPriority,function(dt)
-			local instances=self._camShakeInstances
-			local pos=Vector3.new()
-			local rot=Vector3.new()
+			instances=self._camShakeInstances
+			pos=Vector3.new()
+			rot=Vector3.new()
 			for i=1,#instances do
-				local inst=instances[i]
-				local state=inst:GetState()
+				inst=instances[i]
+				state=inst:GetState()
 				if state==CameraShakeState.Inactive and inst.DeleteOnInactive then
 					table.insert(self._removeInstances,i)
 				elseif state~=CameraShakeState.Inactive then
-					local offset=inst:UpdateShake(dt)
+					offset=inst:UpdateShake(dt)
 					pos=pos+offset*inst.PositionInfluence
 					rot=rot+offset*inst.RotationInfluence
 				end
@@ -975,23 +975,23 @@ end)()
 CurrentShaker:Start()
 table.insert(playerData.cleanupObjects,{Destroy=function() CurrentShaker:Stop() end})
 
-local dir={-0.1,0,0.1,0}
-local i=1
-local vibrateRunning=false
-local vibrateConn
+dir={-0.1,0,0.1,0}
+i=1
+vibrateRunning=false
+vibrateConn
 
 
-local phaseSound
-local phaseSoundLoaded = false
+phaseSound
+phaseSoundLoaded = false
 
-local function LoadPhaseSound()
+function LoadPhaseSound()
     if phaseSoundLoaded then return end
     
-    local soundFileName = "phase_vibration.wav"
-    local soundUrl = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Body%20vibration%2001.wav"
+    soundFileName = "phase_vibration.wav"
+    soundUrl = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Body%20vibration%2001.wav"
     
     if not isfile(soundFileName) then
-        local success, soundData = pcall(function()
+        success, soundData = pcall(function()
             return game:HttpGet(soundUrl)
         end)
         
@@ -1015,32 +1015,32 @@ local function LoadPhaseSound()
     print("🔊 Phase vibration sound loaded!")
 end
 
-local function PlayPhaseSound()
+function PlayPhaseSound()
     if not phaseSound then LoadPhaseSound() end
     if phaseSound and not phaseSound.IsPlaying then
         phaseSound:Play()
     end
 end
 
-local function StopPhaseSound()
+function StopPhaseSound()
     if phaseSound and phaseSound.IsPlaying then
         phaseSound:Stop()
     end
 end
 
 
-local runStartSound1
-local runStartSound2
-local runStartSoundsLoaded = false
+runStartSound1
+runStartSound2
+runStartSoundsLoaded = false
 
-local function LoadRunStartSounds()
+function LoadRunStartSounds()
     if runStartSoundsLoaded then return end
     
-    local sound1FileName = "run_start_01.wav"
-    local sound1Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2001.wav"
+    sound1FileName = "run_start_01.wav"
+    sound1Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2001.wav"
     
     if not isfile(sound1FileName) then
-        local success, soundData = pcall(function()
+        success, soundData = pcall(function()
             return game:HttpGet(sound1Url)
         end)
         
@@ -1052,11 +1052,11 @@ local function LoadRunStartSounds()
         end
     end
     
-    local sound2FileName = "run_start_02.wav"
-    local sound2Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2002.wav"
+    sound2FileName = "run_start_02.wav"
+    sound2Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2002.wav"
     
     if not isfile(sound2FileName) then
-        local success, soundData = pcall(function()
+        success, soundData = pcall(function()
             return game:HttpGet(sound2Url)
         end)
         
@@ -1086,19 +1086,19 @@ local function LoadRunStartSounds()
     print("🔊 Run start sounds loaded!")
 end
 
-local function PlayRandomRunStartSound()
+function PlayRandomRunStartSound()
     if not runStartSound1 or not runStartSound2 then 
         LoadRunStartSounds() 
     end
     
-    local selectedSound = math.random(1, 2) == 1 and runStartSound1 or runStartSound2
+    selectedSound = math.random(1, 2) == 1 and runStartSound1 or runStartSound2
     
     if selectedSound and not selectedSound.IsPlaying then
         selectedSound:Play()
     end
 end
 
-local function StopAllPlayerSounds()
+function StopAllPlayerSounds()
     StopPhaseSound()
     
     if HRP then
@@ -1110,7 +1110,7 @@ local function StopAllPlayerSounds()
     end
 end
 
-local function StartVibrate()
+function StartVibrate()
     if not isLocalPlayer then return end
     if vibrateRunning then return end
     vibrateRunning=true
@@ -1118,15 +1118,15 @@ local function StartVibrate()
     PlayPhaseSound()
     
     vibrateConn=RunService.RenderStepped:Connect(function()
-        local pos=HRP.Position
-        local rot=HRP.CFrame - HRP.CFrame.Position
+        pos=HRP.Position
+        rot=HRP.CFrame - HRP.CFrame.Position
         HRP.CFrame=CFrame.new(pos + Vector3.new(dir[i],0,0)) * rot
         i=i+1
         if i>#dir then i=1 end
     end)
 end
 
-local function StopVibrate()
+function StopVibrate()
     StopAllPlayerSounds()
     if not vibrateRunning then return end
     vibrateRunning=false
@@ -1139,14 +1139,14 @@ local function StopVibrate()
     end
 end
 
-local effectParts = {}
+effectParts = {}
 for _,v in pairs(CharacterRef:GetDescendants()) do
     if v:IsA("BasePart") then
         effectParts[#effectParts+1] = v
     end
 end
 
-local function getColor()
+function getColor()
    if speedsterType == "RF" then
         return ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)),
@@ -1177,11 +1177,11 @@ local function getColor()
     end
 end
 
-local function createEmitter(part)
-    local color = getColor()
+function createEmitter(part)
+    color = getColor()
     if not color then return nil end
 
-    local e = Instance.new("ParticleEmitter")
+    e = Instance.new("ParticleEmitter")
     e.Texture = "rbxassetid://99013781938083"
     e.Rate = _G.G_Optimized and 120 or 240
     e.SpreadAngle = Vector2.new(360,360)
@@ -1201,12 +1201,12 @@ local function createEmitter(part)
     return e
 end
 
-local activeEmitters = {}
-local effectRunning = false
-local maxEmitters = _G.G_Optimized and 4 or 8
-local spawnThread
+activeEmitters = {}
+effectRunning = false
+maxEmitters = _G.G_Optimized and 4 or 8
+spawnThread
 
-local function StartEffect()
+function StartEffect()
     if effectRunning then return end
     effectRunning = true
 
@@ -1215,8 +1215,8 @@ local function StartEffect()
             task.wait(_G.G_Optimized and 0.15 or 0.1)
             if not effectRunning then break end
 
-            local part = effectParts[math.random(1,#effectParts)]
-            local emitter = createEmitter(part)
+            part = effectParts[math.random(1,#effectParts)]
+            emitter = createEmitter(part)
             if emitter then
                 activeEmitters[#activeEmitters+1] = emitter
 
@@ -1231,7 +1231,7 @@ local function StartEffect()
     end)
 end
 
-local function StopEffect()
+function StopEffect()
     effectRunning = false
 
     if spawnThread then
@@ -1246,14 +1246,14 @@ local function StopEffect()
     activeEmitters = {}
 end
 
-local h = CharacterRef:WaitForChild("Humanoid")
-local ld = game:GetService("Lighting")
+h = CharacterRef:WaitForChild("Humanoid")
+ld = game:GetService("Lighting")
 
-local em = {}
-local tr
-local an
+em = {}
+tr
+an
 
-local function EnableDarkAura()
+function EnableDarkAura()
     an = Instance.new("Animation")
     an.AnimationId = "rbxassetid://82363856064263"
     tr = h:LoadAnimation(an)
@@ -1261,7 +1261,7 @@ local function EnableDarkAura()
 
     for _,x in next,CharacterRef:GetDescendants() do
         if x:IsA("BasePart") then
-            local e = Instance.new("ParticleEmitter")
+            e = Instance.new("ParticleEmitter")
             e.Parent = x
             e.Color = ColorSequence.new(Color3.new(0,0,0))
             e.Brightness = 1.5
@@ -1293,7 +1293,7 @@ local function EnableDarkAura()
         end
     end
 
-    local b = ld:FindFirstChild("DarkAuraBlur")
+    b = ld:FindFirstChild("DarkAuraBlur")
     if not b then
         b = Instance.new("BlurEffect")
         b.Name = "DarkAuraBlur"
@@ -1303,7 +1303,7 @@ local function EnableDarkAura()
     ts:Create(b, TweenInfo.new(0.5), {Size = 10}):Play()
 end
 
-local function DisableDarkAura()
+function DisableDarkAura()
     if tr then
         tr:Stop()
         tr = nil
@@ -1313,9 +1313,9 @@ local function DisableDarkAura()
         an = nil
     end
 
-    local b = ld:FindFirstChild("DarkAuraBlur")
+    b = ld:FindFirstChild("DarkAuraBlur")
     if b then
-        local tw = ts:Create(b, TweenInfo.new(0.5), {Size = 0})
+        tw = ts:Create(b, TweenInfo.new(0.5), {Size = 0})
         tw:Play()
         tw.Completed:Once(function()
             b:Destroy()
@@ -1328,16 +1328,16 @@ local function DisableDarkAura()
     em = {}
 end
 
-local Character = CharacterRef
-local Humanoid = h
-local Root = HRP
-local Camera = cam
-local TweenService = ts
+Character = CharacterRef
+Humanoid = h
+Root = HRP
+Camera = cam
+TweenService = ts
 
-local FOVTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local CurrentTween
+FOVTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+CurrentTween
 
-local BodyParts = {
+BodyParts = {
 
     "Left Arm",
     "Right Arm",
@@ -1359,50 +1359,50 @@ local BodyParts = {
     "RightFoot"
 }
 
-local TrailsPerPart = {}
-local spotlightTask
-local heartbeatConnection
+TrailsPerPart = {}
+spotlightTask
+heartbeatConnection
 
-local enabled = false
-local runState = false
-local defaultWalkSpeed = 20
-local customSpeed = 375  -- editable via the Speed TextBox in the GUI
+enabled = false
+runState = false
+defaultWalkSpeed = 20
+customSpeed = 375  -- editable via the Speed TextBox in the GUI
 
 
 
-local RUN_ANIM_ID = "rbxassetid://102622695004986"
-local IDLE_ANIM_ID = "rbxassetid://132861892011980"
+RUN_ANIM_ID = "rbxassetid://102622695004986"
+IDLE_ANIM_ID = "rbxassetid://132861892011980"
 
-local RunAnimation = Instance.new("Animation")
+RunAnimation = Instance.new("Animation")
 RunAnimation.AnimationId = RUN_ANIM_ID
-local IdleAnimation = Instance.new("Animation")
+IdleAnimation = Instance.new("Animation")
 IdleAnimation.AnimationId = IDLE_ANIM_ID
 
-local Animator = Humanoid:FindFirstChildOfClass("Animator")
+Animator = Humanoid:FindFirstChildOfClass("Animator")
 if not Animator then
     Animator = Instance.new("Animator")
     Animator.Parent = Humanoid
 end
 
-local RunAnimTrack = Animator:LoadAnimation(RunAnimation)
+RunAnimTrack = Animator:LoadAnimation(RunAnimation)
 RunAnimTrack.Priority = Enum.AnimationPriority.Action
-local IdleAnimTrack = Animator:LoadAnimation(IdleAnimation)
+IdleAnimTrack = Animator:LoadAnimation(IdleAnimation)
 IdleAnimTrack.Priority = Enum.AnimationPriority.Action
 
-local function AddAttachments(Part, IsArm)
-    local A1 = Instance.new("Attachment")
+function AddAttachments(Part, IsArm)
+    A1 = Instance.new("Attachment")
     A1.Name = "1"
     A1.Position = IsArm and Vector3.new(0,0.5,0) or Vector3.new(0,1,0)
     A1.Parent = Part
-    local A2 = Instance.new("Attachment")
+    A2 = Instance.new("Attachment")
     A2.Name = "2"
     A2.Position = Vector3.new(0,-1,0)
     A2.Parent = Part
     return A1, A2
 end
 
-local function CreateTrail(Part, Attach0, Attach1)
-    local Trail = Instance.new("Trail")
+function CreateTrail(Part, Attach0, Attach1)
+    Trail = Instance.new("Trail")
 
 if speedsterType == "RF" then
         Trail.Color = ColorSequence.new(
@@ -1452,24 +1452,24 @@ if speedsterType == "RF" then
 end
 
 
-local function InitializeTrails()
+function InitializeTrails()
     TrailsPerPart = {}
     for _, PartName in pairs(BodyParts) do
-        local Part = Character:FindFirstChild(PartName)
+        Part = Character:FindFirstChild(PartName)
         if Part and Part:IsA("BasePart") then
-            local IsArm = PartName:find("Arm")
-            local A0, A1 = AddAttachments(Part, IsArm)
-            local T1 = CreateTrail(Part, A0, A1)
-            local T2 = T1:Clone()
+            IsArm = PartName:find("Arm")
+            A0, A1 = AddAttachments(Part, IsArm)
+            T1 = CreateTrail(Part, A0, A1)
+            T2 = T1:Clone()
             T2.Parent = Part
             TrailsPerPart[Part] = {T1, T2, A0, A1}
         end
     end
 end
 
-local function CreateInvisibleWater(Part)
+function CreateInvisibleWater(Part)
     if Part:FindFirstChild("FakeWater") then return end
-    local Clone = Instance.new("Part")
+    Clone = Instance.new("Part")
     Clone.Size = Part.Size
     Clone.CFrame = Part.CFrame
     Clone.Anchored = true
@@ -1485,9 +1485,9 @@ end
 -- Now it just toggles Enabled once per 2 frames for the flicker feel
 -- Water detection and TODC are preserved exactly
 -- ================================================================
-local heartbeatFrame = 0
+heartbeatFrame = 0
 
-local function HeartbeatUpdate()
+function HeartbeatUpdate()
     heartbeatFrame += 1
 
     -- Lightweight trail "pop" flicker: toggle enabled state briefly
@@ -1495,9 +1495,9 @@ local function HeartbeatUpdate()
     -- but costs nearly nothing compared to Clone() + Destroy()
     if heartbeatFrame % 2 == 0 then
         for Part, Data in pairs(TrailsPerPart) do
-            local T1, T2 = Data[1], Data[2]
+            T1, T2 = Data[1], Data[2]
             -- Randomly pick one trail to snap-reset per frame
-            local target = (math.random(1,2) == 1) and T1 or T2
+            target = (math.random(1,2) == 1) and T1 or T2
             if target and target.Parent then
                 -- Brief toggle clears the existing trail segment history
                 target.Enabled = false
@@ -1523,7 +1523,7 @@ local function HeartbeatUpdate()
 end
 
 
-local generalEnableSound = Instance.new("Sound")
+generalEnableSound = Instance.new("Sound")
 generalEnableSound.SoundId = "rbxassetid://9112776526"
 generalEnableSound.Volume = 0.8
 generalEnableSound.Looped = true
@@ -1532,7 +1532,7 @@ generalEnableSound.RollOffMaxDistance = 200
 generalEnableSound.RollOffMinDistance = 10
 generalEnableSound.Parent = HRP
 
-local runSound1 = Instance.new("Sound")
+runSound1 = Instance.new("Sound")
 runSound1.SoundId = "rbxassetid://5113213873"
 runSound1.Volume = 0.3
 runSound1.Looped = true
@@ -1541,7 +1541,7 @@ runSound1.RollOffMaxDistance = 200
 runSound1.RollOffMinDistance = 10
 runSound1.Parent = HRP
 
-local runSound2 = Instance.new("Sound")
+runSound2 = Instance.new("Sound")
 runSound2.SoundId = "rbxassetid://4738483700"
 runSound2.Volume = 0.5
 runSound2.Looped = false
@@ -1550,7 +1550,7 @@ runSound2.RollOffMaxDistance = 200
 runSound2.RollOffMinDistance = 10
 runSound2.Parent = HRP
 
-local runSound3 = Instance.new("Sound")
+runSound3 = Instance.new("Sound")
 runSound3.SoundId = "rbxassetid://6336173633"
 runSound3.Volume = 0.3
 runSound3.Looped = true
@@ -1559,7 +1559,7 @@ runSound3.RollOffMaxDistance = 200
 runSound3.RollOffMinDistance = 10
 runSound3.Parent = HRP
 
-local runSound4 = Instance.new("Sound")
+runSound4 = Instance.new("Sound")
 runSound4.SoundId = "rbxassetid://3308152153"
 runSound4.Volume = 0.3
 runSound4.Looped = true
@@ -1568,7 +1568,7 @@ runSound4.RollOffMaxDistance = 200
 runSound4.RollOffMinDistance = 10
 runSound4.Parent = HRP
 
-local runSound5 = Instance.new("Sound")
+runSound5 = Instance.new("Sound")
 runSound5.SoundId = "rbxassetid://2852749304"
 runSound5.Volume = 0.3
 runSound5.Looped = false
@@ -1577,7 +1577,7 @@ runSound5.RollOffMaxDistance = 200
 runSound5.RollOffMinDistance = 10
 runSound5.Parent = HRP
 
-local stopSound = Instance.new("Sound")
+stopSound = Instance.new("Sound")
 stopSound.SoundId = "rbxassetid://4944377949"
 stopSound.Volume = 0.5
 stopSound.Looped = false
@@ -1586,16 +1586,16 @@ stopSound.RollOffMaxDistance = 200
 stopSound.RollOffMinDistance = 10
 stopSound.Parent = HRP
 
-local wasRunning = false
-local lastWalkSpeed = 0
-local soundConnection = nil
+wasRunning = false
+lastWalkSpeed = 0
+soundConnection = nil
 
-local function UpdateSounds()
+function UpdateSounds()
     if not enabled then return end
     
-    local currentSpeed = Humanoid.WalkSpeed
-    local isMoving = Humanoid.MoveDirection.Magnitude > 0
-    local isRunning = isMoving and currentSpeed > 0
+    currentSpeed = Humanoid.WalkSpeed
+    isMoving = Humanoid.MoveDirection.Magnitude > 0
+    isRunning = isMoving and currentSpeed > 0
     
     if isRunning then
         if not wasRunning then
@@ -1629,11 +1629,11 @@ end
 
 
 
-local function UpdateAnimationsAndFOV()
+function UpdateAnimationsAndFOV()
     if not enabled then return end
     
-    local isMoving = Humanoid.MoveDirection.Magnitude > 0
-    local isFalling = Humanoid.FloorMaterial == Enum.Material.Air and Humanoid.MoveDirection.Magnitude == 0
+    isMoving = Humanoid.MoveDirection.Magnitude > 0
+    isFalling = Humanoid.FloorMaterial == Enum.Material.Air and Humanoid.MoveDirection.Magnitude == 0
     
     if isMoving then
 
@@ -1666,9 +1666,9 @@ local function UpdateAnimationsAndFOV()
     end
 end
 
-local animConnection
+animConnection
 
-local function enableAll()
+function enableAll()
     if enabled then return end
     enabled = true
     Humanoid.WalkSpeed = defaultWalkSpeed
@@ -1688,7 +1688,7 @@ local function enableAll()
     end
 end
 
-local function disableAll()
+function disableAll()
     if not enabled then return end
     enabled = false
     Humanoid.WalkSpeed = 25
@@ -1719,14 +1719,14 @@ local function disableAll()
     Camera.FieldOfView = 70
 end
 
-local thrownFolder = workspace:FindFirstChild("Thrown")
+thrownFolder = workspace:FindFirstChild("Thrown")
 if not thrownFolder then
     thrownFolder = Instance.new("Folder")
     thrownFolder.Name = "Thrown"
     thrownFolder.Parent = workspace
 end
 
-local liveFolder = workspace:FindFirstChild("Live")
+liveFolder = workspace:FindFirstChild("Live")
 if not liveFolder then
     liveFolder = Instance.new("Folder")
     liveFolder.Name = "Live"
@@ -1734,29 +1734,29 @@ if not liveFolder then
 end
 
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local function downloadFile(path, url)
+function downloadFile(path, url)
     if not isfile(path) then
-        local content = game:HttpGet(url)
+        content = game:HttpGet(url)
         writefile(path, content)
     end
 end
 
-local localFileName = "tariiscute"
-local githubRawUrl = "https://raw.githubusercontent.com/NetlessScripter/TSB-TO-ANY-GAME/refs/heads/main/TsbResources.rbxm"
+localFileName = "tariiscute"
+githubRawUrl = "https://raw.githubusercontent.com/NetlessScripter/TSB-TO-ANY-GAME/refs/heads/main/TsbResources.rbxm"
 
 downloadFile(localFileName, githubRawUrl)
 
-local model = game:GetObjects(getcustomasset(localFileName))[1]
+model = game:GetObjects(getcustomasset(localFileName))[1]
 
-local resourcesFolder = ReplicatedStorage:FindFirstChild("Resources") or Instance.new("Folder")
+resourcesFolder = ReplicatedStorage:FindFirstChild("Resources") or Instance.new("Folder")
 resourcesFolder.Name = "Resources"
 resourcesFolder.Parent = ReplicatedStorage
 
 model.Parent = resourcesFolder
 
-local tsbResources = resourcesFolder:FindFirstChild("TsbResources")
+tsbResources = resourcesFolder:FindFirstChild("TsbResources")
 if tsbResources then
     for _, child in ipairs(tsbResources:GetChildren()) do
         child.Parent = resourcesFolder
@@ -1764,7 +1764,7 @@ if tsbResources then
     tsbResources:Destroy()
 end
 
-local nestedResources = resourcesFolder:FindFirstChild("resources")
+nestedResources = resourcesFolder:FindFirstChild("resources")
 if nestedResources then
     for _, child in ipairs(nestedResources:GetChildren()) do
         child.Parent = resourcesFolder
@@ -1772,17 +1772,17 @@ if nestedResources then
     nestedResources:Destroy()
 end
 
-local src1 = game.ReplicatedStorage.Resources.DownSlam.Wind2.Part.Attachment
-local src2 = game.ReplicatedStorage.Resources.Cannon.Maybe.Maybe.lines
+src1 = game.ReplicatedStorage.Resources.DownSlam.Wind2.Part.Attachment
+src2 = game.ReplicatedStorage.Resources.Cannon.Maybe.Maybe.lines
 
-local fx1
-local fx2
-local made = false
-local fxRunning = false
-local fxEnabled = false
-local fxConnection
+fx1
+fx2
+made = false
+fxRunning = false
+fxEnabled = false
+fxConnection
 
-local function make()
+function make()
     if made then return end
     made = true
 
@@ -1792,7 +1792,7 @@ local function make()
     fx2 = src2:Clone()
     fx2.Parent = HRP
 
-    local fxCol = ColorSequence.new(Color3.fromRGB(255,59,0))
+    fxCol = ColorSequence.new(Color3.fromRGB(255,59,0))
 
     for _, x in pairs(fx1:GetChildren()) do
         if x:IsA("ParticleEmitter") then
@@ -1808,7 +1808,7 @@ local function make()
     end
 end
 
-local function startFX()
+function startFX()
     if not made then make() end
 
     for _, x in pairs(fx1:GetChildren()) do
@@ -1826,7 +1826,7 @@ local function startFX()
     end
 end
 
-local function stopFX()
+function stopFX()
     if not made then return end
 
     for _, x in pairs(fx1:GetChildren()) do
@@ -1842,9 +1842,9 @@ local function stopFX()
     end
 end
 
-local function onMoveChanged()
+function onMoveChanged()
     if not fxEnabled then return end
-    local m = h.MoveDirection.Magnitude > 0
+    m = h.MoveDirection.Magnitude > 0
 
     if m and not fxRunning then
         fxRunning = true
@@ -1855,7 +1855,7 @@ local function onMoveChanged()
     end
 end
 
-local function enableRunEvents()
+function enableRunEvents()
     if fxEnabled then return end
     fxEnabled = true
     if not fxConnection then
@@ -1863,7 +1863,7 @@ local function enableRunEvents()
     end
 end
 
-local function disableRunEvents()
+function disableRunEvents()
     if not fxEnabled then return end
     fxEnabled = false
     if fxConnection then
@@ -1879,7 +1879,7 @@ end
 -- LIGHTNING SYSTEM - COLOR UTILITIES
 -- ================================================================
 
-local function GetLightningColor()
+function GetLightningColor()
     if speedsterType == "RF" then
         return Color3.fromRGB(255, 50, 50)
     elseif speedsterType == "Zoom" then
@@ -1912,26 +1912,26 @@ end
 -- - When G_Optimized: slower intervals, higher on-chance (less spam)
 -- ================================================================
 
-local flickerActive = false
-local flickerThread = nil
+flickerActive = false
+flickerThread = nil
 
-local function StartLightningFlicker()
+function StartLightningFlicker()
     if flickerActive then return end
     flickerActive = true
 
     flickerThread = task.spawn(function()
-        local tick_leg = 0
-        local tick_arm = 7  -- offset so arms and legs don't sync
-        local tick_all = 3  -- offset for allTrails
+        tick_leg = 0
+        tick_arm = 7  -- offset so arms and legs don't sync
+        tick_all = 3  -- offset for allTrails
 
         while flickerActive do
             tick_leg += 1
             tick_arm += 1
             tick_all += 1
 
-            local speed = (h and h.Parent and h.WalkSpeed) or 0
+            speed = (h and h.Parent and h.WalkSpeed) or 0
             -- intensity: 0.2 at idle (lightning still crackles slightly), 1.0 at full speed
-            local intensity = math.clamp(speed / math.max(customSpeed, 1), 0.2, 1.0)
+            intensity = math.clamp(speed / math.max(customSpeed, 1), 0.2, 1.0)
 
             -- === tlist: BASE body trails - the most visible layer ===
             -- These are the trails from the simple loop at the top of setup.
@@ -1939,8 +1939,8 @@ local function StartLightningFlicker()
             for idx, trail in ipairs(tlist) do
                 if trail and trail.Parent then
                     -- Sine wave base creates a slow pulse, random spikes create jitter
-                    local sineWave = math.sin(tick_leg * 0.4 + idx * 0.9) * 0.25 + 0.75
-                    local rand = math.random()
+                    sineWave = math.sin(tick_leg * 0.4 + idx * 0.9) * 0.25 + 0.75
+                    rand = math.random()
                     if rand < intensity * sineWave then
                         trail.Enabled = true
                         -- Vary lifetime: short = sharp bolt feel, long = glow trail feel
@@ -1966,8 +1966,8 @@ local function StartLightningFlicker()
             if tick_arm % 2 == 0 then
                 for idx, trail in ipairs(t) do
                     if trail and trail.Parent then
-                        local sineArm = math.sin(tick_arm * 0.3 + idx * 1.1) * 0.2 + 0.8
-                        local rand = math.random()
+                        sineArm = math.sin(tick_arm * 0.3 + idx * 1.1) * 0.2 + 0.8
+                        rand = math.random()
                         if rand < intensity * sineArm * 0.9 then
                             trail.Enabled = true
                             trail.Lifetime = math.random(15, 40) / 100
@@ -1998,7 +1998,7 @@ local function StartLightningFlicker()
     end)
 end
 
-local function StopLightningFlicker()
+function StopLightningFlicker()
     flickerActive = false
     if flickerThread then
         task.cancel(flickerThread)
@@ -2040,14 +2040,14 @@ playerData.StopLightningFlicker = StopLightningFlicker
 --   Beam naturally stretches as the character moves — looks correct
 -- ================================================================
 
-local groundArcActive = false
-local groundArcThread = nil
-local groundRayParams = RaycastParams.new()
+groundArcActive = false
+groundArcThread = nil
+groundRayParams = RaycastParams.new()
 groundRayParams.FilterType = Enum.RaycastFilterType.Exclude
 
 -- Parts to arc FROM — prioritizes feet/legs (most visible ground contact)
 -- then arms and hands, then torso as fallback
-local GROUND_ARC_SOURCE_PARTS = {
+GROUND_ARC_SOURCE_PARTS = {
     "LeftFoot", "RightFoot",
     "LeftLowerLeg", "RightLowerLeg",
     "Left Leg", "Right Leg",
@@ -2058,9 +2058,9 @@ local GROUND_ARC_SOURCE_PARTS = {
     "LeftLowerArm", "RightLowerArm",
 }
 
-local Debris = game:GetService("Debris")
+Debris = game:GetService("Debris")
 
-local function FireGroundArc(originPart, lightColor)
+function FireGroundArc(originPart, lightColor)
     if not originPart or not originPart.Parent then return end
     if not CharacterRef or not CharacterRef.Parent then return end
     if not HRP or not HRP.Parent then return end
@@ -2070,15 +2070,15 @@ local function FireGroundArc(originPart, lightColor)
 
     -- Variable spread: mostly downward, with horizontal deviation
     -- This makes lightning fan outward from feet rather than always going straight down
-    local spreadX = (math.random() - 0.5) * 5
-    local spreadZ = (math.random() - 0.5) * 5
-    local rayLength = math.random(5, 20)
-    local rayDir = Vector3.new(spreadX * 0.3, -rayLength, spreadZ * 0.3)
+    spreadX = (math.random() - 0.5) * 5
+    spreadZ = (math.random() - 0.5) * 5
+    rayLength = math.random(5, 20)
+    rayDir = Vector3.new(spreadX * 0.3, -rayLength, spreadZ * 0.3)
 
-    local result = workspace:Raycast(originPart.Position, rayDir, groundRayParams)
+    result = workspace:Raycast(originPart.Position, rayDir, groundRayParams)
     if not result then return end
 
-    local groundPos = result.Position
+    groundPos = result.Position
     -- Slight random offset at ground contact = simulates lightning branching
     -- to a point slightly away from direct hit (like real ground strikes)
     groundPos = groundPos + Vector3.new(
@@ -2091,7 +2091,7 @@ local function FireGroundArc(originPart, lightColor)
     -- Anchored = true means it stays in world space while character moves
     -- This is intentional: the ground point is FIXED, the body end moves
     -- This creates the "lightning stretching as you run past" feel
-    local groundPart = Instance.new("Part")
+    groundPart = Instance.new("Part")
     groundPart.Anchored = true
     groundPart.CanCollide = false
     groundPart.CastShadow = false
@@ -2100,21 +2100,21 @@ local function FireGroundArc(originPart, lightColor)
     groundPart.Position = groundPos
     groundPart.Parent = workspace
 
-    local groundAttach = Instance.new("Attachment", groundPart)
+    groundAttach = Instance.new("Attachment", groundPart)
 
     -- Body attachment with small random offset from part center
     -- Simulates lightning originating from different points on the limb
-    local bodyAttach = Instance.new("Attachment", originPart)
+    bodyAttach = Instance.new("Attachment", originPart)
     bodyAttach.Position = Vector3.new(
         (math.random() - 0.5) * 0.6,
         (math.random() - 0.5) * 0.5,
         (math.random() - 0.5) * 0.4
     )
 
-    local whiteColor = Color3.new(1, 1, 1)
+    whiteColor = Color3.new(1, 1, 1)
 
     -- === MAIN BEAM ARC ===
-    local beam = Instance.new("Beam")
+    beam = Instance.new("Beam")
     beam.Attachment0 = bodyAttach   -- body end (moves with character)
     beam.Attachment1 = groundAttach  -- ground end (fixed)
     beam.FaceCamera = true
@@ -2154,7 +2154,7 @@ local function FireGroundArc(originPart, lightColor)
 
     -- Lifetime: 30ms–180ms. The wide range gives unpredictable "pop" timing.
     -- Short bolts feel like sharp cracks; longer ones feel like sustained arcs.
-    local lifetime = math.random(3, 18) / 100
+    lifetime = math.random(3, 18) / 100
 
     -- Schedule cleanup
     Debris:AddItem(groundPart, lifetime + 0.08)
@@ -2180,7 +2180,7 @@ local function FireGroundArc(originPart, lightColor)
             if not CharacterRef or not CharacterRef.Parent then return end
             if not originPart or not originPart.Parent then return end
 
-            local branchPart = Instance.new("Part")
+            branchPart = Instance.new("Part")
             branchPart.Anchored = true
             branchPart.CanCollide = false
             branchPart.CastShadow = false
@@ -2194,13 +2194,13 @@ local function FireGroundArc(originPart, lightColor)
             )
             branchPart.Parent = workspace
 
-            local bAttach0 = Instance.new("Attachment", originPart)
+            bAttach0 = Instance.new("Attachment", originPart)
             bAttach0.Position = bodyAttach.Position + Vector3.new(
                 (math.random() - 0.5) * 0.4, 0, 0
             )
-            local bAttach1 = Instance.new("Attachment", branchPart)
+            bAttach1 = Instance.new("Attachment", branchPart)
 
-            local branchBeam = Instance.new("Beam")
+            branchBeam = Instance.new("Beam")
             branchBeam.Attachment0 = bAttach0
             branchBeam.Attachment1 = bAttach1
             branchBeam.FaceCamera = true
@@ -2224,7 +2224,7 @@ local function FireGroundArc(originPart, lightColor)
             })
             branchBeam.Parent = branchPart
 
-            local bLifetime = lifetime * 0.55
+            bLifetime = lifetime * 0.55
             Debris:AddItem(branchPart, bLifetime + 0.05)
             Debris:AddItem(bAttach0, bLifetime + 0.05)
 
@@ -2237,14 +2237,14 @@ local function FireGroundArc(originPart, lightColor)
     end
 end
 
-local function StartGroundArcs()
+function StartGroundArcs()
     if groundArcActive then return end
     groundArcActive = true
 
     -- Build available source parts list (only parts that actually exist on this character)
-    local arcPartsList = {}
+    arcPartsList = {}
     for _, name in ipairs(GROUND_ARC_SOURCE_PARTS) do
-        local p = CharacterRef:FindFirstChild(name)
+        p = CharacterRef:FindFirstChild(name)
         if p and p:IsA("BasePart") then
             table.insert(arcPartsList, p)
         end
@@ -2255,18 +2255,18 @@ local function StartGroundArcs()
 
     groundArcThread = task.spawn(function()
         while groundArcActive and CharacterRef and CharacterRef.Parent do
-            local isMoving = h and h.Parent and h.MoveDirection.Magnitude > 0
-            local speed = h and h.Parent and h.WalkSpeed or 0
+            isMoving = h and h.Parent and h.MoveDirection.Magnitude > 0
+            speed = h and h.Parent and h.WalkSpeed or 0
 
             if speed > 30 then
-                local lightColor = GetLightningColor()
+                lightColor = GetLightningColor()
 
                 if isMoving then
                     -- Running: fire 1-4 simultaneous arcs from random body parts
                     -- G_Optimized: always 1 arc; Normal: 1-3 arcs
-                    local numArcs = _G.G_Optimized and 1 or math.random(1, 3)
+                    numArcs = _G.G_Optimized and 1 or math.random(1, 3)
                     for i = 1, numArcs do
-                        local part = arcPartsList[math.random(1, #arcPartsList)]
+                        part = arcPartsList[math.random(1, #arcPartsList)]
                         -- Each arc is spawned independently so they don't block each other
                         task.spawn(FireGroundArc, part, lightColor)
                     end
@@ -2283,13 +2283,13 @@ local function StartGroundArcs()
             -- At full speed (375): fires every ~30-70ms = ~15-30 arcs/second
             -- At low speed (100): fires every ~60-110ms = ~9-16 arcs/second
             -- G_Optimized: fires every ~80-150ms regardless of speed
-            local interval
+            interval
             if _G.G_Optimized then
                 interval = math.random(8, 15) / 100
             else
-                local speedFactor = math.clamp(speed / 375, 0, 1)
-                local minMs = math.floor(3 + (1 - speedFactor) * 4)
-                local maxMs = math.floor(7 + (1 - speedFactor) * 7)
+                speedFactor = math.clamp(speed / 375, 0, 1)
+                minMs = math.floor(3 + (1 - speedFactor) * 4)
+                maxMs = math.floor(7 + (1 - speedFactor) * 7)
                 interval = math.random(minMs, maxMs) / 100
             end
             task.wait(interval)
@@ -2298,7 +2298,7 @@ local function StartGroundArcs()
     end)
 end
 
-local function StopGroundArcs()
+function StopGroundArcs()
     groundArcActive = false
     if groundArcThread then
         task.cancel(groundArcThread)
@@ -2316,8 +2316,8 @@ playerData.StopGroundArcs = StopGroundArcs
 -- This caused the lightning particle to re-enable itself after X/Stop
 -- Fix: guard with playerData.spd check
 -- ================================================================
-local idleParticleConnection
-local lastRunningState = false
+idleParticleConnection
+lastRunningState = false
 
 idleParticleConnection = h.Running:Connect(function(speed)
     -- BUG FIX: Do not re-enable lightning effects if speed mode is off
@@ -2340,14 +2340,14 @@ idleParticleConnection = h.Running:Connect(function(speed)
 end)
 
 
-local TextChatService = game:GetService("TextChatService")
-local textChannel
+TextChatService = game:GetService("TextChatService")
+textChannel
 
 
-local function InitializeTextChannel()
+function InitializeTextChannel()
     if textChannel then return true end
     
-    local success = pcall(function()
+    success = pcall(function()
         textChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral")
     end)
     
@@ -2360,10 +2360,10 @@ local function InitializeTextChannel()
     end
 end
 
-local function BroadcastState(stateType, value)
+function BroadcastState(stateType, value)
     if not textChannel and not InitializeTextChannel() then return end
     
-    local message = ""
+    message = ""
     
     if stateType == "speed" and value then
         message = ".1"
@@ -2380,29 +2380,29 @@ local function BroadcastState(stateType, value)
     end)
 end
 
-local syncConnection
+syncConnection
 
-local function SetupSyncListener()
+function SetupSyncListener()
     if not textChannel and not InitializeTextChannel() then return end
     
     print("👂 Listening for speedster commands (.1, .2, .3)...")
     
     syncConnection = textChannel.MessageReceived:Connect(function(textChatMessage)
 
-        local msgText = textChatMessage.Text
-        local textSource = textChatMessage.TextSource
+        msgText = textChatMessage.Text
+        textSource = textChatMessage.TextSource
         
         if not textSource then return end
         
-        local senderUserId = textSource.UserId
+        senderUserId = textSource.UserId
         if senderUserId == player.UserId then return end
         
-        local senderPlayer = Players:GetPlayerByUserId(senderUserId)
+        senderPlayer = Players:GetPlayerByUserId(senderUserId)
         if not senderPlayer or not IsAllowed(senderPlayer) then 
             return 
         end
         
-        local senderData = PlayerData[senderUserId]
+        senderData = PlayerData[senderUserId]
         if not senderData then return end
         
         if msgText == ".1" then
@@ -2444,15 +2444,15 @@ if isLocalPlayer then
 end
 
 if isLocalPlayer then
-    local radius=10
-local speed=400
-local angle=0
-local ws0=25
+    radius=10
+speed=400
+angle=0
+ws0=25
 h.WalkSpeed=ws0
-local spd=false
+spd=false
 
-local pg=player:WaitForChild("PlayerGui")
-local gui=Instance.new("ScreenGui")
+pg=player:WaitForChild("PlayerGui")
+gui=Instance.new("ScreenGui")
 gui.Parent=pg
 gui.Name="PhaseGui"
 gui.ResetOnSpawn=false
@@ -2465,16 +2465,16 @@ gui.IgnoreGuiInset=true
 -- ════════════════════════════════════════════════════════════════════
 
 -- ── tiny helpers ─────────────────────────────────────────────────
-local function addGrad(parent, col, rot)
-    local g = Instance.new("UIGradient")
+function addGrad(parent, col, rot)
+    g = Instance.new("UIGradient")
     g.Color   = col
     g.Rotation = rot or 0
     g.Parent  = parent
     return g
 end
 
-local function addStrokeGrad(parent, thickness, col, rot)
-    local s = Instance.new("UIStroke")
+function addStrokeGrad(parent, thickness, col, rot)
+    s = Instance.new("UIStroke")
     s.Thickness = thickness
     s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     addGrad(s, col, rot or 45)
@@ -2482,9 +2482,9 @@ local function addStrokeGrad(parent, thickness, col, rot)
     return s
 end
 
-local function addShine(parent)
+function addShine(parent)
     -- glass-reflection highlight bar near top of any pill/frame
-    local shine = Instance.new("Frame")
+    shine = Instance.new("Frame")
     shine.Parent = parent
     shine.Size = UDim2.new(0.52, 0, 0, 1)
     shine.Position = UDim2.new(0.12, 0, 0, 4)
@@ -2500,7 +2500,7 @@ local function addShine(parent)
 end
 
 -- ── MAIN PANEL ───────────────────────────────────────────────────
-local panel = Instance.new("Frame")
+panel = Instance.new("Frame")
 panel.Parent   = gui
 panel.Size     = UDim2.new(0, 172, 0, 288)
 panel.Position = UDim2.new(0, 8, 0, 8)
@@ -2524,7 +2524,7 @@ addStrokeGrad(panel, 1.5, ColorSequence.new({
 }), 90)
 
 -- ── HEADER ───────────────────────────────────────────────────────
-local header = Instance.new("TextLabel")
+header = Instance.new("TextLabel")
 header.Parent = panel
 header.Size   = UDim2.new(1, -12, 0, 28)
 header.Position = UDim2.new(0, 6, 0, 8)
@@ -2535,7 +2535,7 @@ header.TextScaled = true
 header.TextColor3 = Color3.fromRGB(255, 210, 85)
 
 -- divider bar under header
-local div = Instance.new("Frame")
+div = Instance.new("Frame")
 div.Parent = panel
 div.Size   = UDim2.new(1, -20, 0, 1)
 div.Position = UDim2.new(0, 10, 0, 40)
@@ -2556,8 +2556,8 @@ addGrad(div, ColorSequence.new({
 -- bg0/bg1   : background gradient colours
 -- sk0/sk1   : stroke glow colours
 -- textCol   : text colour
-local function makeBtn(yPos, label, icon, bg0, bg1, sk0, sk1, textCol)
-    local f = Instance.new("Frame")
+function makeBtn(yPos, label, icon, bg0, bg1, sk0, sk1, textCol)
+    f = Instance.new("Frame")
     f.Parent = panel
     f.Size   = UDim2.new(1, -16, 0, 44)
     f.Position = UDim2.new(0, 8, 0, yPos)
@@ -2578,7 +2578,7 @@ local function makeBtn(yPos, label, icon, bg0, bg1, sk0, sk1, textCol)
 
     addShine(f)
 
-    local b = Instance.new("TextButton")
+    b = Instance.new("TextButton")
     b.Parent = f
     b.Size   = UDim2.new(1, 0, 1, 0)
     b.BackgroundTransparency = 1
@@ -2593,7 +2593,7 @@ end
 -- ── BUTTONS ──────────────────────────────────────────────────────
 
 -- Angular Mirage — electric teal shard
-local mir, mirb = makeBtn(50,
+mir, mirb = makeBtn(50,
     "Ang. Mirage", "◈",
     Color3.fromRGB(7,  26, 52),   Color3.fromRGB(3, 10, 28),
     Color3.fromRGB(46,180,255),   Color3.fromRGB(18, 65,155),
@@ -2601,7 +2601,7 @@ local mir, mirb = makeBtn(50,
 )
 
 -- Phase — spectral ghost-green
-local ph, phb = makeBtn(102,
+ph, phb = makeBtn(102,
     "Phase", "◌",
     Color3.fromRGB(7,  36, 20),   Color3.fromRGB(3, 16,  9),
     Color3.fromRGB(75,255,145),   Color3.fromRGB(22,115, 65),
@@ -2609,7 +2609,7 @@ local ph, phb = makeBtn(102,
 )
 
 -- Enable Speed — molten gold
-local sp, spb = makeBtn(154,
+sp, spb = makeBtn(154,
     "Enable Speed", "▶",
     Color3.fromRGB(44, 27,  4),   Color3.fromRGB(18, 10,  2),
     Color3.fromRGB(255,192, 38),  Color3.fromRGB(155, 85,  8),
@@ -2617,7 +2617,7 @@ local sp, spb = makeBtn(154,
 )
 
 -- ── STOP BUTTON (top-right, outside panel) ───────────────────────
-local sh = Instance.new("Frame")
+sh = Instance.new("Frame")
 sh.Parent = gui
 sh.Size   = UDim2.new(0, 92, 0, 36)
 sh.Position = UDim2.new(1, -100, 0, 8)
@@ -2638,7 +2638,7 @@ addStrokeGrad(sh, 1.5, ColorSequence.new({
 
 addShine(sh)
 
-local sb = Instance.new("TextButton")
+sb = Instance.new("TextButton")
 sb.Parent = sh
 sb.Size   = UDim2.new(1, 0, 1, 0)
 sb.BackgroundTransparency = 1
@@ -2649,7 +2649,7 @@ sb.Font        = Enum.Font.Michroma
 sb.AutoButtonColor = false
 
 -- ── VELOCITY TEXTBOX ─────────────────────────────────────────────
-local speedBoxFrame = Instance.new("Frame")
+speedBoxFrame = Instance.new("Frame")
 speedBoxFrame.Parent = panel
 speedBoxFrame.Size   = UDim2.new(1, -16, 0, 62)
 speedBoxFrame.Position = UDim2.new(0, 8, 0, 214)
@@ -2669,7 +2669,7 @@ addStrokeGrad(speedBoxFrame, 1.5, ColorSequence.new({
     ColorSequenceKeypoint.new(1,   Color3.fromRGB(255, 182, 28)),
 }), 45)
 
-local speedLabel = Instance.new("TextLabel")
+speedLabel = Instance.new("TextLabel")
 speedLabel.Parent = speedBoxFrame
 speedLabel.Size   = UDim2.new(1, -12, 0, 20)
 speedLabel.Position = UDim2.new(0, 8, 0, 5)
@@ -2680,7 +2680,7 @@ speedLabel.TextScaled = true
 speedLabel.TextColor3 = Color3.fromRGB(255, 188, 48)
 speedLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local speedBox = Instance.new("TextBox")
+speedBox = Instance.new("TextBox")
 speedBox.Parent = speedBoxFrame
 speedBox.Size   = UDim2.new(1, -14, 0, 26)
 speedBox.Position = UDim2.new(0, 7, 0, 29)
@@ -2700,8 +2700,8 @@ addGrad(speedBox, ColorSequence.new({
 }), 90)
 
 -- Confirm on focus lost
-local function applySpeedBox()
-    local val = tonumber(speedBox.Text)
+function applySpeedBox()
+    val = tonumber(speedBox.Text)
     if val and val > 0 and val <= 9999 then
         customSpeed = val
         speedBox.TextColor3 = Color3.fromRGB(100, 255, 140)
@@ -2722,29 +2722,29 @@ speedBox.FocusLost:Connect(function()
 end)
 -- ─────────────────────────────────────────────────────────────────
 
-local ang=false
-local phs=false
-local nc=false
-local ocf=HRP.CFrame
-local occ=cam.CameraType
+ang=false
+phs=false
+nc=false
+ocf=HRP.CFrame
+occ=cam.CameraType
 
-local function circle(dt)
+function circle(dt)
     if not isLocalPlayer then return end
     if not ang then return end
 
 V88()
 
     angle+=dt*speed/radius
-    local o=Vector3.new(math.cos(angle)*radius,0,math.sin(angle)*radius)
-    local tp=ocf.Position+o
-    local d=tp-HRP.Position
+    o=Vector3.new(math.cos(angle)*radius,0,math.sin(angle)*radius)
+    tp=ocf.Position+o
+    d=tp-HRP.Position
     HRP.AssemblyLinearVelocity=d/dt
     if d.Magnitude>0.1 then
         HRP.CFrame=CFrame.new(HRP.Position,HRP.Position+Vector3.new(d.X,0,d.Z))
     end
 end
 
-local function sn(state)
+function sn(state)
     nc=state
     for _,v in next,CharacterRef:GetDescendants() do
         if v:IsA("BasePart") then v.CanCollide=not state end
@@ -2802,16 +2802,16 @@ StopVibrate()
     end
 end)
 
-local a
-local x
-local tFlag = false
-local b = "rbxassetid://897"
+a
+x
+tFlag = false
+b = "rbxassetid://897"
 
-local heartbeatConnection
-local runningConnection
+heartbeatConnection
+runningConnection
 
 
-local function storeConnection(conn)
+function storeConnection(conn)
     table.insert(playerData.connections, conn)
     return conn
 end
@@ -2822,7 +2822,7 @@ end
 -- Fixes the "doesn't properly disable" bug: all trail tables and
 -- all dynamic systems are stopped in a single deterministic sequence.
 -- ================================================================
-local function MasterDisableAll()
+function MasterDisableAll()
     -- 1. Stop dynamic systems FIRST (they may be enabling trails)
     StopLightningFlicker()
     StopGroundArcs()
@@ -2944,28 +2944,28 @@ sb.MouseButton1Click:Connect(function()
     if cam then
         cam.CameraType = Enum.CameraType.Custom
         if cam.FieldOfView ~= 70 then
-            local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
-            local goal = { FieldOfView = 70 }
+            info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+            goal = { FieldOfView = 70 }
             ts:Create(cam, info, goal):Play()
         end
     end
 end)
 
-local function gnp()
-    local np=nil
-    local md=9999
+function gnp()
+    np=nil
+    md=9999
     for _,pl in next,game.Players:GetPlayers() do
         if pl~=player then
-            local cc=pl.Character
-            local hr=cc and cc:FindFirstChild("HumanoidRootPart")
-            local d=hr and (HRP.Position-hr.Position).Magnitude
+            cc=pl.Character
+            hr=cc and cc:FindFirstChild("HumanoidRootPart")
+            d=hr and (HRP.Position-hr.Position).Magnitude
             if d and d<md then md=d np=hr end
         end
     end
     return np
 end
 
-local mainHeartbeat = RunService.Heartbeat:Connect(function(dt)
+mainHeartbeat = RunService.Heartbeat:Connect(function(dt)
     if not CharacterRef or not CharacterRef.Parent then return end
     if nc then
         -- FIX: cache descendants to avoid GetDescendants() every frame
@@ -2979,9 +2979,9 @@ local mainHeartbeat = RunService.Heartbeat:Connect(function(dt)
 end)
 table.insert(playerData.connections, mainHeartbeat)
 
-local targetAnimId = "rbxassetid://108670084190135"
+targetAnimId = "rbxassetid://108670084190135"
 
-local animPlayedConn = h.AnimationPlayed:Connect(function(animTrack)
+animPlayedConn = h.AnimationPlayed:Connect(function(animTrack)
 	if animTrack.Animation and animTrack.Animation.AnimationId == targetAnimId then
 		animTrack:Stop()
 	end
@@ -2995,26 +2995,26 @@ V90()
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ChosenSkibidi/VIP-SCRIPTS/refs/heads/main/useless%20notification"))()
 
-local g=player.PlayerGui.Attention.DialogueFrameAnnouncement
+g=player.PlayerGui.Attention.DialogueFrameAnnouncement
 
 g.Message.Text="Enjoy the script, and thank you for using our work."
 g:GetChildren()[11].Text="This script was created by Infinite Studios."
 
-local UserInputService = game:GetService("UserInputService")
+UserInputService = game:GetService("UserInputService")
 
 if UserInputService.TouchEnabled == false then
     gui.Enabled = false
 end
 
-local function onCharacterAdded(char)
-    local humanoid = char:WaitForChild("Humanoid")
+function onCharacterAdded(char)
+    humanoid = char:WaitForChild("Humanoid")
     humanoid.Died:Connect(function()
         if gui and gui.Enabled then
             for _, child in ipairs(gui:GetChildren()) do
                 if child:IsA("GuiObject") then
-                    local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
-                    local goal = {Position = child.Position + UDim2.new(0,0,-1,0)}
-                    local tween = TweenService:Create(child, tweenInfo, goal)
+                    tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+                    goal = {Position = child.Position + UDim2.new(0,0,-1,0)}
+                    tween = TweenService:Create(child, tweenInfo, goal)
                     tween:Play()
                     
                     tween.Completed:Connect(function()
@@ -3040,7 +3040,7 @@ uis.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
 
     if input.UserInputType == Enum.UserInputType.Keyboard then
-        local key = input.KeyCode
+        key = input.KeyCode
 
         -- ============================================================
         -- Q KEY: TOGGLE SPEED
@@ -3191,8 +3191,8 @@ end
     if cam then
         cam.CameraType = Enum.CameraType.Custom
         if cam.FieldOfView ~= 70 then
-            local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
-            local goal = { FieldOfView = 70 }
+            info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+            goal = { FieldOfView = 70 }
             ts:Create(cam, info, goal):Play()
         end
     end
@@ -3202,7 +3202,7 @@ end
 end)
 end
 
-local bNames = {
+bNames = {
 
     "Head",
     "Left Arm",
@@ -3225,37 +3225,37 @@ local bNames = {
     "RightFoot"
 }
 
-local ig = lightningAttachment
+ig = lightningAttachment
 
-local function mk()
+function mk()
 end
 
-local godCS2 = ColorSequence.new({
+godCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(200,200,200)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
 })
 
-local nwaCS2 = ColorSequence.new({
+nwaCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(200,100,255))
 })
 
-local zoomCS2 = ColorSequence.new({
+zoomCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))
 })
 
-local kidCS2 = ColorSequence.new({
+kidCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
 })
 
-local rfCS2 = ColorSequence.new({
+rfCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
 })
 
-local regularCS2 = ColorSequence.new({
+regularCS2 = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(255,59,33)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(255,59,33))
 })
@@ -3265,12 +3265,12 @@ local regularCS2 = ColorSequence.new({
 -- FIX: Increased wait interval in G_Optimized mode (0.5s vs 0.1s)
 -- This was running every 0.1s even when nothing needed updating
 -- ================================================================
-local colorUpdateRunning = true
-local colorUpdateThread = task.spawn(function()
+colorUpdateRunning = true
+colorUpdateThread = task.spawn(function()
     while colorUpdateRunning and player and player.Parent and CharacterRef and CharacterRef.Parent do
-        local success, err = pcall(function()
-            local cs = nil
-            local spot = nil
+        success, err = pcall(function()
+            cs = nil
+            spot = nil
 
             if speedsterType == "RF" then
                 cs = rfCS2
@@ -3299,7 +3299,7 @@ local colorUpdateThread = task.spawn(function()
                 mk()
 
                 for _,n in pairs(bNames) do
-                    local pr = CharacterRef:FindFirstChild(n)
+                    pr = CharacterRef:FindFirstChild(n)
                     if pr and pr.Parent then
                         for _,tr in pairs(pr:GetChildren()) do
                             if tr:IsA("Trail") and tr.Parent then
@@ -3311,8 +3311,8 @@ local colorUpdateThread = task.spawn(function()
 
                 for _,v in pairs(CharacterRef:GetDescendants()) do
                     if v:IsA("ParticleEmitter") and v.Parent then
-                        local cur = v
-                        local g = false
+                        cur = v
+                        g = false
                         while cur do
                             if cur == ig then
                                 g = true
@@ -3358,52 +3358,52 @@ end
 
 
 if isLocalPlayer then
-    local renderConn1 = game:GetService("RunService").RenderStepped:Connect(function()
+    renderConn1 = game:GetService("RunService").RenderStepped:Connect(function()
         if not CharacterRef or not CharacterRef.Parent or not player or not player.Parent then return end
-        local humanoid = CharacterRef:FindFirstChildOfClass("Humanoid")
+        humanoid = CharacterRef:FindFirstChildOfClass("Humanoid")
         if not humanoid then return end
         
-        local d = humanoid.MoveDirection
+        d = humanoid.MoveDirection
         if d.Magnitude > 0 and HRP and HRP.Parent then 
             HRP.CFrame = CFrame.new(HRP.Position, HRP.Position + d) 
         end
     end)
     table.insert(playerData.connections, renderConn1)
 
-    local snap=18
+    snap=18
 
-    local renderConn2 = RunService.RenderStepped:Connect(function(dt)
+    renderConn2 = RunService.RenderStepped:Connect(function(dt)
         if not CharacterRef or not CharacterRef.Parent or not HRP or not HRP.Parent or not h or not h.Parent then return end
     	if h.FloorMaterial==Enum.Material.Air then return end
 
-    	local md=h.MoveDirection
+    	md=h.MoveDirection
     	if md.Magnitude==0 then return end
 
     	md=Vector3.new(md.X,0,md.Z).Unit
 
-    	local v=HRP.AssemblyLinearVelocity
-    	local y=v.Y
+    	v=HRP.AssemblyLinearVelocity
+    	y=v.Y
 
-    	local sp=v.Magnitude
+    	sp=v.Magnitude
     	if sp<1 then return end
 
-    	local target=md*sp
+    	target=md*sp
     	HRP.AssemblyLinearVelocity=v:Lerp(Vector3.new(target.X,y,target.Z),math.clamp(dt*snap,0,1))
     end)
     table.insert(playerData.connections, renderConn2)
 end
 
 
-local humanoidForDeath = CharacterRef:FindFirstChildOfClass("Humanoid")
+humanoidForDeath = CharacterRef:FindFirstChildOfClass("Humanoid")
 if humanoidForDeath then
-    local diedConnection = humanoidForDeath.Died:Connect(function()
+    diedConnection = humanoidForDeath.Died:Connect(function()
         CleanupPlayer(player)
     end)
     table.insert(playerData.connections, diedConnection)
 end
 
 
-local ancestryConnection = CharacterRef.AncestryChanged:Connect(function(_, parent)
+ancestryConnection = CharacterRef.AncestryChanged:Connect(function(_, parent)
     if not parent then
         CleanupPlayer(player)
     end
@@ -3416,38 +3416,38 @@ end
 -- ================================================================
 -- WIND SYSTEM (original, preserved exactly)
 -- ================================================================
-local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
-local Debris = game:GetService("Debris")
-local Players = game:GetService("Players")
+TweenService = game:GetService("TweenService")
+RunService = game:GetService("RunService")
+Debris = game:GetService("Debris")
+Players = game:GetService("Players")
 
-local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+LocalPlayer = Players.LocalPlayer
+Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
-local CurrentCamera = workspace.CurrentCamera
+CurrentCamera = workspace.CurrentCamera
 
-local Blur = CurrentCamera:FindFirstChild("Blur")
+Blur = CurrentCamera:FindFirstChild("Blur")
 if not Blur then
 	Blur = Instance.new("BlurEffect", CurrentCamera)
 end
 Blur.Size = 0
 
-local RunBlur = CurrentCamera:FindFirstChild("RunBlur")
+RunBlur = CurrentCamera:FindFirstChild("RunBlur")
 if not RunBlur then
 	RunBlur = Instance.new("BlurEffect", CurrentCamera)
 	RunBlur.Name = "RunBlur"
 end
 RunBlur.Size = 0
-local runBlurTween = nil
-local wasMoving = false
+runBlurTween = nil
+wasMoving = false
 
-local isR15 = Character:FindFirstChild("UpperTorso") ~= nil
-local R15 = {"Head","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}
-local R6 = {"Head","Left Arm","Right Arm","Left Leg","Right Leg"}
+isR15 = Character:FindFirstChild("UpperTorso") ~= nil
+R15 = {"Head","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}
+R6 = {"Head","Left Arm","Right Arm","Left Leg","Right Leg"}
 
-local bodyParts = {}
+bodyParts = {}
 for _, n in ipairs(isR15 and R15 or R6) do
-	local p = Character:FindFirstChild(n)
+	p = Character:FindFirstChild(n)
 	if p and p:IsA("BasePart") then
 		bodyParts[#bodyParts + 1] = p
 	end
@@ -3455,7 +3455,7 @@ end
 
 for _, part in ipairs(bodyParts) do
 	do
-		local e = Instance.new("ParticleEmitter")
+		e = Instance.new("ParticleEmitter")
 		e.Brightness = 7
 		e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
 		e.LightEmission = 0.5
@@ -3493,7 +3493,7 @@ for _, part in ipairs(bodyParts) do
 		e.Parent = part
 	end
 	do
-		local e = Instance.new("ParticleEmitter")
+		e = Instance.new("ParticleEmitter")
 		e.Brightness = 7
 		e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
 		e.LightEmission = 0.5
@@ -3531,7 +3531,7 @@ for _, part in ipairs(bodyParts) do
 		e.Parent = part
 	end
 	do
-		local e = Instance.new("ParticleEmitter")
+		e = Instance.new("ParticleEmitter")
 		e.Brightness = 7
 		e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
 		e.LightEmission = 0.5
@@ -3570,7 +3570,7 @@ for _, part in ipairs(bodyParts) do
 	end
 end
 
-local wndPart = Instance.new("Part")
+wndPart = Instance.new("Part")
 wndPart.Transparency = 1
 wndPart.Anchored = true
 wndPart.CanCollide = false
@@ -3579,11 +3579,11 @@ wndPart.Size = Vector3.new(1,1,1)
 wndPart.Name = "wnd"
 wndPart.Parent = workspace
 
-local wndAttachment = Instance.new("Attachment", wndPart)
+wndAttachment = Instance.new("Attachment", wndPart)
 wndAttachment.Name = "Attachment"
 
-local function makeWind(name, emissionDir, lifetimeMin, lifetimeMax, rate, rotSpeedMin, rotSpeedMax, rotMin, rotMax, speedMin, speedMax, spreadAngle, acceleration, drag, sizeSeq, squashSeq, transparencySeq)
-	local e = Instance.new("ParticleEmitter")
+function makeWind(name, emissionDir, lifetimeMin, lifetimeMax, rate, rotSpeedMin, rotSpeedMax, rotMin, rotMax, speedMin, speedMax, spreadAngle, acceleration, drag, sizeSeq, squashSeq, transparencySeq)
+	e = Instance.new("ParticleEmitter")
 	e.Brightness = 7
 	e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
 	e.LightEmission = 0.5
@@ -3644,20 +3644,20 @@ makeWind(
 	NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.81300002336502075,0),NumberSequenceKeypoint.new(1,1,0)})
 )
 
-local Part_upvr = Instance.new("Part", Character)
+Part_upvr = Instance.new("Part", Character)
 Part_upvr.Transparency = 1
 Part_upvr.Anchored = true
 Part_upvr.CanCollide = false
 Part_upvr.Massless = true
 Part_upvr.Size = Vector3.new(1,1,1)
 
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-local Humanoid = Character:WaitForChild("Humanoid")
+HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+Humanoid = Character:WaitForChild("Humanoid")
 
-local tickW = 0
+tickW = 0
 
 RunService.RenderStepped:Connect(function()
-	local Magnitude = HumanoidRootPart.Velocity.Magnitude
+	Magnitude = HumanoidRootPart.Velocity.Magnitude
 
 	if 0 < Magnitude then
 		Part_upvr.CFrame = CFrame.new(CurrentCamera.CFrame.Position, CurrentCamera.CFrame.Position + HumanoidRootPart.Velocity * 5)
@@ -3670,7 +3670,7 @@ RunService.RenderStepped:Connect(function()
 	Blur.Size = math.clamp(Magnitude / 70, 0, 9)
 
 	-- RunBlur: triggers at max when player starts moving, fades out over 0.3s
-	local isMovingNow = Magnitude > 8
+	isMovingNow = Magnitude > 8
 	if isMovingNow and not wasMoving then
 		if runBlurTween then runBlurTween:Cancel() end
 		RunBlur.Size = 20
@@ -3686,11 +3686,11 @@ RunService.RenderStepped:Connect(function()
 	end
 	wasMoving = isMovingNow
 
-	local wndPos = CurrentCamera.CFrame.Position + CurrentCamera.CFrame.LookVector * 15
+	wndPos = CurrentCamera.CFrame.Position + CurrentCamera.CFrame.LookVector * 15
 	wndPart.CFrame = CFrame.new(wndPos, wndPos + CurrentCamera.CFrame.LookVector)
 
 	if 80 <= Magnitude and tickW % math.max(1, math.floor(50 / Magnitude)) == 0 then
-		local Part = Instance.new("Part")
+		Part = Instance.new("Part")
 		Part.CastShadow = false
 		Part.Color = Color3.new(1,1,1)
 		Part.Material = Enum.Material.ForceField
@@ -3700,13 +3700,13 @@ RunService.RenderStepped:Connect(function()
 		Part.Massless = true
 		Part.Parent = workspace
 
-		local SpecialMesh = Instance.new("SpecialMesh")
+		SpecialMesh = Instance.new("SpecialMesh")
 		SpecialMesh.MeshType = Enum.MeshType.Sphere
 		SpecialMesh.Parent = Part
 
-		local cframe = CFrame.new(math.random(-300,300)/100, math.random(-200,200)/100, -math.floor(Magnitude/50)*2)
+		cframe = CFrame.new(math.random(-300,300)/100, math.random(-200,200)/100, -math.floor(Magnitude/50)*2)
 
-		local Weld = Instance.new("Weld", Part)
+		Weld = Instance.new("Weld", Part)
 		Weld.Part0 = Part_upvr
 		Weld.Part1 = Part
 		Weld.C0 = cframe
@@ -3718,7 +3718,7 @@ RunService.RenderStepped:Connect(function()
 					v.Speed = NumberRange.new(math.clamp(5*Magnitude/40,-100,50), math.clamp(20*Magnitude/40,-100,200))
 					v.Rate = math.clamp(2*Magnitude/4, 0, _G.G_Optimized and 1000 or 2000)
 				elseif v.Name == "Wind3" then
-					local lock = false
+					lock = false
 					if Humanoid.FloorMaterial == Enum.Material.Air then
 						if 250 >= Magnitude then
 							lock = false
@@ -3752,8 +3752,8 @@ end)
 -- ================================================================
 -- MULTIPLAYER SETUP (original, preserved exactly)
 -- ================================================================
-local function CheckGameMode()
-    local allowedPlayersInGame = 0
+function CheckGameMode()
+    allowedPlayersInGame = 0
     for _, player in ipairs(Players:GetPlayers()) do
         if IsAllowed(player) then
             allowedPlayersInGame = allowedPlayersInGame + 1
@@ -3769,7 +3769,7 @@ local function CheckGameMode()
 end
 
 
-local allowedCount = CheckGameMode()
+allowedCount = CheckGameMode()
 for _, player in ipairs(Players:GetPlayers()) do
     if IsAllowed(player) and player.Character then
         SetupSpeedster(player)
