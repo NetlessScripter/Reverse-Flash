@@ -3207,7 +3207,14 @@ local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 
 local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Character = LocalPlayer.Character
+if not Character then
+    Character = LocalPlayer.CharacterAdded:Wait()
+end
+if not Character then
+    warn("Wind System: Character not found, skipping wind setup")
+    return
+end
 
 local CurrentCamera = workspace.CurrentCamera
 
@@ -3459,7 +3466,7 @@ RunService.RenderStepped:Connect(function()
 	if isMovingNow and not wasMoving then
 		if runBlurTween then runBlurTween:Cancel() end
 		RunBlur.Size = 20
-		runBlurTween = ts:Create(
+		runBlurTween = TweenService:Create(
 			RunBlur,
 			TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 			{Size = 0}
@@ -3504,7 +3511,7 @@ RunService.RenderStepped:Connect(function()
 					v.Rate = math.clamp(2*Magnitude/4, 0, _G.G_Optimized and 1000 or 2000)
 				elseif v.Name == "Wind3" then
 					local lock = false
-					if h.FloorMaterial == Enum.Material.Air then
+					if Humanoid.FloorMaterial == Enum.Material.Air then
 						if 250 >= Magnitude then
 							lock = false
 						else
@@ -3518,12 +3525,12 @@ RunService.RenderStepped:Connect(function()
 
 		Debris:AddItem(Part, 0.6)
 
-		ts:Create(Part, TweenInfo.new(0.05, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 0.8}):Play()
-		ts:Create(Weld, TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {C0 = CFrame.new(cframe.Position.X, cframe.Position.Y, math.floor(Magnitude/100)*4)}):Play()
+		TweenService:Create(Part, TweenInfo.new(0.05, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 0.8}):Play()
+		TweenService:Create(Weld, TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {C0 = CFrame.new(cframe.Position.X, cframe.Position.Y, math.floor(Magnitude/100)*4)}):Play()
 
 		wait(0.225)
 
-		ts:Create(Part, TweenInfo.new(0.095, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 1}):Play()
+		TweenService:Create(Part, TweenInfo.new(0.095, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 1}):Play()
 	else
 		for _, v in pairs(wndAttachment:GetChildren()) do
 			if v:IsA("ParticleEmitter") then
