@@ -3226,13 +3226,13 @@ RunBlur.Size = 0
 local runBlurTween = nil
 local wasMoving = false
 
-local isR15 = CharacterRef:FindFirstChild("UpperTorso") ~= nil
+local isR15 = Character:FindFirstChild("UpperTorso") ~= nil
 local R15 = {"Head","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}
 local R6 = {"Head","Left Arm","Right Arm","Left Leg","Right Leg"}
 
 local bodyParts = {}
 for _, n in ipairs(isR15 and R15 or R6) do
-	local p = CharacterRef:FindFirstChild(n)
+	local p = Character:FindFirstChild(n)
 	if p and p:IsA("BasePart") then
 		bodyParts[#bodyParts + 1] = p
 	end
