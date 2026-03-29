@@ -673,7 +673,7 @@ for _,v in pairs(CharacterRef:GetChildren()) do
 		isRight = v.Name:find("Right") ~= nil
 		spreadDist = math.random(35, 80) / 10  -- 3.5–8.0 studs outward
 		offsetY = -1.5  -- slight downward for ground-skimming look
-		offsetX, offsetZ
+		offsetX, offsetZ = nil, nil
 
 		if math.random() < 0.5 then
 			-- Side-biased: follows which side the limb is on
