@@ -198,8 +198,8 @@ ParticleRef.Parent = lightningAttachment
 
 if speedsterType == "Zoom" then
     ParticleRef.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(160,220,255)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(0,120,255))
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))
     })
 elseif speedsterType == "GodOfSpeed" then
     ParticleRef.Color = ColorSequence.new({
@@ -673,7 +673,39 @@ for _,v in pairs(CharacterRef:GetChildren()) do
 	if v:IsA("BasePart") and not noTrailParts[v.Name] then
 		local a0 = Instance.new("Attachment",v)
 		local a1 = Instance.new("Attachment",v)
-		a1.Position = Vector3.new(0,0,-1)
+
+		-- DCEU-style: a1 fans outward from the character instead of trailing behind.
+		-- Origin (a0) sits at the part center; endpoint (a1) is pushed far out
+		-- horizontally so the trail slices AWAY from the body to the ground.
+		local isLeft  = v.Name:find("Left")  ~= nil
+		local isRight = v.Name:find("Right") ~= nil
+		local spreadDist = math.random(35, 80) / 10  -- 3.5–8.0 studs outward
+		local offsetY = -1.5  -- slight downward for ground-skimming look
+		local offsetX, offsetZ
+
+		if math.random() < 0.5 then
+			-- Side-biased: follows which side the limb is on
+			if isLeft then
+				offsetX = -spreadDist
+				offsetZ = (math.random() - 0.5) * 3
+			elseif isRight then
+				offsetX = spreadDist
+				offsetZ = (math.random() - 0.5) * 3
+			else
+				-- Centre parts: random flat direction
+				local ang = math.random() * math.pi * 2
+				offsetX = math.cos(ang) * spreadDist
+				offsetZ = math.sin(ang) * spreadDist
+			end
+		else
+			-- 50 % chance: fully random horizontal direction (no up/down)
+			local ang = math.random() * math.pi * 2
+			offsetX = math.cos(ang) * spreadDist
+			offsetZ = math.sin(ang) * spreadDist
+		end
+
+		a0.Position = Vector3.new(0, 0, 0)
+		a1.Position = Vector3.new(offsetX, offsetY, offsetZ)
 
 		local x = Instance.new("Trail")
 		x.Attachment0 = a0
@@ -732,7 +764,7 @@ if shouldWrite then
 end
 
 local rfCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))})
-local zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(100,168,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(26,144,255))})
+local zoomCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))})
 local godCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(200,200,200)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))})
 local nwaCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(200,100,255))})
 local kidCS = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))})
@@ -758,8 +790,8 @@ if speedsterType == "RF" then
     )
     elseif speedsterType == "Zoom" then
         x.Color = ColorSequence.new(
-            Color3.fromRGB(100,168,255),
-            Color3.fromRGB(26,144,255)
+            Color3.fromRGB(46,124,255),
+            Color3.fromRGB(124,194,255)
         )
     elseif speedsterType == "GodOfSpeed" then
         x.Color = ColorSequence.new(
@@ -1130,8 +1162,8 @@ local function getColor()
         })
     elseif speedsterType == "Zoom" then
         return ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(100,168,255)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(26,144,255))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))
         })
     elseif speedsterType == "GodOfSpeed" then
         return ColorSequence.new({
@@ -1342,6 +1374,7 @@ local heartbeatConnection
 local enabled = false
 local runState = false
 local defaultWalkSpeed = 20
+local customSpeed = 375  -- editable via the Speed TextBox in the GUI
 
 
 
@@ -1386,8 +1419,8 @@ if speedsterType == "RF" then
         )
     elseif speedsterType == "Zoom" then
         Trail.Color = ColorSequence.new(
-            Color3.fromRGB(100,168,255),
-            Color3.fromRGB(26,144,255)
+            Color3.fromRGB(46,124,255),
+            Color3.fromRGB(124,194,255)
         )
     elseif speedsterType == "GodOfSpeed" then
         Trail.Color = ColorSequence.new(
@@ -1913,7 +1946,7 @@ local function StartLightningFlicker()
 
             local speed = (h and h.Parent and h.WalkSpeed) or 0
             -- intensity: 0.2 at idle (lightning still crackles slightly), 1.0 at full speed
-            local intensity = math.clamp(speed / 375, 0.2, 1.0)
+            local intensity = math.clamp(speed / math.max(customSpeed, 1), 0.2, 1.0)
 
             -- === tlist: BASE body trails - the most visible layer ===
             -- These are the trails from the simple loop at the top of setup.
@@ -2440,35 +2473,269 @@ gui.Name="PhaseGui"
 gui.ResetOnSpawn=false
 gui.IgnoreGuiInset=true
 
-local baseColor=Color3.fromRGB(40,40,50)
+-- ════════════════════════════════════════════════════════════════════
+-- SPEED FORCE CODEX  —  UI REDESIGN
+-- Aesthetic : ancient artifact / obsidian shards / speed-rune panel
+-- Fonts     : Fondamento (headers/labels) · Michroma (buttons) · Code (input)
+-- ════════════════════════════════════════════════════════════════════
 
-local function cb(parent,pos,size,text,tcol)
-    local f=Instance.new("Frame")
-    f.Parent=parent
-    f.Size=size
-    f.Position=pos
-    f.BackgroundColor3=baseColor
-    f.BackgroundTransparency=0.3
-    Instance.new("UICorner",f).CornerRadius=UDim.new(0,8)
-    local s=Instance.new("UIStroke",f)
-    s.Color=Color3.fromRGB(80,80,90)
-    s.Thickness=2
-    local b=Instance.new("TextButton")
-    b.Parent=f
-    b.Size=UDim2.new(1,0,1,0)
-    b.BackgroundTransparency=1
-    b.Text=text
-    b.TextColor3=tcol
-    b.TextScaled=true
-    b.Font=Enum.Font.GothamBold
-    b.AutoButtonColor=false
-    return f,b
+-- ── tiny helpers ─────────────────────────────────────────────────
+local function addGrad(parent, col, rot)
+    local g = Instance.new("UIGradient")
+    g.Color   = col
+    g.Rotation = rot or 0
+    g.Parent  = parent
+    return g
 end
 
-local sh,sb=cb(gui,UDim2.new(1,-160,0,10),UDim2.new(0,150,0,40),"STOP",Color3.fromRGB(255,100,100))
-local mir,mirb=cb(gui,UDim2.new(0,10,0,10),UDim2.new(0,150,0,40),"Angular Mirage",Color3.fromRGB(100,200,255))
-local ph,phb=cb(gui,UDim2.new(0,10,0,60),UDim2.new(0,150,0,40),"Phase",Color3.fromRGB(150,255,150))
-local sp,spb=cb(gui,UDim2.new(0,10,0,110),UDim2.new(0,150,0,40),"Enable Speed",Color3.fromRGB(255,255,100))
+local function addStrokeGrad(parent, thickness, col, rot)
+    local s = Instance.new("UIStroke")
+    s.Thickness = thickness
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    addGrad(s, col, rot or 45)
+    s.Parent = parent
+    return s
+end
+
+local function addShine(parent)
+    -- glass-reflection highlight bar near top of any pill/frame
+    local shine = Instance.new("Frame")
+    shine.Parent = parent
+    shine.Size = UDim2.new(0.52, 0, 0, 1)
+    shine.Position = UDim2.new(0.12, 0, 0, 4)
+    shine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    shine.BackgroundTransparency = 0.55
+    shine.BorderSizePixel = 0
+    Instance.new("UICorner", shine).CornerRadius = UDim.new(1, 0)
+    addGrad(shine, ColorSequence.new({
+        ColorSequenceKeypoint.new(0,   Color3.fromRGB(0,0,0)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255,255,255)),
+        ColorSequenceKeypoint.new(1,   Color3.fromRGB(0,0,0)),
+    }), 0)
+end
+
+-- ── MAIN PANEL ───────────────────────────────────────────────────
+local panel = Instance.new("Frame")
+panel.Parent   = gui
+panel.Size     = UDim2.new(0, 172, 0, 288)
+panel.Position = UDim2.new(0, 8, 0, 8)
+panel.BackgroundColor3 = Color3.fromRGB(9, 7, 20)
+panel.BackgroundTransparency = 0.08
+panel.BorderSizePixel = 0
+Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 16)
+
+-- panel bg: deep void-purple diagonal
+addGrad(panel, ColorSequence.new({
+    ColorSequenceKeypoint.new(0,    Color3.fromRGB(24, 10, 52)),
+    ColorSequenceKeypoint.new(0.45, Color3.fromRGB(11,  7, 26)),
+    ColorSequenceKeypoint.new(1,    Color3.fromRGB(4,   3, 12)),
+}), 140)
+
+-- panel border: electric-purple shimmer
+addStrokeGrad(panel, 1.5, ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(140, 65, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(55,  18, 120)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(140, 65, 255)),
+}), 90)
+
+-- ── HEADER ───────────────────────────────────────────────────────
+local header = Instance.new("TextLabel")
+header.Parent = panel
+header.Size   = UDim2.new(1, -12, 0, 28)
+header.Position = UDim2.new(0, 6, 0, 8)
+header.BackgroundTransparency = 1
+header.Text   = "⚡  SPEED FORCE"
+header.Font   = Enum.Font.Fondamento
+header.TextScaled = true
+header.TextColor3 = Color3.fromRGB(255, 210, 85)
+
+-- divider bar under header
+local div = Instance.new("Frame")
+div.Parent = panel
+div.Size   = UDim2.new(1, -20, 0, 1)
+div.Position = UDim2.new(0, 10, 0, 40)
+div.BackgroundColor3 = Color3.fromRGB(180, 100, 255)
+div.BackgroundTransparency = 0.3
+div.BorderSizePixel = 0
+addGrad(div, ColorSequence.new({
+    ColorSequenceKeypoint.new(0,    Color3.fromRGB(0,0,0)),
+    ColorSequenceKeypoint.new(0.15, Color3.fromRGB(180,100,255)),
+    ColorSequenceKeypoint.new(0.85, Color3.fromRGB(180,100,255)),
+    ColorSequenceKeypoint.new(1,    Color3.fromRGB(0,0,0)),
+}), 0)
+
+-- ── BUTTON FACTORY ───────────────────────────────────────────────
+-- yPos      : Y offset inside panel
+-- label     : button text
+-- icon      : symbol prefix
+-- bg0/bg1   : background gradient colours
+-- sk0/sk1   : stroke glow colours
+-- textCol   : text colour
+local function makeBtn(yPos, label, icon, bg0, bg1, sk0, sk1, textCol)
+    local f = Instance.new("Frame")
+    f.Parent = panel
+    f.Size   = UDim2.new(1, -16, 0, 44)
+    f.Position = UDim2.new(0, 8, 0, yPos)
+    f.BackgroundColor3 = bg0
+    f.BorderSizePixel  = 0
+    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 20)
+
+    addGrad(f, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, bg0),
+        ColorSequenceKeypoint.new(1, bg1),
+    }), 130)
+
+    addStrokeGrad(f, 1.5, ColorSequence.new({
+        ColorSequenceKeypoint.new(0,   sk0),
+        ColorSequenceKeypoint.new(0.5, sk1),
+        ColorSequenceKeypoint.new(1,   sk0),
+    }), 45)
+
+    addShine(f)
+
+    local b = Instance.new("TextButton")
+    b.Parent = f
+    b.Size   = UDim2.new(1, 0, 1, 0)
+    b.BackgroundTransparency = 1
+    b.Text   = icon .. "  " .. label
+    b.TextColor3  = textCol
+    b.TextScaled  = true
+    b.Font        = Enum.Font.Michroma
+    b.AutoButtonColor = false
+    return f, b
+end
+
+-- ── BUTTONS ──────────────────────────────────────────────────────
+
+-- Angular Mirage — electric teal shard
+local mir, mirb = makeBtn(50,
+    "Ang. Mirage", "◈",
+    Color3.fromRGB(7,  26, 52),   Color3.fromRGB(3, 10, 28),
+    Color3.fromRGB(46,180,255),   Color3.fromRGB(18, 65,155),
+    Color3.fromRGB(140,220,255)
+)
+
+-- Phase — spectral ghost-green
+local ph, phb = makeBtn(102,
+    "Phase", "◌",
+    Color3.fromRGB(7,  36, 20),   Color3.fromRGB(3, 16,  9),
+    Color3.fromRGB(75,255,145),   Color3.fromRGB(22,115, 65),
+    Color3.fromRGB(155,255,195)
+)
+
+-- Enable Speed — molten gold
+local sp, spb = makeBtn(154,
+    "Enable Speed", "▶",
+    Color3.fromRGB(44, 27,  4),   Color3.fromRGB(18, 10,  2),
+    Color3.fromRGB(255,192, 38),  Color3.fromRGB(155, 85,  8),
+    Color3.fromRGB(255,220,100)
+)
+
+-- ── STOP BUTTON (top-right, outside panel) ───────────────────────
+local sh = Instance.new("Frame")
+sh.Parent = gui
+sh.Size   = UDim2.new(0, 92, 0, 36)
+sh.Position = UDim2.new(1, -100, 0, 8)
+sh.BackgroundColor3 = Color3.fromRGB(48, 6, 6)
+sh.BorderSizePixel  = 0
+Instance.new("UICorner", sh).CornerRadius = UDim.new(0, 18)
+
+addGrad(sh, ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(82, 10, 10)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(28,  4,  4)),
+}), 130)
+
+addStrokeGrad(sh, 1.5, ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(255, 75, 75)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(130, 18, 18)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(255, 75, 75)),
+}), 45)
+
+addShine(sh)
+
+local sb = Instance.new("TextButton")
+sb.Parent = sh
+sb.Size   = UDim2.new(1, 0, 1, 0)
+sb.BackgroundTransparency = 1
+sb.Text   = "✕  STOP"
+sb.TextColor3  = Color3.fromRGB(255, 135, 135)
+sb.TextScaled  = true
+sb.Font        = Enum.Font.Michroma
+sb.AutoButtonColor = false
+
+-- ── VELOCITY TEXTBOX ─────────────────────────────────────────────
+local speedBoxFrame = Instance.new("Frame")
+speedBoxFrame.Parent = panel
+speedBoxFrame.Size   = UDim2.new(1, -16, 0, 62)
+speedBoxFrame.Position = UDim2.new(0, 8, 0, 214)
+speedBoxFrame.BackgroundColor3 = Color3.fromRGB(6, 4, 18)
+speedBoxFrame.BackgroundTransparency = 0.12
+speedBoxFrame.BorderSizePixel = 0
+Instance.new("UICorner", speedBoxFrame).CornerRadius = UDim.new(0, 12)
+
+addGrad(speedBoxFrame, ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 18, 5)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(9,   5, 2)),
+}), 130)
+
+addStrokeGrad(speedBoxFrame, 1.5, ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(255, 182, 28)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(135,  75,  8)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(255, 182, 28)),
+}), 45)
+
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Parent = speedBoxFrame
+speedLabel.Size   = UDim2.new(1, -12, 0, 20)
+speedLabel.Position = UDim2.new(0, 8, 0, 5)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text   = "VELOCITY"
+speedLabel.Font   = Enum.Font.Fondamento
+speedLabel.TextScaled = true
+speedLabel.TextColor3 = Color3.fromRGB(255, 188, 48)
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local speedBox = Instance.new("TextBox")
+speedBox.Parent = speedBoxFrame
+speedBox.Size   = UDim2.new(1, -14, 0, 26)
+speedBox.Position = UDim2.new(0, 7, 0, 29)
+speedBox.BackgroundColor3 = Color3.fromRGB(10, 6, 2)
+speedBox.BackgroundTransparency = 0.1
+speedBox.Text   = "375"
+speedBox.PlaceholderText = "enter speed..."
+speedBox.TextColor3 = Color3.fromRGB(255, 218, 110)
+speedBox.TextScaled = true
+speedBox.Font   = Enum.Font.Code
+speedBox.ClearTextOnFocus = false
+Instance.new("UICorner", speedBox).CornerRadius = UDim.new(0, 6)
+
+addGrad(speedBox, ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(22, 13,  3)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB( 8,  5,  1)),
+}), 90)
+
+-- Confirm on focus lost
+local function applySpeedBox()
+    local val = tonumber(speedBox.Text)
+    if val and val > 0 and val <= 9999 then
+        customSpeed = val
+        speedBox.TextColor3 = Color3.fromRGB(100, 255, 140)
+        task.delay(0.5, function()
+            if speedBox then speedBox.TextColor3 = Color3.fromRGB(255, 218, 110) end
+        end)
+    else
+        speedBox.Text = tostring(customSpeed)
+        speedBox.TextColor3 = Color3.fromRGB(255, 100, 100)
+        task.delay(0.5, function()
+            if speedBox then speedBox.TextColor3 = Color3.fromRGB(255, 218, 110) end
+        end)
+    end
+end
+
+speedBox.FocusLost:Connect(function()
+    applySpeedBox()
+end)
+-- ─────────────────────────────────────────────────────────────────
 
 local ang=false
 local phs=false
@@ -2612,11 +2879,11 @@ spb.MouseButton1Click:Connect(function()
         V89()
         V87()
 
-        -- Start heartbeat speed lock
+        -- Start heartbeat speed lock (uses customSpeed set by the TextBox)
         if heartbeatConnection then heartbeatConnection:Disconnect() end
         heartbeatConnection = RunService.Heartbeat:Connect(function()
             if h and h.Parent then
-                h.WalkSpeed = 375
+                h.WalkSpeed = customSpeed
             end
         end)
 
@@ -2805,7 +3072,7 @@ uis.InputBegan:Connect(function(input, gameProcessed)
         if heartbeatConnection then heartbeatConnection:Disconnect() end
         heartbeatConnection = RunService.Heartbeat:Connect(function()
             if h and h.Parent then
-                h.WalkSpeed = 375
+                h.WalkSpeed = customSpeed
             end
         end)
 
@@ -2989,8 +3256,8 @@ local nwaCS2 = ColorSequence.new({
 })
 
 local zoomCS2 = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(100,168,255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(26,144,255))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))
 })
 
 local kidCS2 = ColorSequence.new({
@@ -3028,7 +3295,7 @@ local colorUpdateThread = task.spawn(function()
                 spot = Color3.fromRGB(255,255,0)
             elseif speedsterType == "Zoom" then
                 cs = zoomCS2
-                spot = Color3.fromRGB(26,144,255)
+                spot = Color3.fromRGB(124,194,255)
             elseif speedsterType == "GodOfSpeed" then
                 cs = godCS2
                 spot = Color3.fromRGB(255,220,0)
