@@ -105,14 +105,6 @@ local function CleanupPlayer(player)
 end
 
 
-Players.PlayerRemoving:Connect(function(leavingPlayer)
-    if leavingPlayer == player and syncConnection then
-        pcall(function()
-            syncConnection:Disconnect()
-        end)
-    end
-end)
-
 local function SetupSpeedster(player)
     if not IsAllowed(player) then return end
     if not player or not player.Parent then return end
@@ -1741,13 +1733,6 @@ if not liveFolder then
     liveFolder.Parent = workspace
 end
 
-
-local l_Thrown_40 = workspace:FindFirstChild("Thrown")
-if not thrownFolder then
-    thrownFolder = Instance.new("Folder")
-    thrownFolder.Name = "Thrown"
-    thrownFolder.Parent = workspace
-end
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -3664,7 +3649,7 @@ Part_upvr.Transparency = 1
 Part_upvr.Anchored = true
 Part_upvr.CanCollide = false
 Part_upvr.Massless = true
-Part_upvr.Size = Vector3.new()
+Part_upvr.Size = Vector3.new(1,1,1)
 
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local Humanoid = Character:WaitForChild("Humanoid")
