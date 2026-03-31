@@ -1770,8 +1770,9 @@ local soundConnection = nil
 local function UpdateSounds()
     if not enabled then return end
 
-    local vel = HRP.Velocity.Magnitude
-    local isRunning = vel > RUN_VELOCITY_THRESHOLD
+    local currentSpeed = h.WalkSpeed
+    local isMoving = h.MoveDirection.Magnitude > 0
+    local isRunning = isMoving and currentSpeed > 0
 
     if isRunning then
         if not wasRunning then
@@ -1783,7 +1784,7 @@ local function UpdateSounds()
         if not runSound2.IsPlaying then runSound2:Play() end
         if not runSound5.IsPlaying then runSound5:Play() end
     else
-        if wasRunning then
+        if wasRunning or (not isMoving and currentSpeed == 0) then
             if runSound1.IsPlaying then runSound1:Stop() end
             if runSound2.IsPlaying then runSound2:Stop() end
             if runSound3.IsPlaying then runSound3:Stop() end
@@ -1792,15 +1793,14 @@ local function UpdateSounds()
         end
     end
 
-    -- Play the stop/skid sound when momentum fully bleeds out
-    if wasRunning and vel < 2 then
+    if not isMoving and currentSpeed == 0 and wasRunning then
         if not stopSound.IsPlaying then
             stopSound:Play()
         end
     end
 
     wasRunning = isRunning
-    lastWalkSpeed = vel
+    lastWalkSpeed = currentSpeed
 end
 
 
@@ -1809,19 +1809,16 @@ end
 local function UpdateAnimationsAndFOV()
     if not enabled then return end
 
-    local vel = HRP.Velocity.Magnitude
-    local isMoving = vel > RUN_VELOCITY_THRESHOLD
-    local isFalling = h.FloorMaterial == Enum.Material.Air and not isMoving
+    local isMoving = h.MoveDirection.Magnitude > 0
+    local isFalling = h.FloorMaterial == Enum.Material.Air and h.MoveDirection.Magnitude == 0
 
-    -- Slide condition: driven by real velocity against per-speed thresholds
+    -- Slide condition: walkspeed-based thresholds per speed setting
     local shouldSlide = false
     if playerData.spd then
         if customSpeed > 87 then
-            -- High-speed preset: slide while momentum is still bleeding off
-            shouldSlide = vel < 150
+            shouldSlide = h.WalkSpeed < 150
         elseif customSpeed < 87 then
-            -- Low-speed preset: tighter threshold
-            shouldSlide = vel < 30
+            shouldSlide = h.WalkSpeed < 30
         end
     end
 
@@ -1833,7 +1830,7 @@ local function UpdateAnimationsAndFOV()
         playerData.sliding = true
 
     elseif isMoving then
-        -- Full running velocity — slide off, run on
+        -- Moving normally — slide off, run on
         if SlideAnimTrack.IsPlaying then SlideAnimTrack:Stop() end
         playerData.sliding = false
 
@@ -1850,7 +1847,7 @@ local function UpdateAnimationsAndFOV()
         end
 
     else
-        -- Truly stopped or in the air
+        -- Stopped or in the air
         if SlideAnimTrack.IsPlaying then SlideAnimTrack:Stop() end
         if RunAnimTrack.IsPlaying  then RunAnimTrack:Stop()  end
         playerData.sliding = false
@@ -1886,7 +1883,7 @@ local function enableAll()
     
     soundConnection = RunService.RenderStepped:Connect(UpdateSounds)
     
-    if HRP.Velocity.Magnitude <= RUN_VELOCITY_THRESHOLD then
+    if h.MoveDirection.Magnitude == 0 then
         IdleAnimTrack:Play()
     end
 end
