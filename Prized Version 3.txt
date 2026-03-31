@@ -1822,15 +1822,39 @@ local function UpdateAnimationsAndFOV()
             CurrentTween:Play()
         end
     else
+        -- Check if the player still has enough momentum that a slide is
+        -- imminent or actively playing. If so, hold the run animation so
+        -- there is zero gap between running → sliding.
+        -- customSpeed / HRP are both in scope; playerData.spd tracks the
+        -- speed-enabled flag without needing the isLocalPlayer-scoped `spd`.
+        local vel = HRP.Velocity.Magnitude
+        local coastingToSlide = playerData.spd and (
+            (customSpeed > 89 and vel >= 89) or
+            (customSpeed == 87 and vel >= 30)
+        )
+        local slideActive = playerData.sliding == true
 
-        if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
-        
-        if not isFalling and not IdleAnimTrack.IsPlaying then 
-            IdleAnimTrack:Play() 
-        elseif isFalling and IdleAnimTrack.IsPlaying then
-            IdleAnimTrack:Stop()
+        if RunAnimTrack.IsPlaying and not coastingToSlide and not slideActive then
+            RunAnimTrack:Stop()
+        elseif not RunAnimTrack.IsPlaying and (coastingToSlide or slideActive) then
+            -- Re-arm the run anim under the slide anim (Action4 overrides Action)
+            -- so it's ready the instant the slide finishes.
+            RunAnimTrack:Play()
+            RunAnimTrack:AdjustSpeed(14)
         end
-        
+
+        -- Only let the idle play when we are truly done coasting and not sliding
+        if not coastingToSlide and not slideActive then
+            if not isFalling and not IdleAnimTrack.IsPlaying then
+                IdleAnimTrack:Play()
+            elseif isFalling and IdleAnimTrack.IsPlaying then
+                IdleAnimTrack:Stop()
+            end
+        else
+            -- Suppress idle during coast / slide
+            if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
+        end
+
         if cam.FieldOfView ~= 70 then
             if CurrentTween then CurrentTween:Cancel() end
             CurrentTween = ts:Create(cam, FOVTweenInfo, {FieldOfView = 70})
