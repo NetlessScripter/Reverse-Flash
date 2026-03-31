@@ -1812,13 +1812,15 @@ local function UpdateAnimationsAndFOV()
     local isMoving = h.MoveDirection.Magnitude > 0
     local isFalling = h.FloorMaterial == Enum.Material.Air and h.MoveDirection.Magnitude == 0
 
-    -- Slide condition: walkspeed-based thresholds per speed setting
+    -- Slide uses actual physics velocity (WalkSpeed is locked to customSpeed
+    -- by the heartbeat so it never drops — velocity is what bleeds off).
     local shouldSlide = false
     if playerData.spd then
+        local vel = HRP.Velocity.Magnitude
         if customSpeed > 87 then
-            shouldSlide = h.WalkSpeed < 150
+            shouldSlide = vel < 150
         elseif customSpeed < 87 then
-            shouldSlide = h.WalkSpeed < 30
+            shouldSlide = vel < 30
         end
     end
 
