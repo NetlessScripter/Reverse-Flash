@@ -1535,6 +1535,10 @@ local runState = false
 local defaultWalkSpeed = 20
 local customSpeed = 375  -- editable via the Speed TextBox in the GUI
 
+-- Velocity threshold for the animation/sound system.
+-- Above this (studs/sec) = running; at or below = idle/stopped.
+local RUN_VELOCITY_THRESHOLD = 8
+
 
 
 local RUN_ANIM_ID = "rbxassetid://102622695004986"
@@ -1765,11 +1769,10 @@ local soundConnection = nil
 
 local function UpdateSounds()
     if not enabled then return end
-    
-    local currentSpeed = h.WalkSpeed
-    local isMoving = h.MoveDirection.Magnitude > 0
-    local isRunning = isMoving and currentSpeed > 0
-    
+
+    local vel = HRP.Velocity.Magnitude
+    local isRunning = vel > RUN_VELOCITY_THRESHOLD
+
     if isRunning then
         if not wasRunning then
             if not runSound1.IsPlaying then runSound1:Play() end
@@ -1780,7 +1783,7 @@ local function UpdateSounds()
         if not runSound2.IsPlaying then runSound2:Play() end
         if not runSound5.IsPlaying then runSound5:Play() end
     else
-        if wasRunning or (not isMoving and currentSpeed == 0) then
+        if wasRunning then
             if runSound1.IsPlaying then runSound1:Stop() end
             if runSound2.IsPlaying then runSound2:Stop() end
             if runSound3.IsPlaying then runSound3:Stop() end
@@ -1788,15 +1791,16 @@ local function UpdateSounds()
             if runSound5.IsPlaying then runSound5:Stop() end
         end
     end
-    
-    if not isMoving and currentSpeed == 0 and wasRunning then
+
+    -- Play the stop/skid sound when momentum fully bleeds out
+    if wasRunning and vel < 2 then
         if not stopSound.IsPlaying then
             stopSound:Play()
         end
     end
-    
+
     wasRunning = isRunning
-    lastWalkSpeed = currentSpeed
+    lastWalkSpeed = vel
 end
 
 
@@ -1804,55 +1808,57 @@ end
 
 local function UpdateAnimationsAndFOV()
     if not enabled then return end
-    
-    local isMoving = h.MoveDirection.Magnitude > 0
-    local isFalling = h.FloorMaterial == Enum.Material.Air and h.MoveDirection.Magnitude == 0
-    
-    if isMoving then
 
-        if not RunAnimTrack.IsPlaying then 
+    local vel = HRP.Velocity.Magnitude
+    local isMoving = vel > RUN_VELOCITY_THRESHOLD
+    local isFalling = h.FloorMaterial == Enum.Material.Air and not isMoving
+
+    -- Slide condition: driven by real velocity against per-speed thresholds
+    local shouldSlide = false
+    if playerData.spd then
+        if customSpeed > 87 then
+            -- High-speed preset: slide while momentum is still bleeding off
+            shouldSlide = vel < 150
+        elseif customSpeed < 87 then
+            -- Low-speed preset: tighter threshold
+            shouldSlide = vel < 30
+        end
+    end
+
+    if shouldSlide then
+        -- Slide takes priority — kill run/idle, hold slide anim
+        if RunAnimTrack.IsPlaying  then RunAnimTrack:Stop()  end
+        if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
+        if not SlideAnimTrack.IsPlaying then SlideAnimTrack:Play() end
+        playerData.sliding = true
+
+    elseif isMoving then
+        -- Full running velocity — slide off, run on
+        if SlideAnimTrack.IsPlaying then SlideAnimTrack:Stop() end
+        playerData.sliding = false
+
+        if not RunAnimTrack.IsPlaying then
             if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
-            RunAnimTrack:Play() 
+            RunAnimTrack:Play()
         end
         RunAnimTrack:AdjustSpeed(14)
-        
+
         if cam.FieldOfView ~= 140 then
             if CurrentTween then CurrentTween:Cancel() end
             CurrentTween = ts:Create(cam, FOVTweenInfo, {FieldOfView = 140})
             CurrentTween:Play()
         end
+
     else
-        -- Check if the player still has enough momentum that a slide is
-        -- imminent or actively playing. If so, hold the run animation so
-        -- there is zero gap between running → sliding.
-        -- customSpeed / HRP are both in scope; playerData.spd tracks the
-        -- speed-enabled flag without needing the isLocalPlayer-scoped `spd`.
-        local vel = HRP.Velocity.Magnitude
-        local coastingToSlide = playerData.spd and (
-            (customSpeed > 89 and vel >= 89) or
-            (customSpeed == 87 and vel >= 30)
-        )
-        local slideActive = playerData.sliding == true
+        -- Truly stopped or in the air
+        if SlideAnimTrack.IsPlaying then SlideAnimTrack:Stop() end
+        if RunAnimTrack.IsPlaying  then RunAnimTrack:Stop()  end
+        playerData.sliding = false
 
-        if RunAnimTrack.IsPlaying and not coastingToSlide and not slideActive then
-            RunAnimTrack:Stop()
-        elseif not RunAnimTrack.IsPlaying and (coastingToSlide or slideActive) then
-            -- Re-arm the run anim under the slide anim (Action4 overrides Action)
-            -- so it's ready the instant the slide finishes.
-            RunAnimTrack:Play()
-            RunAnimTrack:AdjustSpeed(14)
-        end
-
-        -- Only let the idle play when we are truly done coasting and not sliding
-        if not coastingToSlide and not slideActive then
-            if not isFalling and not IdleAnimTrack.IsPlaying then
-                IdleAnimTrack:Play()
-            elseif isFalling and IdleAnimTrack.IsPlaying then
-                IdleAnimTrack:Stop()
-            end
-        else
-            -- Suppress idle during coast / slide
-            if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
+        if not isFalling and not IdleAnimTrack.IsPlaying then
+            IdleAnimTrack:Play()
+        elseif isFalling and IdleAnimTrack.IsPlaying then
+            IdleAnimTrack:Stop()
         end
 
         if cam.FieldOfView ~= 70 then
@@ -1880,7 +1886,7 @@ local function enableAll()
     
     soundConnection = RunService.RenderStepped:Connect(UpdateSounds)
     
-    if h.MoveDirection.Magnitude == 0 then
+    if HRP.Velocity.Magnitude <= RUN_VELOCITY_THRESHOLD then
         IdleAnimTrack:Play()
     end
 end
@@ -3121,73 +3127,10 @@ V88()
 V90()
 
 
--- ================================================================
--- SLIDING STATE SYSTEM
---
--- Triggers when speed is enabled and the player's actual HRP velocity
--- magnitude was ABOVE the threshold and then DROPS below it — i.e.
--- the player stopped running and is now bleeding off momentum (sliding).
---
--- customSpeed > 89  →  threshold = 89,  TimePosition = 5.7
--- customSpeed == 87 →  threshold = 30,  TimePosition = 6.1
---
--- sliding locks for 2 seconds then auto-resets.
--- A new slide cannot retrigger until the player first goes back ABOVE
--- the threshold (prevents spam while slow-walking).
--- ================================================================
-local sliding = false
-local slideAboveThreshold = false  -- tracks whether we were above the threshold
-
-local function TriggerSlide(timePos)
-    if sliding then return end
-    sliding = true
-    playerData.sliding = true
-
-    -- Play and immediately seek to the correct start point
-    SlideAnimTrack:Play()
-    SlideAnimTrack.TimePosition = timePos
-
-    task.delay(2, function()
-        if SlideAnimTrack.IsPlaying then
-            SlideAnimTrack:Stop()
-        end
-        sliding = false
-        playerData.sliding = false
-        -- Reset the "was above" flag so the next run-up can re-arm the trigger
-        slideAboveThreshold = false
-    end)
-end
-
-local slidingMonitor = RunService.Heartbeat:Connect(function()
-    -- Only active while speed mode is on
-    if not spd then
-        slideAboveThreshold = false
-        return
-    end
-
-    local mag = HRP.Velocity.Magnitude
-
-    if customSpeed == 87 then
-        -- Special-case: arm above 30, fire when it drops below 30
-        if mag >= 30 then
-            slideAboveThreshold = true
-        elseif slideAboveThreshold and mag < 30 and not sliding then
-            TriggerSlide(6.1)
-        end
-    elseif customSpeed > 89 then
-        -- Standard case: arm above 89, fire when it drops below 89
-        if mag >= 89 then
-            slideAboveThreshold = true
-        elseif slideAboveThreshold and mag < 89 and not sliding then
-            TriggerSlide(5.7)
-        end
-    else
-        -- Speed value doesn't meet either condition — keep flag clear
-        slideAboveThreshold = false
-    end
-end)
-
-table.insert(playerData.connections, slidingMonitor)
+-- Sliding state is now driven entirely by UpdateAnimationsAndFOV
+-- (velocity-based continuous check each RenderStepped frame).
+-- playerData.sliding is written there; no separate heartbeat needed.
+playerData.sliding = false
 
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ChosenSkibidi/VIP-SCRIPTS/refs/heads/main/useless%20notification"))()
