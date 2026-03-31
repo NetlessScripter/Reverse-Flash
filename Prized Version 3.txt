@@ -133,7 +133,8 @@ local function SetupSpeedster(player)
         cleanupObjects = {},
         spd = false,
         phs = false,
-        Running = false
+        Running = false,
+        sliding = false
     }
     
     local playerData = PlayerData[userId]
@@ -1554,6 +1555,12 @@ local RunAnimTrack = Animator:LoadAnimation(RunAnimation)
 RunAnimTrack.Priority = Enum.AnimationPriority.Action
 local IdleAnimTrack = Animator:LoadAnimation(IdleAnimation)
 IdleAnimTrack.Priority = Enum.AnimationPriority.Action
+
+-- Slide animation (loaded once, reused every trigger)
+local SlideAnimation = Instance.new("Animation")
+SlideAnimation.AnimationId = "rbxassetid://137637559394127"
+local SlideAnimTrack = Animator:LoadAnimation(SlideAnimation)
+SlideAnimTrack.Priority = Enum.AnimationPriority.Action4
 
 local function AddAttachments(Part, IsArm)
     local A1 = Instance.new("Attachment")
@@ -3090,6 +3097,73 @@ V88()
 V90()
 
 
+-- ================================================================
+-- SLIDING STATE SYSTEM
+--
+-- Triggers when speed is enabled and the player's actual HRP velocity
+-- magnitude was ABOVE the threshold and then DROPS below it — i.e.
+-- the player stopped running and is now bleeding off momentum (sliding).
+--
+-- customSpeed > 89  →  threshold = 89,  TimePosition = 5.7
+-- customSpeed == 87 →  threshold = 30,  TimePosition = 6.1
+--
+-- sliding locks for 2 seconds then auto-resets.
+-- A new slide cannot retrigger until the player first goes back ABOVE
+-- the threshold (prevents spam while slow-walking).
+-- ================================================================
+local sliding = false
+local slideAboveThreshold = false  -- tracks whether we were above the threshold
+
+local function TriggerSlide(timePos)
+    if sliding then return end
+    sliding = true
+    playerData.sliding = true
+
+    -- Play and immediately seek to the correct start point
+    SlideAnimTrack:Play()
+    SlideAnimTrack.TimePosition = timePos
+
+    task.delay(2, function()
+        if SlideAnimTrack.IsPlaying then
+            SlideAnimTrack:Stop()
+        end
+        sliding = false
+        playerData.sliding = false
+        -- Reset the "was above" flag so the next run-up can re-arm the trigger
+        slideAboveThreshold = false
+    end)
+end
+
+local slidingMonitor = RunService.Heartbeat:Connect(function()
+    -- Only active while speed mode is on
+    if not spd then
+        slideAboveThreshold = false
+        return
+    end
+
+    local mag = HRP.Velocity.Magnitude
+
+    if customSpeed == 87 then
+        -- Special-case: arm above 30, fire when it drops below 30
+        if mag >= 30 then
+            slideAboveThreshold = true
+        elseif slideAboveThreshold and mag < 30 and not sliding then
+            TriggerSlide(6.1)
+        end
+    elseif customSpeed > 89 then
+        -- Standard case: arm above 89, fire when it drops below 89
+        if mag >= 89 then
+            slideAboveThreshold = true
+        elseif slideAboveThreshold and mag < 89 and not sliding then
+            TriggerSlide(5.7)
+        end
+    else
+        -- Speed value doesn't meet either condition — keep flag clear
+        slideAboveThreshold = false
+    end
+end)
+
+table.insert(playerData.connections, slidingMonitor)
 
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ChosenSkibidi/VIP-SCRIPTS/refs/heads/main/useless%20notification"))()
