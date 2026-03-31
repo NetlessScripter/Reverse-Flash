@@ -133,8 +133,7 @@ local function SetupSpeedster(player)
         cleanupObjects = {},
         spd = false,
         phs = false,
-        Running = false,
-        sliding = false
+        Running = false
     }
     
     local playerData = PlayerData[userId]
@@ -1535,10 +1534,6 @@ local runState = false
 local defaultWalkSpeed = 20
 local customSpeed = 375  -- editable via the Speed TextBox in the GUI
 
--- Velocity threshold for the animation/sound system.
--- Above this (studs/sec) = running; at or below = idle/stopped.
-local RUN_VELOCITY_THRESHOLD = 8
-
 
 
 local RUN_ANIM_ID = "rbxassetid://102622695004986"
@@ -1559,12 +1554,6 @@ local RunAnimTrack = Animator:LoadAnimation(RunAnimation)
 RunAnimTrack.Priority = Enum.AnimationPriority.Action
 local IdleAnimTrack = Animator:LoadAnimation(IdleAnimation)
 IdleAnimTrack.Priority = Enum.AnimationPriority.Action
-
--- Slide animation (loaded once, reused every trigger)
-local SlideAnimation = Instance.new("Animation")
-SlideAnimation.AnimationId = "rbxassetid://137637559394127"
-local SlideAnimTrack = Animator:LoadAnimation(SlideAnimation)
-SlideAnimTrack.Priority = Enum.AnimationPriority.Action4
 
 local function AddAttachments(Part, IsArm)
     local A1 = Instance.new("Attachment")
@@ -1769,11 +1758,11 @@ local soundConnection = nil
 
 local function UpdateSounds()
     if not enabled then return end
-
+    
     local currentSpeed = h.WalkSpeed
     local isMoving = h.MoveDirection.Magnitude > 0
     local isRunning = isMoving and currentSpeed > 0
-
+    
     if isRunning then
         if not wasRunning then
             if not runSound1.IsPlaying then runSound1:Play() end
@@ -1792,13 +1781,13 @@ local function UpdateSounds()
             if runSound5.IsPlaying then runSound5:Stop() end
         end
     end
-
+    
     if not isMoving and currentSpeed == 0 and wasRunning then
         if not stopSound.IsPlaying then
             stopSound:Play()
         end
     end
-
+    
     wasRunning = isRunning
     lastWalkSpeed = currentSpeed
 end
@@ -1808,58 +1797,33 @@ end
 
 local function UpdateAnimationsAndFOV()
     if not enabled then return end
-
+    
     local isMoving = h.MoveDirection.Magnitude > 0
     local isFalling = h.FloorMaterial == Enum.Material.Air and h.MoveDirection.Magnitude == 0
+    
+    if isMoving then
 
-    -- Slide uses actual physics velocity (WalkSpeed is locked to customSpeed
-    -- by the heartbeat so it never drops — velocity is what bleeds off).
-    local shouldSlide = false
-    if playerData.spd then
-        local vel = HRP.Velocity.Magnitude
-        if customSpeed > 87 then
-            shouldSlide = vel < 150
-        elseif customSpeed < 87 then
-            shouldSlide = vel < 30
-        end
-    end
-
-    if shouldSlide then
-        -- Slide takes priority — kill run/idle, hold slide anim
-        if RunAnimTrack.IsPlaying  then RunAnimTrack:Stop()  end
-        if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
-        if not SlideAnimTrack.IsPlaying then SlideAnimTrack:Play() end
-        playerData.sliding = true
-
-    elseif isMoving then
-        -- Moving normally — slide off, run on
-        if SlideAnimTrack.IsPlaying then SlideAnimTrack:Stop() end
-        playerData.sliding = false
-
-        if not RunAnimTrack.IsPlaying then
+        if not RunAnimTrack.IsPlaying then 
             if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
-            RunAnimTrack:Play()
+            RunAnimTrack:Play() 
         end
         RunAnimTrack:AdjustSpeed(14)
-
+        
         if cam.FieldOfView ~= 140 then
             if CurrentTween then CurrentTween:Cancel() end
             CurrentTween = ts:Create(cam, FOVTweenInfo, {FieldOfView = 140})
             CurrentTween:Play()
         end
-
     else
-        -- Stopped or in the air
-        if SlideAnimTrack.IsPlaying then SlideAnimTrack:Stop() end
-        if RunAnimTrack.IsPlaying  then RunAnimTrack:Stop()  end
-        playerData.sliding = false
 
-        if not isFalling and not IdleAnimTrack.IsPlaying then
-            IdleAnimTrack:Play()
+        if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
+        
+        if not isFalling and not IdleAnimTrack.IsPlaying then 
+            IdleAnimTrack:Play() 
         elseif isFalling and IdleAnimTrack.IsPlaying then
             IdleAnimTrack:Stop()
         end
-
+        
         if cam.FieldOfView ~= 70 then
             if CurrentTween then CurrentTween:Cancel() end
             CurrentTween = ts:Create(cam, FOVTweenInfo, {FieldOfView = 70})
@@ -3126,10 +3090,6 @@ V88()
 V90()
 
 
--- Sliding state is now driven entirely by UpdateAnimationsAndFOV
--- (velocity-based continuous check each RenderStepped frame).
--- playerData.sliding is written there; no separate heartbeat needed.
-playerData.sliding = false
 
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ChosenSkibidi/VIP-SCRIPTS/refs/heads/main/useless%20notification"))()
