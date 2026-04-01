@@ -510,12 +510,143 @@ end
 playerData.ParticleRef = ParticleRef
 table.insert(playerData.cleanupObjects, ParticleRef)
 
+
+-- ================================================================
+-- BODY-WIDE PARTICLE EFFECT (ParticleRef2 - NSFVFX)
+-- Two emitters per limb (soft glow + sparkle), color matches _G speedsterType
+-- ================================================================
+local isR15_nsf = CharacterRef:FindFirstChild("UpperTorso") ~= nil
+local R15Parts_nsf = {
+    "Head","UpperTorso","LowerTorso",
+    "LeftUpperArm","LeftLowerArm","LeftHand",
+    "RightUpperArm","RightLowerArm","RightHand",
+    "LeftUpperLeg","LeftLowerLeg","LeftFoot",
+    "RightUpperLeg","RightLowerLeg","RightFoot",
+    "HumanoidRootPart"
+}
+local R6Parts_nsf = {"Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg","HumanoidRootPart"}
+
+local bodyParts_nsf = {}
+for _, n in ipairs(isR15_nsf and R15Parts_nsf or R6Parts_nsf) do
+    local p = CharacterRef:FindFirstChild(n)
+    if p and p:IsA("BasePart") then
+        bodyParts_nsf[#bodyParts_nsf + 1] = p
+    end
+end
+
+local nsfColor
+if speedsterType == "Zoom" then
+    nsfColor = Color3.fromRGB(46, 124, 255)
+elseif speedsterType == "GodOfSpeed" then
+    nsfColor = Color3.fromRGB(220, 220, 255)
+elseif speedsterType == "NWA" then
+    nsfColor = Color3.fromRGB(210, 160, 255)
+elseif speedsterType == "KidFlash" then
+    nsfColor = Color3.fromRGB(255, 255, 100)
+elseif speedsterType == "RF" then
+    nsfColor = Color3.fromRGB(255, 80, 80)
+else
+    nsfColor = Color3.fromRGB(255, 51, 0)
+end
+
+local nsfEmitters = {}
+playerData.nsfEmitters = nsfEmitters
+
+for _, part in ipairs(bodyParts_nsf) do
+    -- Emitter 1: soft body glow
+    local e1 = Instance.new("ParticleEmitter")
+    e1.Brightness = 0.05000000074505806
+    e1.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, nsfColor), ColorSequenceKeypoint.new(1, nsfColor)})
+    e1.LightEmission = 1
+    e1.LightInfluence = 0
+    e1.Orientation = Enum.ParticleOrientation.FacingCamera
+    e1.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0.12669374048709869,0),NumberSequenceKeypoint.new(1,0.57012182474136353,0)})
+    e1.Squash = NumberSequence.new({NumberSequenceKeypoint.new(0,-0.5,0),NumberSequenceKeypoint.new(1,-0.5,0)})
+    e1.Texture = "rbxassetid://1847258023"
+    e1.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0.32499998807907104,0)})
+    e1.ZOffset = 0.5
+    e1.EmissionDirection = Enum.NormalId.Top
+    e1.Enabled = false
+    e1.Lifetime = NumberRange.new(0.40000000596046448, 0.5)
+    e1.Rate = 20
+    e1.RotSpeed = NumberRange.new(0, 0)
+    e1.Rotation = NumberRange.new(0, 0)
+    e1.Speed = NumberRange.new(0, 0)
+    e1.SpreadAngle = Vector2.new(0, 0)
+    e1.TimeScale = 1
+    e1.Acceleration = Vector3.new(0, 0, 0)
+    e1.Drag = 0
+    e1.VelocityInheritance = 0
+    e1.WindAffectsDrag = false
+    e1.Shape = Enum.ParticleEmitterShape.Box
+    e1.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+    e1.ShapePartial = 1
+    e1.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+    e1.FlipbookFramerate = NumberRange.new(1, 1)
+    e1.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+    e1.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+    e1.FlipbookStartRandom = false
+    e1.LockedToPart = true
+    e1.Name = "NSFVFX"
+    e1.Parent = part
+    table.insert(nsfEmitters, e1)
+    table.insert(playerData.cleanupObjects, e1)
+
+    -- Emitter 2: sparkle dots
+    local e2 = Instance.new("ParticleEmitter")
+    e2.Brightness = 10
+    e2.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, nsfColor), ColorSequenceKeypoint.new(1, nsfColor)})
+    e2.LightEmission = 1
+    e2.LightInfluence = 0
+    e2.Orientation = Enum.ParticleOrientation.FacingCamera
+    e2.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0.076016247272491455,0),NumberSequenceKeypoint.new(1,0.076016247272491455,0)})
+    e2.Squash = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+    e2.Texture = "rbxassetid://11492870634"
+    e2.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.90112358331680298,0,0),NumberSequenceKeypoint.new(1,1,0)})
+    e2.ZOffset = 0.5
+    e2.EmissionDirection = Enum.NormalId.Top
+    e2.Enabled = false
+    e2.Lifetime = NumberRange.new(0.40000000596046448, 0.40000000596046448)
+    e2.Rate = 5
+    e2.RotSpeed = NumberRange.new(0, 0)
+    e2.Rotation = NumberRange.new(-360, 360)
+    e2.Speed = NumberRange.new(0.010135498829185963, 0.010135498829185963)
+    e2.SpreadAngle = Vector2.new(360, 360)
+    e2.TimeScale = 1
+    e2.Acceleration = Vector3.new(0, 0, 0)
+    e2.Drag = 0
+    e2.VelocityInheritance = 0
+    e2.WindAffectsDrag = false
+    e2.Shape = Enum.ParticleEmitterShape.Box
+    e2.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+    e2.ShapePartial = 1
+    e2.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+    e2.FlipbookFramerate = NumberRange.new(1, 1)
+    e2.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid4x4
+    e2.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+    e2.FlipbookStartRandom = false
+    e2.LockedToPart = true
+    e2.Name = "NSFVFX"
+    e2.Parent = part
+    table.insert(nsfEmitters, e2)
+    table.insert(playerData.cleanupObjects, e2)
+end
+
+
 local function EnableLightningGlobal()
     if playerData.Running then return end
     playerData.Running = true
     if playerData.ParticleRef and playerData.ParticleRef.Parent then
         playerData.ParticleRef.Enabled = true
         playerData.ParticleRef:Emit(15)
+    end
+    if playerData.nsfEmitters then
+        for _, e in ipairs(playerData.nsfEmitters) do
+            if e and e.Parent then
+                e.Enabled = true
+                e:Emit(15)
+            end
+        end
     end
 end
 
@@ -524,6 +655,13 @@ local function DisableLightningGlobal()
     playerData.Running = false
     if playerData.ParticleRef and playerData.ParticleRef.Parent then
         playerData.ParticleRef.Enabled = false
+    end
+    if playerData.nsfEmitters then
+        for _, e in ipairs(playerData.nsfEmitters) do
+            if e and e.Parent then
+                e.Enabled = false
+            end
+        end
     end
 end
 
@@ -1839,6 +1977,9 @@ local function enableAll()
     enabled = true
     h.WalkSpeed = defaultWalkSpeed
     InitializeTrails()
+    -- FIX: disconnect any existing heartbeat before overwriting (prevents leaked walkspeed-lock heartbeats
+    -- from accumulating every enable/disable cycle and overriding WalkSpeed reset on disable)
+    if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
     heartbeatConnection = RunService.Heartbeat:Connect(HeartbeatUpdate)
 
     animConnection = RunService.RenderStepped:Connect(UpdateAnimationsAndFOV)
@@ -1855,13 +1996,9 @@ local function enableAll()
 end
 
 local function disableAll()
-    if not enabled then return end
-    enabled = false
-    h.WalkSpeed = 25
-    if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
-    if animConnection then animConnection:Disconnect() animConnection = nil end
-    if soundConnection then soundConnection:Disconnect() soundConnection = nil end
-    
+    -- FIX: stop all sounds unconditionally BEFORE the enabled guard.
+    -- Previously these were inside the guard, so if enabled was already false
+    -- (state desync, double-disable, etc.) sounds were silently skipped.
     if generalEnableSound.IsPlaying then generalEnableSound:Stop() end
     if runSound1.IsPlaying then runSound1:Stop() end
     if runSound2.IsPlaying then runSound2:Stop() end
@@ -1869,6 +2006,13 @@ local function disableAll()
     if runSound4.IsPlaying then runSound4:Stop() end
     if runSound5.IsPlaying then runSound5:Stop() end
     if stopSound.IsPlaying then stopSound:Stop() end
+
+    if not enabled then return end
+    enabled = false
+    h.WalkSpeed = 25
+    if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
+    if animConnection then animConnection:Disconnect() animConnection = nil end
+    if soundConnection then soundConnection:Disconnect() soundConnection = nil end
     
     wasRunning = false
     
@@ -2573,6 +2717,14 @@ local function SetupSyncListener()
             if senderData.ParticleRef and senderData.ParticleRef.Parent then
                 senderData.ParticleRef.Enabled = true
             end
+            if senderData.nsfEmitters then
+                for _, e in ipairs(senderData.nsfEmitters) do
+                    if e and e.Parent then
+                        e.Enabled = true
+                        e:Emit(15)
+                    end
+                end
+            end
             
         elseif msgText == ".2" then
             print("🔄 " .. textSource.Name .. " enabled phase!")
@@ -2592,6 +2744,13 @@ local function SetupSyncListener()
             
             if senderData.ParticleRef and senderData.ParticleRef.Parent then
                 senderData.ParticleRef.Enabled = false
+            end
+            if senderData.nsfEmitters then
+                for _, e in ipairs(senderData.nsfEmitters) do
+                    if e and e.Parent then
+                        e.Enabled = false
+                    end
+                end
             end
         end
     end)
@@ -2950,7 +3109,11 @@ local function MasterDisableAll()
     disableRunEvents()
     disableAll()
 
-    -- 6. Reset flags
+    -- 6. Nuclear sound kill — catches anything disableAll missed due to state desync,
+    --    early-returns, or sounds restarted by the leaked walkspeed heartbeat
+    StopAllPlayerSounds()
+
+    -- 7. Reset flags
     spd = false
     playerData.spd = false
 end
