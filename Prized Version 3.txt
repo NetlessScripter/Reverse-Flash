@@ -2635,7 +2635,7 @@ local function FireGroundArc(originPart, lightColor)
     -- This creates the "lightning dissipates" effect rather than hard-cutting
     task.delay(lifetime * 0.35, function()
         if beam and beam.Parent then
-            ts:Create(beam, TweenInfo.new(lifetime * 0.65, Enum.EasingStyle.Expo, Enum.EasingDirection.Out), {
+            ts:Create(beam, TweenInfo.new(lifetime * 0.65, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
                 Transparency = NumberSequence.new(1),
                 Width0 = 0,
                 Width1 = 0
@@ -2699,7 +2699,7 @@ local function FireGroundArc(originPart, lightColor)
             Debris:AddItem(branchPart, bLifetime + 0.05)
             Debris:AddItem(bAttach0, bLifetime + 0.05)
 
-            ts:Create(branchBeam, TweenInfo.new(bLifetime, Enum.EasingStyle.Expo, Enum.EasingDirection.Out), {
+            ts:Create(branchBeam, TweenInfo.new(bLifetime, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
                 Transparency = NumberSequence.new(1),
                 Width0 = 0,
                 Width1 = 0
