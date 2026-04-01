@@ -812,200 +812,229 @@ local l = game:GetService('Lighting')
 local _li
 if _G.NightMode then
 
-    _li = Instance.new('Sky')
-    _li.SkyboxBk = "rbxassetid://6444884337"
-    _li.SkyboxDn = "rbxassetid://6444884785"
-    _li.SkyboxFt = "rbxassetid://6444884337"
-    _li.SkyboxLf = "rbxassetid://6444884337"
-    _li.SkyboxRt = "rbxassetid://6444884337"
-    _li.SkyboxUp = "rbxassetid://6412503613"
-    _li.MoonAngularSize = 11
-    _li.MoonTextureId = "rbxassetid://6444320592"
-    _li.SunAngularSize = 11
-    _li.SunTextureId = "rbxassetid://6196665106"
-    _li.Parent = l
-    _li = Instance.new('SunRaysEffect')
-    _li.Intensity = 0.009999999776482582
-    _li.Spread = 0.10000000149011612
-    _li.Enabled = true
-    _li.Parent = l
-    _li = Instance.new('Atmosphere')
-    _li.Density = 0.30000001192092896
-    _li.Offset = 0.25
-    _li.Color = Color3.new(0.7803921699523926,0.7803921699523926,0.7803921699523926)
-    _li.Decay = Color3.new(0.4156862795352936,0.43921568989753723,0.4901960790157318)
-    _li.Glare = 0
-    _li.Haze = 0
-    _li.Parent = l
-    _li = Instance.new('BloomEffect')
-    _li.Intensity = 1
-    _li.Size = 24
-    _li.Threshold = 2
-    _li.Enabled = true
-    _li.Parent = l
-    _li = Instance.new('DepthOfFieldEffect')
-    _li.FarIntensity = 0.10000000149011612
-    _li.FocusDistance = 0.05000000074505806
-    _li.InFocusRadius = 30
-    _li.NearIntensity = 0.75
-    _li.Enabled = false
-    _li.Parent = l
-    _li = Instance.new('SunRaysEffect')
-    _li.Intensity = 0.16899999976158142
-    _li.Spread = 1
-    _li.Enabled = true
-    _li.Parent = l
-    _li = Instance.new('Atmosphere')
-    _li.Density = 0.3009999990463257
-    _li.Offset = 0.32499998807907104
-    _li.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
-    _li.Decay = Color3.new(0.3607843220233917,0.23529411852359772,0.05098039284348488)
-    _li.Glare = 0
-    _li.Haze = 0
-    _li.Parent = l
-    _li = Instance.new('BloomEffect')
-    _li.Intensity = 3
-    _li.Size = 100
-    _li.Threshold = 1.2000000476837158
-    _li.Enabled = true
-    _li.Parent = l
-    _li = Instance.new('BlurEffect')
-    _li.Size = 4
-    _li.Enabled = true
-    _li.Parent = l
-    _li = Instance.new('ColorCorrectionEffect')
-    _li.Brightness = 0
-    _li.Contrast = 0.10000003129243851
-    _li.Saturation = 0.15000000596046448
-    _li.TintColor = Color3.new(1,1,1)
-    _li.Enabled = true
-    _li.Parent = l
-    _li = Instance.new('SunRaysEffect')
-    _li.Intensity = 0.03200000151991844
-    _li.Spread = 0.7160000205039978
-    _li.Enabled = true
-    _li.Parent = l
-    _li = Instance.new('Sky')
-    _li.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
-    _li.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
-    _li.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
-    _li.SkyboxLf = "http://www.roblox.com/asset/?id=11389739259"
-    _li.SkyboxRt = "http://www.roblox.com/asset/?id=11389735910"
-    _li.SkyboxUp = "http://www.roblox.com/asset/?id=11389742333"
-    _li.MoonAngularSize = 7
-    _li.MoonTextureId = "rbxasset://sky/moon.jpg"
-    _li.SunAngularSize = 2
-    _li.SunTextureId = "rbxasset://sky/sun.jpg"
-    _li.Parent = l
-    _li = Instance.new('DepthOfFieldEffect')
-    _li.FarIntensity = 0.30000001192092896
-    _li.FocusDistance = 250
-    _li.InFocusRadius = 38.79999923706055
-    _li.NearIntensity = 0
-    _li.Enabled = true
-    _li.Parent = l
-    l.Brightness = 1.5
-    l.ClockTime = 0
+    local DELETABLE_NIGHT = {"Atmosphere","BloomEffect","BlurEffect","ColorCorrectionEffect","DepthOfFieldEffect","SunRaysEffect","Sky"}
+    for _, child in ipairs(l:GetChildren()) do
+        for _, cls in ipairs(DELETABLE_NIGHT) do
+            if child.ClassName == cls then child:Destroy() break end
+        end
+    end
+
+    l.Ambient = Color3.fromRGB(2, 2, 2)
+    l.Brightness = 2.25
+    l.ClockTime = 17
+    l.ColorShift_Bottom = Color3.fromRGB(0, 0, 0)
+    l.ColorShift_Top = Color3.fromRGB(0, 0, 0)
+    l.EnvironmentDiffuseScale = 0.20000000298023224
+    l.EnvironmentSpecularScale = 0.20000000298023224
+    l.ExposureCompensation = 0.5
+    l.FogColor = Color3.fromRGB(192, 192, 192)
     l.FogEnd = 100000
     l.FogStart = 0
-    l.FogColor = Color3.new(0.7529412508010864,0.7529412508010864,0.7529412508010864)
-    l.OutdoorAmbient = Color3.new(0.29411765933036804,0.29411765933036804,0.29411765933036804)
-    l.Ambient = Color3.new(0.3921568691730499,0.3921568691730499,0.3921568691730499)
+    l.GeographicLatitude = 45
     l.GlobalShadows = true
-    l.GeographicLatitude = -14.670236587524414
-    l.EnvironmentSpecularScale = 1
-    l.EnvironmentDiffuseScale = 1
-    l.ExposureCompensation = 0
-    l.ColorShift_Bottom = Color3.new(0,0,0)
-    l.ColorShift_Top = Color3.new(0,0,0)
-    l.Technology = Enum.Technology.Future
-    l.ShadowSoftness = 0.3199999928474426
-    l.TimeOfDay = "00:00:00"
+    l.OutdoorAmbient = Color3.fromRGB(0, 0, 0)
+    l.ShadowSoftness = 0.20000000298023224
+    l.Technology = Enum.Technology.ShadowMap
+
+    local existingClouds_n = workspace.Terrain:FindFirstChildOfClass("Clouds")
+    if existingClouds_n then existingClouds_n:Destroy() end
+    _li = Instance.new("Clouds")
+    _li.Name = "Clouds"
+    _li.Cover = 0.5
+    _li.Density = 0.3
+    _li.Enabled = true
+    _li.Color = Color3.fromRGB(255, 255, 255)
+    _li.Parent = workspace.Terrain
+
+    workspace.Terrain.WaterColor = Color3.fromRGB(83, 0, 0)
+    workspace.Terrain.WaterReflectance = 1
+    workspace.Terrain.WaterTransparency = 0.30000001192092896
+    workspace.Terrain.WaterWaveSize = 0.15000000596046448
+    workspace.Terrain.WaterWaveSpeed = 10
+
+    _li = Instance.new("BloomEffect")
+    _li.Name = "Bloom"
+    _li.Enabled = true
+    _li.Intensity = 0.30000001192092896
+    _li.Size = 10
+    _li.Threshold = 0.800000011920929
+    _li.Parent = l
+
+    _li = Instance.new("BlurEffect")
+    _li.Name = "Blur"
+    _li.Enabled = true
+    _li.Size = 5
+    _li.Parent = l
+
+    _li = Instance.new("ColorCorrectionEffect")
+    _li.Name = "ColorCorrection"
+    _li.Brightness = 0.10000000149011612
+    _li.Contrast = 0.5
+    _li.Enabled = true
+    _li.Saturation = -0.30000001192092896
+    _li.TintColor = Color3.fromRGB(255, 235, 203)
+    _li.Parent = l
+
+    _li = Instance.new("SunRaysEffect")
+    _li.Name = "SunRays"
+    _li.Enabled = true
+    _li.Intensity = 0.07500000298023224
+    _li.Spread = 0.7269999980926514
+    _li.Parent = l
+
+    _li = Instance.new("Sky")
+    _li.Name = "Sky"
+    _li.CelestialBodiesShown = true
+    _li.MoonAngularSize = 11
+    _li.MoonTextureId = "rbxasset://sky/moon.jpg"
+    _li.SkyboxBk = "http://www.roblox.com/asset/?id=151165214"
+    _li.SkyboxDn = "http://www.roblox.com/asset/?id=151165197"
+    _li.SkyboxFt = "http://www.roblox.com/asset/?id=151165224"
+    _li.SkyboxLf = "http://www.roblox.com/asset/?id=151165191"
+    _li.SkyboxRt = "http://www.roblox.com/asset/?id=151165206"
+    _li.SkyboxUp = "http://www.roblox.com/asset/?id=151165227"
+    _li.StarCount = 3000
+    _li.SunAngularSize = 10
+    _li.SunTextureId = "rbxasset://sky/sun.jpg"
+    _li.Parent = l
+
+    _li = Instance.new("Atmosphere")
+    _li.Name = "Atmosphere"
+    _li.Color = Color3.fromRGB(199, 175, 166)
+    _li.Decay = Color3.fromRGB(44, 39, 33)
+    _li.Density = 0.36399999260902405
+    _li.Glare = 0.36000001430511475
+    _li.Haze = 1.7200000286102295
+    _li.Offset = 0.5559999942779541
+    _li.Parent = l
 else
 
-    _li = Instance.new('ColorGradingEffect')
+    local DELETABLE_DAY = {"Atmosphere","BloomEffect","BlurEffect","ColorCorrectionEffect","DepthOfFieldEffect","SunRaysEffect","Sky"}
+    for _, child in ipairs(l:GetChildren()) do
+        for _, cls in ipairs(DELETABLE_DAY) do
+            if child.ClassName == cls then child:Destroy() break end
+        end
+    end
+
+    l.Ambient = Color3.fromRGB(59, 33, 27)
+    l.Brightness = 2.140000104904175
+    l.ClockTime = 6.699999809265137
+    l.ColorShift_Bottom = Color3.fromRGB(11, 0, 20)
+    l.ColorShift_Top = Color3.fromRGB(240, 127, 14)
+    l.EnvironmentDiffuseScale = 0.20000000298023224
+    l.EnvironmentSpecularScale = 1
+    l.ExposureCompensation = 0.23999999463558197
+    l.FogColor = Color3.fromRGB(94, 76, 106)
+    l.FogEnd = 1000
+    l.FogStart = 0
+    l.GeographicLatitude = -20.356000900268555
+    l.GlobalShadows = true
+    l.OutdoorAmbient = Color3.fromRGB(34, 0, 49)
+    l.ShadowSoftness = 0
+    l.Technology = Enum.Technology.Future
+
+    local existingClouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
+    if existingClouds then existingClouds:Destroy() end
+    _li = Instance.new("Clouds")
+    _li.Name = "Clouds"
+    _li.Cover = 0.5
+    _li.Density = 0.3
     _li.Enabled = true
-    _li.Parent = l
-    _li = Instance.new('SunRaysEffect')
-    _li.Intensity = 0.16899999976158142
+    _li.Color = Color3.fromRGB(255, 255, 255)
+    _li.Parent = workspace.Terrain
+
+    workspace.Terrain.WaterColor = Color3.fromRGB(79, 91, 61)
+    workspace.Terrain.WaterReflectance = 1
+    workspace.Terrain.WaterTransparency = 0.6499999761581421
+    workspace.Terrain.WaterWaveSize = 0.10000000149011612
+    workspace.Terrain.WaterWaveSpeed = 5
+
+    _li = Instance.new("SunRaysEffect")
+    _li.Name = "SunRays"
+    _li.Enabled = true
+    _li.Intensity = 0.029999999329447746
     _li.Spread = 1
+    _li.Parent = l
+
+    _li = Instance.new("BlurEffect")
+    _li.Name = "Blur"
     _li.Enabled = true
+    _li.Size = 2
     _li.Parent = l
-    _li = Instance.new('Atmosphere')
-    _li.Density = 0.3009999990463257
-    _li.Offset = 0.32499998807907104
-    _li.Color = Color3.new(0.7803921699523926,0.6666666865348816,0.6666666865348816)
-    _li.Decay = Color3.new(0.3607843220233917,0.23529411852359772,0.05098039284348488)
-    _li.Glare = 0
-    _li.Haze = 0
-    _li.Parent = l
-    _li = Instance.new('BloomEffect')
-    _li.Intensity = 3
-    _li.Size = 100
-    _li.Threshold = 1.2000000476837158
-    _li.Enabled = true
-    _li.Parent = l
-    _li = Instance.new('BlurEffect')
-    _li.Size = 4
-    _li.Enabled = true
-    _li.Parent = l
-    _li = Instance.new('ColorCorrectionEffect')
+
+    _li = Instance.new("ColorCorrectionEffect")
+    _li.Name = "Normal"
     _li.Brightness = 0
-    _li.Contrast = 0.10000003129243851
-    _li.Saturation = 0.15000000596046448
-    _li.TintColor = Color3.new(1,1,1)
-    _li.Enabled = true
+    _li.Contrast = 0
+    _li.Enabled = false
+    _li.Saturation = -0.20000000298023224
+    _li.TintColor = Color3.fromRGB(255, 232, 215)
     _li.Parent = l
-    _li = Instance.new('SunRaysEffect')
-    _li.Intensity = 0.03200000151991844
-    _li.Spread = 0.7160000205039978
+
+    _li = Instance.new("ColorCorrectionEffect")
+    _li.Name = "Inari taisha"
+    _li.Brightness = 0
+    _li.Contrast = 0
     _li.Enabled = true
+    _li.Saturation = 0.05000000074505806
+    _li.TintColor = Color3.fromRGB(255, 224, 219)
     _li.Parent = l
-    _li = Instance.new('Sky')
-    _li.SkyboxBk = "http://www.roblox.com/asset/?id=11389748784"
-    _li.SkyboxDn = "http://www.roblox.com/asset/?id=11389743619"
-    _li.SkyboxFt = "http://www.roblox.com/asset/?id=11389734712"
-    _li.SkyboxLf = "http://www.roblox.com/asset/?id=11389739259"
-    _li.SkyboxRt = "http://www.roblox.com/asset/?id=11389735910"
-    _li.SkyboxUp = "http://www.roblox.com/asset/?id=11389742333"
-    _li.MoonAngularSize = 7
+
+    _li = Instance.new("ColorCorrectionEffect")
+    _li.Name = "Takayama"
+    _li.Brightness = 0
+    _li.Contrast = 0.10000000149011612
+    _li.Enabled = false
+    _li.Saturation = -0.30000001192092896
+    _li.TintColor = Color3.fromRGB(235, 214, 204)
+    _li.Parent = l
+
+    _li = Instance.new("BloomEffect")
+    _li.Name = "Bloom"
+    _li.Enabled = false
+    _li.Intensity = 0.3499999940395355
+    _li.Size = 56
+    _li.Threshold = 0.20000000298023224
+    _li.Parent = l
+
+    _li = Instance.new("Sky")
+    _li.Name = "Sunset"
+    _li.CelestialBodiesShown = true
+    _li.MoonAngularSize = 11
     _li.MoonTextureId = "rbxasset://sky/moon.jpg"
-    _li.SunAngularSize = 2
+    _li.SkyboxBk = "rbxassetid://323494035"
+    _li.SkyboxDn = "rbxassetid://323494368"
+    _li.SkyboxFt = "rbxassetid://323494130"
+    _li.SkyboxLf = "rbxassetid://323494252"
+    _li.SkyboxRt = "rbxassetid://323494067"
+    _li.SkyboxUp = "rbxassetid://323493360"
+    _li.StarCount = 3000
+    _li.SunAngularSize = 14
     _li.SunTextureId = "rbxasset://sky/sun.jpg"
     _li.Parent = l
-    _li = Instance.new('DepthOfFieldEffect')
-    _li.FarIntensity = 0.30000001192092896
-    _li.FocusDistance = 250
-    _li.InFocusRadius = 38.79999923706055
-    _li.NearIntensity = 0
+
+    _li = Instance.new("BloomEffect")
+    _li.Name = "Bloom"
     _li.Enabled = true
+    _li.Intensity = 0.10000000149011612
+    _li.Size = 100
+    _li.Threshold = 0
     _li.Parent = l
-    l.Brightness = 1.5
-    l.ClockTime = 15.109999656677246
-    l.FogEnd = 100000
-    l.FogStart = 0
-    l.FogColor = Color3.new(0.7529412508010864,0.7529412508010864,0.7529412508010864)
-    l.OutdoorAmbient = Color3.new(0.29411765933036804,0.29411765933036804,0.29411765933036804)
-    l.Ambient = Color3.new(0.3921568691730499,0.3921568691730499,0.3921568691730499)
-    l.GlobalShadows = true
-    l.GeographicLatitude = -14.670236587524414
-    l.EnvironmentSpecularScale = 1
-    l.EnvironmentDiffuseScale = 1
-    l.ExposureCompensation = 0
-    l.ColorShift_Bottom = Color3.new(0,0,0)
-    l.ColorShift_Top = Color3.new(0,0,0)
-    l.Technology = Enum.Technology.Future
-    l.ShadowSoftness = 0.3199999928474426
-    l.TimeOfDay = "15:06:36"
+
+    _li = Instance.new("BlurEffect")
+    _li.Name = "Efecto"
+    _li.Enabled = false
+    _li.Size = 2
+    _li.Parent = l
 end
 
 
 if _G.TODC then
     RunService.Heartbeat:Connect(function()
         if _G.NightMode then
-            l.ClockTime = 0
+            l.ClockTime = 17
         else
-            l.ClockTime = 15.109999656677246
+            l.ClockTime = 6.699999809265137
         end
     end)
 else
