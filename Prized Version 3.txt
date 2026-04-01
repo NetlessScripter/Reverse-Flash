@@ -1697,6 +1697,22 @@ local runState = false
 local defaultWalkSpeed = 20
 local customSpeed = 375  -- editable via the Speed TextBox in the GUI
 
+-- ================================================================
+-- FLASH S2 BURST-PHASE CONTROLLER  (shared upvalues)
+-- HeartbeatUpdate AND StartLightningFlicker both read these.
+-- burstPhase = true  → bolt is popping (bright energy moment)
+-- burstPhase = false → gap between bolts (dark moment)
+-- The coordinator thread in StartLightningFlicker drives these.
+-- ================================================================
+local burstPhase     = false   -- master gate: is a bolt erupting right now?
+local burstIntensity = 0.0     -- 0-1 strength of the current burst
+
+-- HeartbeatUpdate's own frame-level burst rhythm (tracks burstPhase at ~60fps)
+local bfCounter  = 0
+local bfActive   = false
+local bfOnLen    = 3   -- frames to stay bright  (re-randomised each burst)
+local bfOffLen   = 6   -- frames to stay dark    (re-randomised each burst)
+
 
 
 local RUN_ANIM_ID = "rbxassetid://102622695004986"
@@ -1809,30 +1825,49 @@ local function CreateInvisibleWater(Part)
 end
 
 -- ================================================================
--- FIX: HeartbeatUpdate no longer clone/destroys trails every frame
--- Original was ~960+ Instance operations/sec at 16 body parts × 60fps
--- Now it just toggles Enabled once per 2 frames for the flicker feel
--- Water detection and TODC are preserved exactly
+-- HeartbeatUpdate  — burst-phase-aware trail driver
+--
+-- Instead of toggling a single random trail every 2 frames (which
+-- produced a gentle, predictable shimmer), this version reads the
+-- shared burstPhase / burstIntensity set by the flash coordinator
+-- thread and applies a hard ON/OFF block rhythm to TrailsPerPart.
+--
+-- Result: hard dark gaps between sharp bolt pops at ~60fps,
+-- matching the Flash S2 "energy struggling to stay contained" look.
 -- ================================================================
 local heartbeatFrame = 0
 
 local function HeartbeatUpdate()
     heartbeatFrame += 1
+    bfCounter      += 1
 
-    -- Lightweight trail "pop" flicker: toggle enabled state briefly
-    -- This resets trail segments (same visual effect as the old clone/destroy)
-    -- but costs nearly nothing compared to Clone() + Destroy()
-    if heartbeatFrame % 2 == 0 then
-        for Part, Data in pairs(TrailsPerPart) do
-            local T1, T2 = Data[1], Data[2]
-            -- Randomly pick one trail to snap-reset per frame
-            local target = (math.random(1,2) == 1) and T1 or T2
-            if target and target.Parent then
-                -- Brief toggle clears the existing trail segment history
-                target.Enabled = false
-                target.Enabled = true
-                -- Vary the lifetime for a non-uniform, organic look
-                target.Lifetime = math.random(5, 22) / 100
+    -- Advance the frame-level burst window.
+    -- When the global burstPhase flips, we snap our local state to it.
+    if bfCounter >= (bfActive and bfOnLen or bfOffLen) then
+        bfCounter = 0
+        bfActive  = burstPhase   -- sync to master burst gate
+        bfOnLen   = math.random(2, 4)    -- bright window: 2-4 frames
+        bfOffLen  = math.random(2, 5)    -- dark  window: 2-5 frames
+    end
+
+    for Part, Data in pairs(TrailsPerPart) do
+        local T1, T2 = Data[1], Data[2]
+        if T1 and T1.Parent then
+            if bfActive and burstPhase then
+                -- BRIGHT PHASE: bolt pop — very short lifetime = crisp crack, not a ribbon
+                T1.Enabled  = true
+                T1.Lifetime = math.random(3, 9) / 100    -- 30-90ms sharp bolt
+                -- T2 flickers independently for a layered depth effect
+                if T2 and T2.Parent then
+                    T2.Enabled  = (math.random() < 0.55)
+                    if T2.Enabled then
+                        T2.Lifetime = math.random(5, 14) / 100
+                    end
+                end
+            else
+                -- DARK PHASE: hard off — creates the unmistakable gap between bolts
+                T1.Enabled = false
+                if T2 and T2.Parent then T2.Enabled = false end
             end
         end
     end
@@ -2226,105 +2261,220 @@ end
 -- uniformly. It snaps on/off at different times across the body.
 --
 -- Implementation:
--- - Three independent flicker loops run on offset timers
--- - Each loop owns a "group" of body-part trails
--- - Lifetime varies per tick (shorter = crisper, longer = smoother)
--- - math.sin wave + random spike = organic non-repeating pattern
--- - When G_Optimized: slower intervals, higher on-chance (less spam)
+-- - A burst coordinator thread drives the master dark/bright rhythm.
+-- - Three independent update loops own the three trail layers and
+--   read burstPhase/burstIntensity for each tick decision.
+-- - tlist (primary arcs): hard OFF in dark phase, sharp bolt pop in
+--   bright phase with per-trail stagger so they don't all fire at once.
+-- - t trails (secondary glow): slower echo gives layered depth.
+-- - allTrails (corona): slowest reaction, ambient haze.
+-- - Pre-built WidthScale variants swap the bolt shape per burst.
 -- ================================================================
 
-local flickerActive = false
-local flickerThread = nil
+local flickerActive    = false
+local flickerThread    = nil
+local burstCoordThread = nil   -- drives burstPhase / burstIntensity
+
+-- Pre-built WidthScale variants for tlist trails.
+-- Swapping these during burst pops replaces the constant uniform ribbon
+-- with something that looks like actual lightning: a sharp bright spike
+-- that immediately tapers off, then vanishes entirely.
+local WS_BURST_SPIKE = NumberSequence.new({  -- wide bright origin, fast taper
+    NumberSequenceKeypoint.new(0,    1,    0),
+    NumberSequenceKeypoint.new(0.07, 0.35, 0),
+    NumberSequenceKeypoint.new(1,    0,    0)
+})
+local WS_BURST_THIN = NumberSequence.new({   -- needle crackle (thinner bolt)
+    NumberSequenceKeypoint.new(0,    0.12, 0),
+    NumberSequenceKeypoint.new(0.4,  0.05, 0),
+    NumberSequenceKeypoint.new(1,    0,    0)
+})
+local WS_ROGUE = NumberSequence.new({        -- ghost trace during dark phase
+    NumberSequenceKeypoint.new(0,    0.04, 0),
+    NumberSequenceKeypoint.new(1,    0,    0)
+})
 
 local function StartLightningFlicker()
     if flickerActive then return end
     flickerActive = true
 
+    -- ── BURST COORDINATOR ─────────────────────────────────────────────
+    -- This thread owns the master dark / bright rhythm and writes to the
+    -- shared burstPhase + burstIntensity upvalues.  Every other system
+    -- (HeartbeatUpdate + the three update loops below) simply reads them.
+    --
+    -- Timing at full speed (customSpeed):
+    --   Dark  phase: ~12-45ms  → eye loses the trail, selling gap speed
+    --   Bright phase: ~10-38ms → bolt pops, eye catches it briefly
+    --   Secondary crackle: ~50% chance of a second smaller pop after
+    --   the bright phase, creating the "double-crack" stutter common
+    --   in Flash S2 acceleration shots.
+    --
+    -- Timing at idle / low speed: much longer dark phases (45-80ms) with
+    -- shorter, dimmer bright phases, so the lightning reads as "crackling
+    -- but contained" rather than "running at full velocity".
+    burstCoordThread = task.spawn(function()
+        while flickerActive do
+            local speed  = (h and h.Parent and h.WalkSpeed) or 0
+            local sRatio = math.clamp(speed / math.max(customSpeed, 1), 0, 1)
+
+            -- DARK PHASE — the gap that makes the next pop feel violent
+            burstPhase     = false
+            burstIntensity = 0
+            local darkMs   = math.random(30, 70) - math.floor(sRatio * 22)
+            task.wait(math.max(darkMs, 10) / 1000)
+            if not flickerActive then break end
+
+            -- BRIGHT PHASE — the actual bolt pop
+            burstPhase     = true
+            burstIntensity = 0.42 + sRatio * 0.58   -- 0.42 idle → 1.0 full speed
+            local brightMs = math.random(10, 26) + math.floor(sRatio * 12)
+            task.wait(brightMs / 1000)
+            if not flickerActive then break end
+
+            -- SECONDARY CRACKLE (rare at idle, common at speed)
+            -- Creates the "double-snap" stutter that reads as raw velocity
+            if math.random() < (0.15 + sRatio * 0.55) then
+                burstPhase     = false
+                burstIntensity = 0
+                task.wait(math.random(6, 16) / 1000)
+                if not flickerActive then break end
+                burstPhase     = true
+                burstIntensity = 0.28 + sRatio * 0.38  -- second crack is dimmer
+                task.wait(math.random(5, 13) / 1000)
+                if not flickerActive then break end
+            end
+        end
+        burstPhase     = false
+        burstIntensity = 0
+    end)
+
+    -- ── TRAIL UPDATE LOOP ─────────────────────────────────────────────
+    -- Runs every 10-30ms and applies per-trail decisions based on the
+    -- current burst state.  Three offset tick counters ensure the three
+    -- layers don't all change on the same tick (asymmetry = organic feel).
     flickerThread = task.spawn(function()
-        local tick_leg = 0
-        local tick_arm = 7  -- offset so arms and legs don't sync
-        local tick_all = 3  -- offset for allTrails
+        local tick_l = 0   -- tlist (primary arcs)
+        local tick_a = 7   -- t     (secondary glow, offset so it's delayed)
+        local tick_c = 3   -- allTrails (corona, slowest)
 
         while flickerActive do
-            tick_leg += 1
-            tick_arm += 1
-            tick_all += 1
+            tick_l += 1
+            tick_a += 1
+            tick_c += 1
 
-            local speed = (h and h.Parent and h.WalkSpeed) or 0
-            -- intensity: 0.2 at idle (lightning still crackles slightly), 1.0 at full speed
-            local intensity = math.clamp(speed / math.max(customSpeed, 1), 0.2, 1.0)
+            local speed  = (h and h.Parent and h.WalkSpeed) or 0
+            local sRatio = math.clamp(speed / math.max(customSpeed, 1), 0, 1)
+            local bi     = burstIntensity  -- snapshot this tick
 
-            -- === tlist: BASE body trails - the most visible layer ===
-            -- These are the trails from the simple loop at the top of setup.
-            -- They flicker fast and form the "electricity wrapping the body" look.
+            -- ══ tlist: PRIMARY flash-arc trails ══
+            -- These are the fanned spread-arcs that wrap around the body.
+            -- In bright phase: random subset pops ON with a bolt-shaped
+            -- WidthScale so each bolt looks like an actual lightning strike
+            -- rather than a glowing ribbon.
+            -- In dark phase: almost all are OFF.  The rare "rogue crackle"
+            -- (0-3% chance) is ultra-brief and ghost-thin — it represents
+            -- the "energy leaking out" between main bursts.
             for idx, trail in ipairs(tlist) do
                 if trail and trail.Parent then
-                    -- Sine wave base creates a slow pulse, random spikes create jitter
-                    local sineWave = math.sin(tick_leg * 0.4 + idx * 0.9) * 0.25 + 0.75
-                    local rand = math.random()
-                    if rand < intensity * sineWave then
-                        trail.Enabled = true
-                        -- Vary lifetime: short = sharp bolt feel, long = glow trail feel
-                        -- Mix both for that DCEU "energy crackling with spikes" look
-                        if rand < 0.15 then
-                            trail.Lifetime = math.random(5, 10) / 100   -- short crackle spike
+                    if burstPhase and bi > 0 then
+                        -- Per-trail stagger: sine offset by index so bolts
+                        -- don't all fire on identical frames → organic look
+                        local stagger = math.sin(tick_l * 2.2 + idx * 1.5) * 0.25 + 0.75
+                        if math.random() < bi * stagger then
+                            trail.Enabled = true
+                            if math.random() < 0.28 then
+                                -- Thin needle crackle (30% of pops)
+                                trail.WidthScale = WS_BURST_THIN
+                                trail.Lifetime   = math.random(2, 6) / 100  -- 20-60ms
+                            else
+                                -- Wide spike bolt (70% of pops)
+                                trail.WidthScale = WS_BURST_SPIKE
+                                trail.Lifetime   = math.random(5, 12) / 100 -- 50-120ms
+                            end
                         else
-                            trail.Lifetime = math.random(12, 28) / 100  -- normal trail
+                            trail.Enabled = false
                         end
-                    elseif rand < (0.08 * intensity) then
-                        -- Snap-off: this is the "lightning bolt pops" effect
-                        -- A small percentage of the time, a trail turns off completely
-                        -- creating the visual of a bolt vanishing and reappearing
-                        trail.Enabled = false
+                    else
+                        -- Dark phase: almost all off
+                        if math.random() < 0.025 * sRatio then
+                            trail.Enabled    = true
+                            trail.WidthScale = WS_ROGUE
+                            trail.Lifetime   = math.random(1, 4) / 100  -- 10-40ms ghost
+                        else
+                            trail.Enabled = false
+                        end
                     end
-                    -- else: leave as-is (no unnecessary writes)
                 end
             end
 
-            -- === t trails: SECONDARY lightning layer ===
-            -- These use the lightning texture and are slightly slower to flicker
-            -- creating a layered depth effect (fast crackle on top of slower glow)
-            if tick_arm % 2 == 0 then
+            -- ══ t trails: SECONDARY lightning-texture layer ══
+            -- Runs at half the update rate (every 2 ticks).
+            -- Longer lifetime than tlist gives this layer a "delayed echo"
+            -- feel: the body bolt has already vanished but a dim afterimage
+            -- lingers for a moment, mimicking the retinal persistence seen
+            -- in Flash S2 close-ups.
+            if tick_a % 2 == 0 then
                 for idx, trail in ipairs(t) do
                     if trail and trail.Parent then
-                        local sineArm = math.sin(tick_arm * 0.3 + idx * 1.1) * 0.2 + 0.8
-                        local rand = math.random()
-                        if rand < intensity * sineArm * 0.9 then
-                            trail.Enabled = true
-                            trail.Lifetime = math.random(15, 40) / 100
-                        elseif rand < 0.05 * intensity then
-                            trail.Enabled = false
+                        if burstPhase and bi > 0 then
+                            local stagger = math.sin(tick_a * 1.7 + idx * 1.9) * 0.2 + 0.8
+                            if math.random() < bi * stagger * 0.75 then
+                                trail.Enabled  = true
+                                trail.Lifetime = math.random(8, 22) / 100  -- 80-220ms glow echo
+                            else
+                                trail.Enabled = false
+                            end
+                        else
+                            if math.random() < 0.015 * sRatio then
+                                trail.Enabled  = true
+                                trail.Lifetime = math.random(3, 8) / 100
+                            else
+                                trail.Enabled = false
+                            end
                         end
                     end
                 end
             end
 
-            -- === allTrails: THIRD layer (from createTrail) ===
-            -- Slowest flicker rate — these provide the "corona glow" around limbs
-            if tick_all % 3 == 0 then
+            -- ══ allTrails: CORONA glow layer ══
+            -- Slowest reaction (every 3 ticks).  These provide the ambient
+            -- "energy aura" around the body.  60% on-chance during burst
+            -- is intentionally lower than tlist so the corona doesn't
+            -- overwhelm the sharp bolt cracks above it.
+            if tick_c % 3 == 0 then
                 for idx, trail in ipairs(allTrails) do
                     if trail and trail.Parent then
-                        if math.random() < intensity * 0.85 then
-                            trail.Enabled = true
-                        elseif math.random() < 0.04 then
-                            trail.Enabled = false
+                        if burstPhase then
+                            trail.Enabled = (math.random() < bi * 0.60)
+                        else
+                            trail.Enabled = (math.random() < 0.022)
                         end
                     end
                 end
             end
 
-            -- Dynamic wait: G_Optimized uses longer intervals
-            task.wait(_G.G_Optimized and (math.random(4, 8) / 100) or (math.random(2, 5) / 100))
+            -- Interval: shorter = faster strobe rhythm.
+            -- 10-30ms normal, 30-70ms G_Optimized.
+            task.wait(_G.G_Optimized and (math.random(3, 7) / 100) or (math.random(1, 3) / 100))
         end
     end)
 end
 
 local function StopLightningFlicker()
-    flickerActive = false
+    flickerActive  = false
+    -- Cancel the coordinator first so it stops writing burstPhase
+    if burstCoordThread then
+        task.cancel(burstCoordThread)
+        burstCoordThread = nil
+    end
     if flickerThread then
         task.cancel(flickerThread)
         flickerThread = nil
     end
+    -- Reset shared state so HeartbeatUpdate sees dark phase immediately
+    burstPhase     = false
+    burstIntensity = 0
     -- Note: caller is responsible for setting trails to correct enabled/disabled state
 end
 
