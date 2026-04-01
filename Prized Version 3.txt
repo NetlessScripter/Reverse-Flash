@@ -852,12 +852,17 @@ if _G.NightMode then
     workspace.Terrain.WaterWaveSize = 0.15000000596046448
     workspace.Terrain.WaterWaveSpeed = 10
 
-    _li = Instance.new("BloomEffect")
-    _li.Name = "Bloom"
+    _li = Instance.new('BloomEffect')
+    _li.Intensity = 1
+    _li.Size = 24
+    _li.Threshold = 2
     _li.Enabled = true
-    _li.Intensity = 0.30000001192092896
-    _li.Size = 10
-    _li.Threshold = 0.800000011920929
+    _li.Parent = l
+    _li = Instance.new('BloomEffect')
+    _li.Intensity = 3
+    _li.Size = 100
+    _li.Threshold = 1.2000000476837158
+    _li.Enabled = true
     _li.Parent = l
 
     _li = Instance.new("BlurEffect")
@@ -989,12 +994,11 @@ else
     _li.TintColor = Color3.fromRGB(235, 214, 204)
     _li.Parent = l
 
-    _li = Instance.new("BloomEffect")
-    _li.Name = "Bloom"
-    _li.Enabled = false
-    _li.Intensity = 0.3499999940395355
-    _li.Size = 56
-    _li.Threshold = 0.20000000298023224
+    _li = Instance.new('BloomEffect')
+    _li.Intensity = 3
+    _li.Size = 100
+    _li.Threshold = 1.2000000476837158
+    _li.Enabled = true
     _li.Parent = l
 
     _li = Instance.new("Sky")
@@ -1011,14 +1015,6 @@ else
     _li.StarCount = 3000
     _li.SunAngularSize = 14
     _li.SunTextureId = "rbxasset://sky/sun.jpg"
-    _li.Parent = l
-
-    _li = Instance.new("BloomEffect")
-    _li.Name = "Bloom"
-    _li.Enabled = true
-    _li.Intensity = 0.10000000149011612
-    _li.Size = 100
-    _li.Threshold = 0
     _li.Parent = l
 
     _li = Instance.new("BlurEffect")
