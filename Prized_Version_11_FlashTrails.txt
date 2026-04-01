@@ -2635,10 +2635,13 @@ local function FireGroundArc(originPart, lightColor)
     -- This creates the "lightning dissipates" effect rather than hard-cutting
     task.delay(lifetime * 0.35, function()
         if beam and beam.Parent then
+            -- Beam.Transparency is a NumberSequence — TweenService cannot interpolate it.
+            -- Tween Width0/Width1 (beam narrows to nothing) + Brightness (light dims out).
+            -- Both are plain numbers. Combined they look more like lightning dissipating.
             ts:Create(beam, TweenInfo.new(lifetime * 0.65, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
-                Transparency = NumberSequence.new(1),
                 Width0 = 0,
-                Width1 = 0
+                Width1 = 0,
+                Brightness = 0
             }):Play()
         end
     end)
@@ -2700,9 +2703,9 @@ local function FireGroundArc(originPart, lightColor)
             Debris:AddItem(bAttach0, bLifetime + 0.05)
 
             ts:Create(branchBeam, TweenInfo.new(bLifetime, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
-                Transparency = NumberSequence.new(1),
                 Width0 = 0,
-                Width1 = 0
+                Width1 = 0,
+                Brightness = 0
             }):Play()
         end)
     end
