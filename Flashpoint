@@ -1751,6 +1751,9 @@ local function MakeTrail(att0, att1, color, lifetime, widthScale)
     trail.FaceCamera     = true
     trail.LightEmission  = 1
     trail.LightInfluence = 0
+    trail.Texture        = "rbxassetid://99013781938083"
+    trail.TextureLength  = 3.625
+    trail.TextureMode    = Enum.TextureMode.Static
     trail.Color          = ColorSequence.new({
         ColorSequenceKeypoint.new(0,   color),
         ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
