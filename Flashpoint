@@ -43,14 +43,6 @@ if _G.G_Optimized == nil then
     _G.G_Optimized = false
 end
 
-if _G.CWTrail == nil then
-    _G.CWTrail = true
-end
-
-if _G.DCEUTrail == nil then
-    _G.DCEUTrail = false
-end
-
 if not _G.TODC then
     print("⏰ TimeOfDayChange DISABLED - ClockTime will NOT be modified")
 else
@@ -63,7 +55,281 @@ else
     print("⚡ G_Optimized DISABLED - Full dynamic lightning quality")
 end
 
+-- CW  = Beam + Raycast arc system (original DCEU rework)
+-- DCEU = LightningBolt module — Bezier + noise-displaced cylinder geometry (friend's system)
+-- Both true → one is picked randomly per arc fired
+if _G.CW == nil then
+    _G.CW = true
+end
+
+if _G.DCEU == nil then
+    _G.DCEU = true
+end
+
+if _G.CW and _G.DCEU then
+    print("⚡ Arc Mode: BOTH (CW Beam/Raycast + DCEU LightningBolt) — randomized per bolt")
+elseif _G.CW then
+    print("⚡ Arc Mode: CW only (Beam + Raycast)")
+elseif _G.DCEU then
+    print("⚡ Arc Mode: DCEU only (LightningBolt procedural geometry)")
+else
+    print("⚡ Arc Mode: DISABLED (_G.CW and _G.DCEU are both false)")
+end
+
 AllowedPlayers = AllowedPlayers or {}
+
+-- ================================================================
+-- FRIEND'S DCEU SYSTEM: PARTCACHE
+-- Pre-pools cylinder Parts so the bolt update loop never calls
+-- Instance.new() or Destroy() mid-frame — zero GC pressure.
+-- ================================================================
+local _RS    = game:GetService("RunService")
+local _clock = os.clock
+
+local PartCache = {}
+PartCache.__index = PartCache
+
+function PartCache.new(template, initialSize, cacheParent)
+    local self       = setmetatable({}, PartCache)
+    self._template   = template
+    self._parent     = cacheParent or workspace
+    self._open       = {}
+    self._inUse      = {}
+    for _ = 1, initialSize do
+        local p = template:Clone()
+        p.Parent = self._parent
+        table.insert(self._open, p)
+    end
+    return self
+end
+
+function PartCache:GetPart()
+    if #self._open == 0 then
+        local p = self._template:Clone()
+        p.Parent = self._parent
+        table.insert(self._open, p)
+    end
+    local p = table.remove(self._open)
+    self._inUse[p] = true
+    return p
+end
+
+function PartCache:ReturnPart(p)
+    if self._inUse[p] then
+        self._inUse[p] = nil
+        p.Transparency = 1
+        p.Size = Vector3.new(0.1, 0.1, 0.1)
+        table.insert(self._open, p)
+    end
+end
+
+function PartCache:IsPartInUse(p)
+    return self._inUse[p] == true
+end
+
+-- ================================================================
+-- FRIEND'S DCEU SYSTEM: LIGHTNINGBOLT MODULE
+-- Bezier spine + per-segment math.noise radial displacement.
+-- Each bolt is a set of pooled cylinder Parts positioned every frame.
+-- Genuine procedural geometry — not a Beam S-curve approximation.
+-- ================================================================
+local function _BezierCurve(t, p0, p1, p2, p3)
+    return p0*(1-t)^3 + p1*3*t*(1-t)^2 + p2*3*(1-t)*t^2 + p3*t^3
+end
+
+local function _OpacityProfile(t, startT, pulseSpeed, pulseLength, fadeLength, minO, maxO)
+    local mid    = pulseLength / (2 * pulseSpeed)
+    local offset = (t - startT * pulseSpeed + 0.5 * pulseLength) / pulseSpeed
+    local val    = mid - math.abs(offset)
+    return math.clamp(val, minO, maxO)
+end
+
+local function _RadialProfile(t)
+    return math.exp(-5000 * (t - 0.5)^10)
+end
+
+local _LookAtInverse = CFrame.lookAt(Vector3.new(), Vector3.new(1, 0, 0)):inverse()
+
+local BoltTemplate         = Instance.new("Part")
+BoltTemplate.TopSurface    = Enum.SurfaceType.Smooth
+BoltTemplate.BottomSurface = Enum.SurfaceType.Smooth
+BoltTemplate.Anchored      = true
+BoltTemplate.CanCollide    = false
+BoltTemplate.Locked        = true
+BoltTemplate.CastShadow    = false
+BoltTemplate.CanTouch      = false
+BoltTemplate.CanQuery      = false
+BoltTemplate.Shape         = Enum.PartType.Cylinder
+BoltTemplate.Name          = "BoltPart"
+BoltTemplate.Material      = Enum.Material.Neon
+BoltTemplate.Color         = Color3.new(1, 1, 1)
+BoltTemplate.Transparency  = 1
+
+local BoltCache   = PartCache.new(BoltTemplate, 400, workspace.Terrain)
+local ActiveBolts = {}
+
+local LightningBolt       = {}
+LightningBolt.__index     = LightningBolt
+
+function LightningBolt.new(att0, att1, numParts)
+    local self                      = setmetatable({}, LightningBolt)
+    self.Enabled                    = true
+    self.Attachment0                = att0
+    self.Attachment1                = att1
+    self.CurveSize0                 = 0
+    self.CurveSize1                 = 0
+    self.MinRadius                  = 0
+    self.MaxRadius                  = 1.8
+    self.Frequency                  = 1
+    self.AnimationSpeed             = 7
+    self.Thickness                  = 0.12
+    self.MinThicknessMultiplier     = 0.3
+    self.MaxThicknessMultiplier     = 1
+    self.MinTransparency            = 0
+    self.MaxTransparency            = 1
+    self.PulseSpeed                 = 2
+    self.PulseLength                = 1000000
+    self.FadeLength                 = 0.2
+    self.ContractFrom               = 0.5
+    self.Color                      = Color3.new(1, 1, 1)
+    self.ColorOffsetSpeed           = 3
+    self._Parts                     = {}
+    self._PartsHidden               = false
+    self._DisabledTransparency      = 1
+    self._StartT                    = _clock()
+    self._RanNum                    = math.random() * 100
+    self._RefIndex                  = #ActiveBolts + 1
+    ActiveBolts[self._RefIndex]     = self
+    for i = 1, numParts or 20 do
+        self._Parts[i] = BoltCache:GetPart()
+    end
+    return self
+end
+
+function LightningBolt:Destroy()
+    ActiveBolts[self._RefIndex] = nil
+    for i = 1, #self._Parts do
+        if BoltCache:IsPartInUse(self._Parts[i]) then
+            BoltCache:ReturnPart(self._Parts[i])
+        end
+    end
+end
+
+function LightningBolt:_UpdateGeometry(part, t, elapsed, thickMult, baseStart, segEnd)
+    local maxO     = 1 - self.MaxTransparency
+    local minO     = 1 - self.MinTransparency
+    local opacity  = _OpacityProfile(elapsed, t, self.PulseSpeed, self.PulseLength, self.FadeLength, maxO, minO)
+    local thick    = self.Thickness * thickMult * opacity
+    local vis      = thick > 0 and opacity or 0
+    local contract = 1 - self.ContractFrom
+    local n        = #self._Parts
+
+    if contract < vis then
+        local len   = (segEnd - baseStart).Magnitude
+        part.Size   = Vector3.new(len, thick, thick)
+        part.CFrame = CFrame.lookAt((baseStart + segEnd) * 0.5, segEnd) * _LookAtInverse
+        part.Transparency = 1 - vis
+    elseif contract - 1 / (n * self.FadeLength) < vis then
+        local fade = (1 - (vis - (contract - 1/(n*self.FadeLength))) * n * self.FadeLength)
+            * (elapsed < t * self.PulseSpeed - 0.5 * self.PulseLength and 1 or -1)
+        local len  = (1 - math.abs(fade)) * (segEnd - baseStart).Magnitude
+        part.Size  = Vector3.new(len, thick, thick)
+        part.CFrame = CFrame.lookAt(
+            baseStart + (segEnd - baseStart) * (math.max(0, fade) + (1 - math.abs(fade)) * 0.5),
+            segEnd
+        ) * _LookAtInverse
+        part.Transparency = 1 - vis
+    else
+        part.Transparency = 1
+    end
+end
+
+function LightningBolt:_UpdateColor(part, t)
+    local c = self.Color
+    if typeof(c) == "Color3" then
+        part.Color = c
+    else
+        local offset = (self._RanNum + t - _clock() * self.ColorOffsetSpeed) % 1
+        local kps    = c.Keypoints
+        for i = 1, #kps - 1 do
+            if kps[i].Time < offset and offset < kps[i+1].Time then
+                part.Color = kps[i].Value:Lerp(kps[i+1].Value,
+                    (offset - kps[i].Time) / (kps[i+1].Time - kps[i].Time))
+                return
+            end
+        end
+    end
+end
+
+-- One shared update loop drives ALL bolts for ALL players
+_RS.Heartbeat:Connect(function()
+    debug.profilebegin("LightningBolt_Update")
+    for _, bolt in pairs(ActiveBolts) do
+        if bolt.Enabled then
+            bolt._PartsHidden = false
+            local n       = #bolt._Parts
+            local elapsed = _clock() - bolt._StartT
+            local maxTime = (bolt.PulseLength + 1) / bolt.PulseSpeed
+            local a0      = bolt.Attachment0
+            local a1      = bolt.Attachment1
+
+            if not (a0 and a1 and a0.Parent and a1.Parent) then
+                bolt:Destroy()
+                continue
+            end
+
+            local p0 = a0.WorldPosition
+            local p1 = a0.WorldPosition + a0.WorldAxis * bolt.CurveSize0
+            local p2 = a1.WorldPosition - a1.WorldAxis * bolt.CurveSize1
+            local p3 = a1.WorldPosition
+
+            if elapsed < maxTime then
+                local prevPos = _BezierCurve(0, p0, p1, p2, p3)
+                for i = 1, n do
+                    local part     = bolt._Parts[i]
+                    local tVal     = i / n
+                    local aSpeed   = bolt.AnimationSpeed
+                    local freq     = bolt.Frequency
+                    local ran      = bolt._RanNum
+
+                    local t1 = aSpeed * -elapsed + freq * 10 * tVal - 0.2 + ran * 4
+                    local t2 = 5 * (aSpeed * 0.01 * -elapsed / 10 + freq * tVal) + ran * 4
+                    local angleNoise = 0.6283 * (math.noise(5*t1, 1.5, t2) + 0.5)
+                        + 5.6549 * (math.noise(0.5*t1, 1.5, 0.1*t2) + 0.5)
+                    local radius = (bolt.MinRadius + (bolt.MaxRadius - bolt.MinRadius)
+                        * (math.noise(3.4, t2, t1) + 0.5)) * _RadialProfile(tVal)
+                    local thickMult = bolt.MinThicknessMultiplier
+                        + (bolt.MaxThicknessMultiplier - bolt.MinThicknessMultiplier)
+                        * (math.noise(2.3, t2, t1) + 0.5)
+
+                    local curvePos = _BezierCurve(tVal, p0, p1, p2, p3)
+                    local segPos
+                    if i == n then
+                        segPos = curvePos
+                    else
+                        local dir  = CFrame.new(prevPos, curvePos) * CFrame.Angles(0, 0, angleNoise)
+                        local cosV = math.clamp(6.12e-17 + 0.99999 * (math.noise(t2, t1, 2.7) + 0.5), -1, 1)
+                        segPos     = (dir * CFrame.Angles(math.acos(cosV), 0, 0) * CFrame.new(0, 0, -radius)).Position
+                            or curvePos
+                    end
+
+                    bolt:_UpdateGeometry(part, tVal, elapsed, thickMult, prevPos, segPos)
+                    bolt:_UpdateColor(part, tVal)
+                    prevPos = curvePos
+                end
+            else
+                bolt:Destroy()
+            end
+        elseif not bolt._PartsHidden then
+            bolt._PartsHidden = true
+            bolt.Enabled = false
+            for _, p in ipairs(bolt._Parts) do
+                p.Transparency = 1
+            end
+        end
+    end
+    debug.profileend()
+end)
 
 local Players = game:GetService("Players")
 local PlayerData = {}
@@ -929,117 +1195,106 @@ else
         end
     end
 
-    l.Ambient = Color3.fromRGB(198, 198, 198)
-    l.Brightness = 0
-    l.ClockTime = 12
-    l.ColorShift_Bottom = Color3.fromRGB(0, 0, 0)
-    l.ColorShift_Top = Color3.fromRGB(0, 0, 0)
-    l.EnvironmentDiffuseScale = 1
+    l.Ambient = Color3.fromRGB(59, 33, 27)
+    l.Brightness = 2.140000104904175
+    l.ClockTime = 6.699999809265137
+    l.ColorShift_Bottom = Color3.fromRGB(11, 0, 20)
+    l.ColorShift_Top = Color3.fromRGB(240, 127, 14)
+    l.EnvironmentDiffuseScale = 0.20000000298023224
     l.EnvironmentSpecularScale = 1
-    l.ExposureCompensation = 0
-    l.FogColor = Color3.fromRGB(248, 248, 248)
-    l.FogEnd = 100000
+    l.ExposureCompensation = 0.23999999463558197
+    l.FogColor = Color3.fromRGB(94, 76, 106)
+    l.FogEnd = 1000
     l.FogStart = 0
-    l.GeographicLatitude = 27.84000015258789
+    l.GeographicLatitude = -20.356000900268555
     l.GlobalShadows = true
-    l.OutdoorAmbient = Color3.fromRGB(0, 0, 0)
-    l.ShadowSoftness = 0.3199999928474426
+    l.OutdoorAmbient = Color3.fromRGB(34, 0, 49)
+    l.ShadowSoftness = 0
     l.Technology = Enum.Technology.Future
-
-    workspace.Terrain.WaterColor = Color3.fromRGB(12, 84, 92)
-    workspace.Terrain.WaterReflectance = 1
-    workspace.Terrain.WaterTransparency = 0.30000001192092896
-    workspace.Terrain.WaterWaveSize = 0.15000000596046448
-    workspace.Terrain.WaterWaveSpeed = 10
 
     local existingClouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
     if existingClouds then existingClouds:Destroy() end
     _li = Instance.new("Clouds")
     _li.Name = "Clouds"
-    _li.Color = Color3.fromRGB(255, 255, 255)
-    _li.Cover = 0.453000009059906
-    _li.Density = 0.6980000138282776
+    _li.Cover = 0.5
+    _li.Density = 0.3
     _li.Enabled = true
+    _li.Color = Color3.fromRGB(255, 255, 255)
     _li.Parent = workspace.Terrain
 
-    _li = Instance.new("ColorCorrectionEffect")
-    _li.Name = "TimeWraithCC"
-    _li.Brightness = 0
-    _li.Contrast = 0
-    _li.Enabled = false
-    _li.Saturation = 0
-    _li.TintColor = Color3.fromRGB(255, 255, 255)
-    _li.Parent = l
-
-    _li = Instance.new("BlurEffect")
-    _li.Name = "BlurObject"
-    _li.Enabled = true
-    _li.Size = 0
-    _li.Parent = l
+    workspace.Terrain.WaterColor = Color3.fromRGB(79, 91, 61)
+    workspace.Terrain.WaterReflectance = 1
+    workspace.Terrain.WaterTransparency = 0.6499999761581421
+    workspace.Terrain.WaterWaveSize = 0.10000000149011612
+    workspace.Terrain.WaterWaveSpeed = 5
 
     _li = Instance.new("SunRaysEffect")
     _li.Name = "SunRays"
     _li.Enabled = true
-    _li.Intensity = 0.03700000047683716
-    _li.Spread = 0.6980000138282776
-    _li.Parent = l
-
-    _li = Instance.new("DepthOfFieldEffect")
-    _li.Name = "DepthOfField"
-    _li.Enabled = true
-    _li.FarIntensity = 1
-    _li.FocusDistance = 0.5
-    _li.InFocusRadius = 350
-    _li.NearIntensity = 0
+    _li.Intensity = 0.029999999329447746
+    _li.Spread = 1
     _li.Parent = l
 
     _li = Instance.new("BlurEffect")
     _li.Name = "Blur"
     _li.Enabled = true
-    _li.Size = 4
-    _li.Parent = l
-
-    _li = Instance.new("BloomEffect")
-    _li.Name = "Bloom"
-    _li.Enabled = true
-    _li.Intensity = 3
-    _li.Size = 100
-    _li.Threshold = 1.2000000476837158
-    _li.Parent = l
-
-    _li = Instance.new("Sky")
-    _li.Name = "Sky"
-    _li.CelestialBodiesShown = true
-    _li.MoonAngularSize = 6
-    _li.MoonTextureId = "rbxasset://sky/sun.jpg"
-    _li.SkyboxBk = "http://www.roblox.com/asset/?id=91458024"
-    _li.SkyboxDn = "http://www.roblox.com/asset/?id=91457980"
-    _li.SkyboxFt = "http://www.roblox.com/asset/?id=91458024"
-    _li.SkyboxLf = "http://www.roblox.com/asset/?id=91458024"
-    _li.SkyboxRt = "http://www.roblox.com/asset/?id=91458024"
-    _li.SkyboxUp = "http://www.roblox.com/asset/?id=91458002"
-    _li.StarCount = 3000
-    _li.SunAngularSize = 2
-    _li.SunTextureId = "rbxasset://sky/sun.jpg"
-    _li.Parent = l
-
-    _li = Instance.new("Atmosphere")
-    _li.Name = "Atmosphere"
-    _li.Color = Color3.fromRGB(255, 255, 255)
-    _li.Decay = Color3.fromRGB(216, 240, 255)
-    _li.Density = 0.1509999930858612
-    _li.Glare = 0
-    _li.Haze = 0
-    _li.Offset = 0.01866455376148224
+    _li.Size = 2
     _li.Parent = l
 
     _li = Instance.new("ColorCorrectionEffect")
-    _li.Name = "ColorCorrection"
-    _li.Brightness = 0.009999999776482582
+    _li.Name = "Normal"
+    _li.Brightness = 0
+    _li.Contrast = 0
+    _li.Enabled = false
+    _li.Saturation = -0.20000000298023224
+    _li.TintColor = Color3.fromRGB(255, 232, 215)
+    _li.Parent = l
+
+    _li = Instance.new("ColorCorrectionEffect")
+    _li.Name = "Inari taisha"
+    _li.Brightness = 0
     _li.Contrast = 0
     _li.Enabled = true
-    _li.Saturation = 0.25
-    _li.TintColor = Color3.fromRGB(255, 255, 255)
+    _li.Saturation = 0.05000000074505806
+    _li.TintColor = Color3.fromRGB(255, 224, 219)
+    _li.Parent = l
+
+    _li = Instance.new("ColorCorrectionEffect")
+    _li.Name = "Takayama"
+    _li.Brightness = 0
+    _li.Contrast = 0.10000000149011612
+    _li.Enabled = false
+    _li.Saturation = -0.30000001192092896
+    _li.TintColor = Color3.fromRGB(235, 214, 204)
+    _li.Parent = l
+
+    _li = Instance.new('BloomEffect')
+    _li.Intensity = 3
+    _li.Size = 100
+    _li.Threshold = 1.2000000476837158
+    _li.Enabled = true
+    _li.Parent = l
+
+    _li = Instance.new("Sky")
+    _li.Name = "Sunset"
+    _li.CelestialBodiesShown = true
+    _li.MoonAngularSize = 11
+    _li.MoonTextureId = "rbxasset://sky/moon.jpg"
+    _li.SkyboxBk = "rbxassetid://323494035"
+    _li.SkyboxDn = "rbxassetid://323494368"
+    _li.SkyboxFt = "rbxassetid://323494130"
+    _li.SkyboxLf = "rbxassetid://323494252"
+    _li.SkyboxRt = "rbxassetid://323494067"
+    _li.SkyboxUp = "rbxassetid://323493360"
+    _li.StarCount = 3000
+    _li.SunAngularSize = 14
+    _li.SunTextureId = "rbxasset://sky/sun.jpg"
+    _li.Parent = l
+
+    _li = Instance.new("BlurEffect")
+    _li.Name = "Efecto"
+    _li.Enabled = false
+    _li.Size = 2
     _li.Parent = l
 end
 
@@ -1165,6 +1420,63 @@ local function m(v)
             a[#a+1] = k
         end
     end
+    if #a < 2 then return end
+
+    local x = Instance.new("Trail")
+
+if speedsterType == "RF" then
+    x.Color = ColorSequence.new(
+        Color3.fromRGB(255,84,84),
+        Color3.fromRGB(255,0,0)
+    )
+    elseif speedsterType == "Zoom" then
+        x.Color = ColorSequence.new(
+            Color3.fromRGB(46,124,255),
+            Color3.fromRGB(124,194,255)
+        )
+    elseif speedsterType == "GodOfSpeed" then
+        x.Color = ColorSequence.new(
+            Color3.fromRGB(200,200,200),
+            Color3.fromRGB(255,255,255)
+        )
+    elseif speedsterType == "NWA" then
+        x.Color = ColorSequence.new(
+            Color3.fromRGB(210,160,255),
+            Color3.fromRGB(200,100,255)
+        )
+    elseif speedsterType == "KidFlash" then
+        x.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
+        })
+    else
+
+        x.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),
+            ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))
+        })
+    end
+
+    x.Brightness = 2
+    x.FaceCamera = true
+    x.LightEmission = 1
+    x.LightInfluence = 0
+    x.Texture = "rbxassetid://10583327833"
+    x.TextureLength = 0.5
+    x.TextureMode = Enum.TextureMode.Stretch
+    x.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0,0),
+        NumberSequenceKeypoint.new(0.25,0.8375),
+        NumberSequenceKeypoint.new(0.5,0),
+        NumberSequenceKeypoint.new(0.75,1),
+        NumberSequenceKeypoint.new(1,0)
+    })
+    x.Attachment0 = a[1]
+    x.Attachment1 = a[2]
+    x.Enabled = false
+    x.Lifetime = 0.4
+    x.Parent = v
+    t[#t+1] = x
 end
 
 local function V87()
@@ -1650,25 +1962,8 @@ local CurrentTween
 
 
 
--- ================================================================
--- TRAIL MODE SELECTION
--- _G.CWTrail  = true  → friend's CW ribbon trail system
--- _G.DCEUTrail = true → self-contained DCEU body trail system
--- Both true           → randomize one choice each time speed enables
--- activeTrailMode is set at enableAll() and cleared at disableAll()
--- ================================================================
-local activeTrailMode = nil   -- "CW" or "DCEU"
-
--- Base trail system (friend's architecture)
--- trailObjects entries: { trail, a0, a1 }
--- Y position is stored in trail.Name as a string so the per-tick
--- jitter loop can recover it via tonumber() — same trick as friend's script.
--- Limb trail Names are their part name, so tonumber() → nil → Y = 0 (correct).
-local trailObjects    = {}
-local baseTrailFolder = nil
-
-local TRAIL_YOFFSETS = { -1.45, -0.65, 0.25, 1.45 }
-
+local TrailsPerPart = {}
+local spotlightTask
 local heartbeatConnection
 
 local enabled = false
@@ -1697,265 +1992,80 @@ RunAnimTrack.Priority = Enum.AnimationPriority.Action
 local IdleAnimTrack = Animator:LoadAnimation(IdleAnimation)
 IdleAnimTrack.Priority = Enum.AnimationPriority.Action
 
--- ================================================================
--- MakeTrail — friend's exact Trail construction.
--- No texture (NumberSequence transparency does all the visual work).
--- Color uses MY speedsterType color, not friend's color palette.
--- ================================================================
-local function MakeTrail(att0, att1, color, lifetime, widthScale)
-    local trail          = Instance.new("Trail")
-    trail.Attachment0    = att0
-    trail.Attachment1    = att1
-    trail.Lifetime       = lifetime or 0.12
-    trail.MinLength      = 0
-    trail.FaceCamera     = true
-    trail.LightEmission  = 1
-    trail.LightInfluence = 0
-    trail.Texture        = "rbxassetid://99013781938083"
-    trail.TextureLength  = 3.625
-    trail.TextureMode    = Enum.TextureMode.Static
-    trail.Color          = ColorSequence.new({
-        ColorSequenceKeypoint.new(0,   color),
-        ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
-        ColorSequenceKeypoint.new(1,   color),
+local function AddAttachments(Part, IsArm)
+    local A1 = Instance.new("Attachment")
+    A1.Name = "1"
+    A1.Position = IsArm and Vector3.new(0,0.5,0) or Vector3.new(0,1,0)
+    A1.Parent = Part
+    local A2 = Instance.new("Attachment")
+    A2.Name = "2"
+    A2.Position = Vector3.new(0,-1,0)
+    A2.Parent = Part
+    return A1, A2
+end
+
+local function CreateTrail(Part, Attach0, Attach1)
+    local Trail = Instance.new("Trail")
+
+if speedsterType == "RF" then
+        Trail.Color = ColorSequence.new(
+            Color3.fromRGB(255,84,84),
+            Color3.fromRGB(255,0,0)
+        )
+    elseif speedsterType == "Zoom" then
+        Trail.Color = ColorSequence.new(
+            Color3.fromRGB(46,124,255),
+            Color3.fromRGB(124,194,255)
+        )
+    elseif speedsterType == "GodOfSpeed" then
+        Trail.Color = ColorSequence.new(
+            Color3.fromRGB(200,200,200),
+            Color3.fromRGB(255,255,255)
+        )
+    elseif speedsterType == "NWA" then
+        Trail.Color = ColorSequence.new(
+            Color3.fromRGB(210,160,255),
+            Color3.fromRGB(200,100,255)
+        )
+    elseif speedsterType == "KidFlash" then
+        Trail.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
+        })
+    else
+        Trail.Color = ColorSequence.new(Color3.fromRGB(255,59,0))
+    end
+
+    Trail.FaceCamera = true
+    Trail.LightEmission = 1
+    Trail.Texture = "rbxassetid://99013781938083"
+    Trail.TextureLength = 3.625
+    Trail.TextureMode = Enum.TextureMode.Static
+    Trail.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.1),
+        NumberSequenceKeypoint.new(1, 1)
     })
-    trail.Transparency   = NumberSequence.new({
-        NumberSequenceKeypoint.new(0,    1),
-        NumberSequenceKeypoint.new(0.08, 0),
-        NumberSequenceKeypoint.new(0.92, 0),
-        NumberSequenceKeypoint.new(1,    1),
-    })
-    trail.WidthScale     = widthScale or NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 1),
-        NumberSequenceKeypoint.new(1, 0),
-    })
-    trail.Enabled        = false
-    return trail
+    Trail.Attachment0 = Attach0
+    Trail.Attachment1 = Attach1
+    Trail.Parent = Part
+    Trail.Enabled = true
+    Trail.Lifetime = 0.5
+
+    return Trail
 end
 
--- Forward declaration: GetLightningColor is defined later but called inside
--- SetupBaseTrails. Declaring it here puts the local variable in scope for
--- the closure so the assignment at the definition site below fills it in.
-local GetLightningColor
 
--- ================================================================
--- SetupBaseTrails — friend's SetupTrails, adapted:
---   • Torso: 4 stacked Y-offset ribbon pairs (depth/volume layer)
---   • Lower limbs: thin crackle trail per arm/leg
---   • NO friend's ParticleEmitters — keeping MY own effects
---   • Trail.Name stores scaledY as string so UpdateTrailActivity
---     can read it back with tonumber() — exactly as friend does
--- ================================================================
-local function SetupBaseTrails()
-    if baseTrailFolder and baseTrailFolder.Parent then
-        baseTrailFolder:Destroy()
-    end
-    baseTrailFolder        = Instance.new("Folder")
-    baseTrailFolder.Name   = "BaseTrails"
-    baseTrailFolder.Parent = CharacterRef
-    trailObjects           = {}
-
-    local color    = GetLightningColor()
-    local torso    = CharacterRef:FindFirstChild("UpperTorso")
-                  or CharacterRef:FindFirstChild("Torso")
-    local humanoid = CharacterRef:FindFirstChildOfClass("Humanoid")
-    local hipH     = (humanoid and humanoid.HipHeight or 2)
-
-    -- Torso stacked ribbons
-    if torso then
-        for _, yOff in ipairs(TRAIL_YOFFSETS) do
-            local scaledY = yOff * (hipH / 2)
-            local dir     = (math.random() < 0.5 and -1 or 1)
-            local basePos = Vector3.new(math.random(-150, 150) / 100, scaledY, 0)
-
-            local a0 = Instance.new("Attachment")
-            local a1 = Instance.new("Attachment")
-            a0.Name     = "BTA"
-            a1.Name     = "BTA"
-            a0.Parent   = torso
-            a1.Parent   = torso
-            a0.Position = basePos
-            a1.Position = basePos + Vector3.new(0, dir * 0.9, 0)
-
-            local trail      = MakeTrail(a0, a1, color, 0.12)
-            trail.Name       = tostring(scaledY)   -- Y stored here for jitter recovery
-            trail.Parent     = baseTrailFolder
-
-            table.insert(trailObjects, { trail = trail, a0 = a0, a1 = a1 })
-            table.insert(playerData.cleanupObjects, trail)
-            table.insert(playerData.cleanupObjects, a0)
-            table.insert(playerData.cleanupObjects, a1)
-        end
-    end
-
-    -- Lower limb thin trails
-    for _, limbName in ipairs({ "RightLowerArm", "LeftLowerArm", "RightLowerLeg", "LeftLowerLeg" }) do
-        local part = CharacterRef:FindFirstChild(limbName)
-        if part then
-            local a0 = Instance.new("Attachment")
-            local a1 = Instance.new("Attachment")
-            a0.Name     = "BTA"
-            a1.Name     = "BTA"
-            a0.Parent   = part
-            a1.Parent   = part
-            a0.Position = Vector3.new(0,  0.3, 0)
-            a1.Position = Vector3.new(0, -0.3, 0)
-
-            local trail = MakeTrail(a0, a1, color, 0.1,
-                NumberSequence.new({
-                    NumberSequenceKeypoint.new(0, 0.8),
-                    NumberSequenceKeypoint.new(1, 0),
-                })
-            )
-            trail.Name   = limbName    -- tonumber("RightLowerArm") = nil → Y = 0 in jitter
-            trail.Parent = baseTrailFolder
-
-            table.insert(trailObjects, { trail = trail, a0 = a0, a1 = a1 })
-            table.insert(playerData.cleanupObjects, trail)
-            table.insert(playerData.cleanupObjects, a0)
-            table.insert(playerData.cleanupObjects, a1)
-        end
-    end
-end
-
--- ================================================================
--- DCEU TRAIL SYSTEM — self-contained, no requires.
--- One trail per body part, attachments at ±Y on each limb.
--- Uses our own texture + GetLightningColor() for color.
--- Mirrors the structure from the friend's DCEU module but
--- lives entirely inside this script with no external dependencies.
--- ================================================================
-local dceuTrailFolder = nil
-local dceuTrailObjects = {}  -- { trail, a0, a1 }
-
-local DCEU_BODY_PARTS = {
-    "UpperTorso", "LowerTorso", "Head",
-    "RightUpperArm", "RightLowerArm", "RightHand",
-    "LeftUpperArm",  "LeftLowerArm",  "LeftHand",
-    "RightUpperLeg", "RightLowerLeg", "RightFoot",
-    "LeftUpperLeg",  "LeftLowerLeg",  "LeftFoot",
-}
-
-local function SetupDCEUTrails()
-    if dceuTrailFolder and dceuTrailFolder.Parent then
-        dceuTrailFolder:Destroy()
-    end
-    dceuTrailFolder        = Instance.new("Folder")
-    dceuTrailFolder.Name   = "DCEU_Trails"
-    dceuTrailFolder.Parent = CharacterRef
-    dceuTrailObjects       = {}
-
-    local color = GetLightningColor()
-
-    for _, partName in ipairs(DCEU_BODY_PARTS) do
-        local part = CharacterRef:FindFirstChild(partName)
-        if part then
-            local a0 = Instance.new("Attachment")
-            local a1 = Instance.new("Attachment")
-            a0.Name     = "DCEU_A"
-            a1.Name     = "DCEU_A"
-            a0.Position = Vector3.new(0, -1, 0)
-            a1.Position = Vector3.new(0,  1, 0)
-            a0.Parent   = part
-            a1.Parent   = part
-
-            local trail             = Instance.new("Trail")
-            trail.Attachment0       = a0
-            trail.Attachment1       = a1
-            trail.Lifetime          = 0.2
-            trail.MinLength         = 0
-            trail.FaceCamera        = true
-            trail.LightEmission     = 1
-            trail.LightInfluence    = 0
-            trail.Texture           = "rbxassetid://99013781938083"
-            trail.TextureLength     = 3.625
-            trail.TextureMode       = Enum.TextureMode.Static
-            trail.Color             = ColorSequence.new(color)
-            trail.Transparency      = NumberSequence.new({
-                NumberSequenceKeypoint.new(0,   0),
-                NumberSequenceKeypoint.new(0.5, 0.25),
-                NumberSequenceKeypoint.new(1,   1),
-            })
-            trail.WidthScale        = NumberSequence.new({
-                NumberSequenceKeypoint.new(0, 1),
-                NumberSequenceKeypoint.new(1, 0),
-            })
-            trail.Enabled           = false
-            trail.Parent            = dceuTrailFolder
-
-            table.insert(dceuTrailObjects, { trail = trail, a0 = a0, a1 = a1 })
-            table.insert(playerData.cleanupObjects, trail)
-            table.insert(playerData.cleanupObjects, a0)
-            table.insert(playerData.cleanupObjects, a1)
-        end
-    end
-end
-
-local function EnableDCEUTrails(moving)
-    local color = GetLightningColor()
-    for _, entry in ipairs(dceuTrailObjects) do
-        entry.trail.Enabled = moving
-        entry.trail.Color   = ColorSequence.new(color)
-    end
-end
-
-local function DisableDCEUTrails()
-    for _, entry in ipairs(dceuTrailObjects) do
-        entry.trail.Enabled = false
-    end
-end
-
-local function DestroyDCEUTrails()
-    if dceuTrailFolder and dceuTrailFolder.Parent then
-        dceuTrailFolder:Destroy()
-    end
-    dceuTrailFolder  = nil
-    dceuTrailObjects = {}
-end
-
--- ================================================================
--- UpdateTrailActivity — friend's exact per-tick jitter system.
---
--- basePos.X is fully re-randomised every tick (not a small offset
--- from a stored position) so torso ribbons sweep the full width
--- of the character erratically — that's the "alive" feel.
---
--- dir is also re-randomised every tick so the vertical spread of
--- each ribbon pair flips unpredictably.
---
--- tonumber(entry.trail.Name) recovers the stored scaledY for torso
--- trails; returns nil for limb trails, giving Y = 0 (correct).
--- ================================================================
-local function UpdateTrailActivity(moving, speed)
-    for _, entry in ipairs(trailObjects) do
-        entry.trail.Enabled = moving
-
-        if moving then
-            local jitter  = speed / 80
-            local basePos = Vector3.new(
-                math.random(-150, 150) / 100,
-                tonumber(entry.trail.Name) or 0,
-                0
-            )
-            local dir = (math.random() < 0.5 and -1 or 1)
-
-            entry.a0.Position = basePos + Vector3.new(
-                math.random(-100, 100) / 100 * jitter,
-                0,
-                0
-            )
-            entry.a1.Position = basePos + Vector3.new(
-                math.random(-100, 100) / 100 * jitter,
-                dir * math.clamp(0.5 + jitter, 0.4, 1.2),
-                0
-            )
-
-            -- Width crackle: random thickness every tick
-            local w = math.random(5, 14) / 10
-            entry.trail.WidthScale = NumberSequence.new({
-                NumberSequenceKeypoint.new(0, w),
-                NumberSequenceKeypoint.new(1, 0),
-            })
+local function InitializeTrails()
+    TrailsPerPart = {}
+    for _, PartName in pairs(LIMBS) do
+        local Part = CharacterRef:FindFirstChild(PartName)
+        if Part and Part:IsA("BasePart") then
+            local IsArm = PartName:find("Arm")
+            local A0, A1 = AddAttachments(Part, IsArm)
+            local T1 = CreateTrail(Part, A0, A1)
+            local T2 = T1:Clone()
+            T2.Parent = Part
+            TrailsPerPart[Part] = {T1, T2, A0, A1}
         end
     end
 end
@@ -1973,27 +2083,35 @@ local function CreateInvisibleWater(Part)
 end
 
 -- ================================================================
--- HeartbeatUpdate — runs every frame while speed is active.
--- Trail jitter/crackle handed off to UpdateTrailActivity.
--- Water detection and TODC preserved exactly.
+-- FIX: HeartbeatUpdate no longer clone/destroys trails every frame
+-- Original was ~960+ Instance operations/sec at 16 body parts × 60fps
+-- Now it just toggles Enabled once per 2 frames for the flicker feel
+-- Water detection and TODC are preserved exactly
 -- ================================================================
 local heartbeatFrame = 0
 
 local function HeartbeatUpdate()
     heartbeatFrame += 1
 
-    -- Per-frame trail jitter + width crackle (friend's system)
-    if HRP and HRP.Parent then
-        local vel    = (HRP.AssemblyLinearVelocity * Vector3.new(1, 0.5, 1)).Magnitude
-        local moving = vel > 4
-        if activeTrailMode == "CW" then
-            UpdateTrailActivity(moving, vel)
-        elseif activeTrailMode == "DCEU" then
-            EnableDCEUTrails(moving)
+    -- Lightweight trail "pop" flicker: toggle enabled state briefly
+    -- This resets trail segments (same visual effect as the old clone/destroy)
+    -- but costs nearly nothing compared to Clone() + Destroy()
+    if heartbeatFrame % 2 == 0 then
+        for Part, Data in pairs(TrailsPerPart) do
+            local T1, T2 = Data[1], Data[2]
+            -- Randomly pick one trail to snap-reset per frame
+            local target = (math.random(1,2) == 1) and T1 or T2
+            if target and target.Parent then
+                -- Brief toggle clears the existing trail segment history
+                target.Enabled = false
+                target.Enabled = true
+                -- Vary the lifetime for a non-uniform, organic look
+                target.Lifetime = math.random(5, 22) / 100
+            end
         end
     end
 
-    -- Water detection (preserved)
+    -- Water detection (original behavior preserved)
     if heartbeatFrame % 30 == 0 then
         for _, Part in pairs(workspace:GetChildren()) do
             if Part.Name == "Water" and Part:IsA("BasePart") then
@@ -2157,24 +2275,9 @@ local function enableAll()
     if enabled then return end
     enabled = true
     h.WalkSpeed = defaultWalkSpeed
-
-    -- Resolve which trail system to use this session
-    local wantCW   = (_G.CWTrail   ~= false)
-    local wantDCEU = (_G.DCEUTrail == true)
-    if wantCW and wantDCEU then
-        activeTrailMode = math.random(2) == 1 and "CW" or "DCEU"
-        print("⚡ Trail mode randomized: " .. activeTrailMode)
-    elseif wantDCEU then
-        activeTrailMode = "DCEU"
-    else
-        activeTrailMode = "CW"
-    end
-
-    if activeTrailMode == "DCEU" then
-        SetupDCEUTrails()
-    else
-        SetupBaseTrails()
-    end
+    InitializeTrails()
+    -- FIX: disconnect any existing heartbeat before overwriting (prevents leaked walkspeed-lock heartbeats
+    -- from accumulating every enable/disable cycle and overriding WalkSpeed reset on disable)
     if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
     heartbeatConnection = RunService.Heartbeat:Connect(HeartbeatUpdate)
 
@@ -2212,13 +2315,14 @@ local function disableAll()
     
     wasRunning = false
     
-    if baseTrailFolder and baseTrailFolder.Parent then
-        baseTrailFolder:Destroy()
+    for Part, Data in pairs(TrailsPerPart) do
+        for ii=1,2 do
+            if Data[ii] and Data[ii].Parent then
+                Data[ii]:Destroy()
+            end
+        end
     end
-    baseTrailFolder = nil
-    trailObjects    = {}
-    DestroyDCEUTrails()
-    activeTrailMode = nil
+    TrailsPerPart = {}
     if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
     if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
     cam.FieldOfView = 70
@@ -2370,7 +2474,7 @@ end
 -- LIGHTNING SYSTEM - COLOR UTILITIES
 -- ================================================================
 
-GetLightningColor = function()
+local function GetLightningColor()
     if speedsterType == "RF" then
         return Color3.fromRGB(255, 50, 50)
     elseif speedsterType == "Zoom" then
@@ -2502,6 +2606,71 @@ playerData.StopLightningFlicker = StopLightningFlicker
 
 
 -- ================================================================
+-- FRIEND'S DCEU SYSTEM: SPAWN HELPERS
+-- SpawnBolt: fires one LightningBolt between two world positions
+--   using the shared BoltCache. Auto-destroys after the pulse.
+-- DoIdleArcs: body-to-body sparks (random limb pairs).
+-- DoGroundSpark: footstep bolt straight down from a part position.
+-- Color comes from GetLightningColor() — NOT friend's color palette.
+-- ================================================================
+local function SpawnBolt(posA, posB, color)
+    local a0 = Instance.new("Attachment")
+    local a1 = Instance.new("Attachment")
+    a0.Parent = workspace.Terrain
+    a1.Parent = workspace.Terrain
+    a0.WorldPosition = posA
+    a1.WorldPosition = posB
+
+    local bolt               = LightningBolt.new(a0, a1, 12)
+    bolt.Color               = color
+    bolt.Thickness           = 0.08
+    bolt.MaxRadius           = 0.6
+    bolt.MinRadius           = 0
+    bolt.AnimationSpeed      = 10
+    bolt.Frequency           = 1.2
+    bolt.PulseLength         = 0.18
+    bolt.PulseSpeed          = 5
+    bolt.FadeLength          = 0.3
+    bolt.ContractFrom        = 0.4
+    bolt.MinThicknessMultiplier = 0.4
+    bolt.MaxThicknessMultiplier = 1
+
+    task.delay(0.25, function()
+        if bolt and ActiveBolts[bolt._RefIndex] then
+            bolt:Destroy()
+        end
+        a0:Destroy()
+        a1:Destroy()
+    end)
+end
+
+local function DoIdleArcs(color)
+    -- Fires a bolt between two random limbs on the character
+    local parts = {}
+    for _, p in ipairs(CharacterRef:GetChildren()) do
+        if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+            table.insert(parts, p)
+        end
+    end
+    if #parts < 2 then return end
+    local p1 = parts[math.random(1, #parts)]
+    local p2 = parts[math.random(1, #parts)]
+    if p1 == p2 then return end
+    SpawnBolt(p1.Position, p2.Position, color)
+end
+
+local function DoGroundSpark(pos, color)
+    -- Fires a bolt from just below the given position outward to a random ground point
+    local groundPos = Vector3.new(pos.X, pos.Y - 3, pos.Z)
+    local spread    = Vector3.new(
+        math.random(-200, 200) / 100,
+        0,
+        math.random(-200, 200) / 100
+    )
+    SpawnBolt(groundPos, groundPos + spread, color)
+end
+
+-- ================================================================
 -- LIGHTNING SYSTEM 2: DCEU GROUND ARC SYSTEM
 --
 -- Research basis:
@@ -2530,36 +2699,6 @@ playerData.StopLightningFlicker = StopLightningFlicker
 -- - groundAttach is at fixed world position (anchored part) so the
 --   Beam naturally stretches as the character moves — looks correct
 -- ================================================================
-
--- FadeBeam: manually fades a Beam's Transparency (NumberSequence, not tweeneable)
--- while tweening Width0/Width1 to 0 via TweenService.
--- 'duration' is in seconds. Works for both main arc and branch arc.
-local function FadeBeam(beam, duration)
-    if not beam or not beam.Parent then return end
-    -- Tween the numeric width properties to zero (these ARE tweeneable)
-    ts:Create(beam, TweenInfo.new(duration, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
-        Width0 = 0,
-        Width1 = 0,
-    }):Play()
-    -- Manually interpolate Transparency (NumberSequence) each frame
-    task.spawn(function()
-        local steps = math.max(4, math.floor(duration / 0.016))
-        for i = 1, steps do
-            if not beam or not beam.Parent then break end
-            local t = i / steps  -- 0→1
-            -- Lerp from current transparency keypoints toward fully opaque→transparent
-            local alpha = math.min(t * 2, 1)  -- ramp up opacity then fade fast
-            beam.Transparency = NumberSequence.new({
-                NumberSequenceKeypoint.new(0, alpha),
-                NumberSequenceKeypoint.new(1, 1),
-            })
-            task.wait(duration / steps)
-        end
-        if beam and beam.Parent then
-            beam.Transparency = NumberSequence.new(1)
-        end
-    end)
-end
 
 local groundArcActive = false
 local groundArcThread = nil
@@ -2685,7 +2824,11 @@ local function FireGroundArc(originPart, lightColor)
     -- This creates the "lightning dissipates" effect rather than hard-cutting
     task.delay(lifetime * 0.35, function()
         if beam and beam.Parent then
-            FadeBeam(beam, lifetime * 0.65)
+            ts:Create(beam, TweenInfo.new(lifetime * 0.65, Enum.EasingStyle.Expo, Enum.EasingDirection.Out), {
+                Transparency = NumberSequence.new(1),
+                Width0 = 0,
+                Width1 = 0
+            }):Play()
         end
     end)
 
@@ -2745,7 +2888,11 @@ local function FireGroundArc(originPart, lightColor)
             Debris:AddItem(branchPart, bLifetime + 0.05)
             Debris:AddItem(bAttach0, bLifetime + 0.05)
 
-            FadeBeam(branchBeam, bLifetime)
+            ts:Create(branchBeam, TweenInfo.new(bLifetime, Enum.EasingStyle.Expo, Enum.EasingDirection.Out), {
+                Transparency = NumberSequence.new(1),
+                Width0 = 0,
+                Width1 = 0
+            }):Play()
         end)
     end
 end
@@ -2754,7 +2901,6 @@ local function StartGroundArcs()
     if groundArcActive then return end
     groundArcActive = true
 
-    -- Build available source parts list (only parts that actually exist on this character)
     local arcPartsList = {}
     for _, name in ipairs(GROUND_ARC_SOURCE_PARTS) do
         local p = CharacterRef:FindFirstChild(name)
@@ -2766,36 +2912,63 @@ local function StartGroundArcs()
         table.insert(arcPartsList, HRP)
     end
 
+    local lastIdleArc = 0
+
     groundArcThread = task.spawn(function()
         while groundArcActive and CharacterRef and CharacterRef.Parent do
-            local isMoving = h and h.Parent and h.MoveDirection.Magnitude > 0
-            local speed = h and h.Parent and h.WalkSpeed or 0
+            local now        = tick()
+            local isMoving   = h and h.Parent and h.MoveDirection.Magnitude > 0
+            local speed      = h and h.Parent and h.WalkSpeed or 0
+            local lightColor = GetLightningColor()
 
+            -- ── DCEU idle arcs (body-to-body) ──────────────────
+            -- Only fires when DCEU mode is active.
+            -- Interval matches friend's script: every 0.35s.
+            if _G.DCEU and (now - lastIdleArc > 0.35) then
+                lastIdleArc = now
+                task.spawn(DoIdleArcs, lightColor)
+            end
+
+            -- ── Ground arcs ────────────────────────────────────
+            -- Resolve which system fires this tick:
+            --   _G.CW   true → CW  system eligible (Beam + Raycast)
+            --   _G.DCEU true → DCEU system eligible (LightningBolt procedural)
+            --   Both    true → pick one randomly per arc
             if speed > 30 then
-                local lightColor = GetLightningColor()
+                local useCW   = _G.CW   ~= false
+                local useDCEU = _G.DCEU ~= false
+
+                local fireCW, fireDCEU
+                if useCW and useDCEU then
+                    local coin = math.random() < 0.5
+                    fireCW     = coin
+                    fireDCEU   = not coin
+                else
+                    fireCW   = useCW
+                    fireDCEU = useDCEU
+                end
 
                 if isMoving then
-                    -- Running: fire 1-4 simultaneous arcs from random body parts
-                    -- G_Optimized: always 1 arc; Normal: 1-3 arcs
                     local numArcs = _G.G_Optimized and 1 or math.random(1, 3)
                     for i = 1, numArcs do
                         local part = arcPartsList[math.random(1, #arcPartsList)]
-                        -- Each arc is spawned independently so they don't block each other
-                        task.spawn(FireGroundArc, part, lightColor)
+                        if fireCW then
+                            task.spawn(FireGroundArc, part, lightColor)
+                        elseif fireDCEU then
+                            task.spawn(DoGroundSpark, part.Position, lightColor)
+                        end
                     end
                 else
-                    -- Standing still at high speed: occasional single torso arc
-                    -- Simulates the "idle lightning crackling" seen in DCEU scenes
                     if math.random() < 0.35 then
-                        task.spawn(FireGroundArc, HRP, lightColor)
+                        if fireCW then
+                            task.spawn(FireGroundArc, HRP, lightColor)
+                        elseif fireDCEU then
+                            task.spawn(DoGroundSpark, HRP.Position, lightColor)
+                        end
                     end
                 end
             end
 
-            -- Arc interval scales with speed:
-            -- At full speed (375): fires every ~30-70ms = ~15-30 arcs/second
-            -- At low speed (100): fires every ~60-110ms = ~9-16 arcs/second
-            -- G_Optimized: fires every ~80-150ms regardless of speed
             local interval
             if _G.G_Optimized then
                 interval = math.random(8, 15) / 100
@@ -4267,7 +4440,12 @@ print("⚡ SendAsync() SYNC SYSTEM LOADED!")
 print("📡 Commands: .1 = Speed | .2 = Phase | .3 = Stop")
 print("✅ Multiplayer sync: ACTIVE")
 print("⚡ DYNAMIC LIGHTNING SYSTEM ACTIVE")
-print("   - DCEU Ground Arc System: Beam + Raycast (ENABLED)")
+print("   - CW Arc System (Beam + Raycast): " .. (_G.CW ~= false and "ENABLED" or "DISABLED"))
+print("   - DCEU Arc System (LightningBolt procedural): " .. (_G.DCEU ~= false and "ENABLED" or "DISABLED"))
+if (_G.CW ~= false) and (_G.DCEU ~= false) then
+    print("   - Arc Mode: BOTH active — randomized per bolt")
+end
+print("   - DCEU Idle Arcs (body-to-body): " .. (_G.DCEU ~= false and "ENABLED" or "DISABLED"))
 print("   - Dynamic Trail Flicker Engine: 3-layer async (ENABLED)")
 print("   - HeartbeatUpdate: Optimized (no clone/destroy spam)")
 print("   - G_Optimized: " .. (_G.G_Optimized and "ENABLED (performance mode)" or "DISABLED (full quality)"))
