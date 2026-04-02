@@ -1157,63 +1157,6 @@ local function m(v)
             a[#a+1] = k
         end
     end
-    if #a < 2 then return end
-
-    local x = Instance.new("Trail")
-
-if speedsterType == "RF" then
-    x.Color = ColorSequence.new(
-        Color3.fromRGB(255,84,84),
-        Color3.fromRGB(255,0,0)
-    )
-    elseif speedsterType == "Zoom" then
-        x.Color = ColorSequence.new(
-            Color3.fromRGB(46,124,255),
-            Color3.fromRGB(124,194,255)
-        )
-    elseif speedsterType == "GodOfSpeed" then
-        x.Color = ColorSequence.new(
-            Color3.fromRGB(200,200,200),
-            Color3.fromRGB(255,255,255)
-        )
-    elseif speedsterType == "NWA" then
-        x.Color = ColorSequence.new(
-            Color3.fromRGB(210,160,255),
-            Color3.fromRGB(200,100,255)
-        )
-    elseif speedsterType == "KidFlash" then
-        x.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
-        })
-    else
-
-        x.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),
-            ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))
-        })
-    end
-
-    x.Brightness = 2
-    x.FaceCamera = true
-    x.LightEmission = 1
-    x.LightInfluence = 0
-    x.Texture = "rbxassetid://10583327833"
-    x.TextureLength = 3.625
-    x.TextureMode = Enum.TextureMode.Static
-    x.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0,0),
-        NumberSequenceKeypoint.new(0.25,0.8375),
-        NumberSequenceKeypoint.new(0.5,0),
-        NumberSequenceKeypoint.new(0.75,1),
-        NumberSequenceKeypoint.new(1,0)
-    })
-    x.Attachment0 = a[1]
-    x.Attachment1 = a[2]
-    x.Enabled = false
-    x.Lifetime = 0.15
-    x.Parent = v
-    t[#t+1] = x
 end
 
 local function V87()
