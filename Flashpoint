@@ -1688,24 +1688,15 @@ local CurrentTween
 
 
 
--- ================================================================
--- BASE TRAIL SYSTEM (friend's architecture)
--- Y-offset stacked ribbons on torso + lower limb thin trails
--- Per-tick jitter on attachments + width crackle = alive/crackling feel
--- ================================================================
-local baseTrailObjects = {}   -- {trail, a0, a1, baseY, baseDir, isLimb}
-local baseTrailFolder  = nil
-local heartbeatFrame   = 0    -- moved here; was inside HeartbeatUpdate
+-- Base trail system (friend's architecture)
+-- trailObjects entries: { trail, a0, a1 }
+-- Y position is stored in trail.Name as a string so the per-tick
+-- jitter loop can recover it via tonumber() — same trick as friend's script.
+-- Limb trail Names are their part name, so tonumber() → nil → Y = 0 (correct).
+local trailObjects    = {}
+local baseTrailFolder = nil
 
-local TRAIL_YOFFSETS = { -1.4, -0.5, 0.5, 1.4 }  -- stacked vertical ribbons on torso
-
-local BASE_LIMBS = {
-    "RightLowerArm", "LeftLowerArm",
-    "RightLowerLeg", "LeftLowerLeg",
-    -- R6 fallbacks
-    "Right Arm", "Left Arm",
-    "Right Leg",  "Left Leg",
-}
+local TRAIL_YOFFSETS = { -1.45, -0.65, 0.25, 1.45 }
 
 local heartbeatConnection
 
@@ -1736,60 +1727,54 @@ local IdleAnimTrack = Animator:LoadAnimation(IdleAnimation)
 IdleAnimTrack.Priority = Enum.AnimationPriority.Action
 
 -- ================================================================
--- MakeBaseTrail — builds one Trail using the existing textures/color.
--- color     : Color3 from GetLightningColor()
--- lifetime  : seconds
--- widthScale: optional NumberSequence override (used for thin limb trails)
+-- MakeTrail — friend's exact Trail construction.
+-- No texture (NumberSequence transparency does all the visual work).
+-- Color uses MY speedsterType color, not friend's color palette.
 -- ================================================================
-local function MakeBaseTrail(att0, att1, color, lifetime, widthScale)
-    local trail             = Instance.new("Trail")
-    trail.Attachment0       = att0
-    trail.Attachment1       = att1
-    trail.Lifetime          = lifetime or 0.12
-    trail.MinLength         = 0
-    trail.FaceCamera        = true
-    trail.LightEmission     = 1
-    trail.LightInfluence    = 0
-    -- White core → speedster color → white tip (keeps MY color, looks less dry)
-    trail.Color             = ColorSequence.new({
+local function MakeTrail(att0, att1, color, lifetime, widthScale)
+    local trail          = Instance.new("Trail")
+    trail.Attachment0    = att0
+    trail.Attachment1    = att1
+    trail.Lifetime       = lifetime or 0.12
+    trail.MinLength      = 0
+    trail.FaceCamera     = true
+    trail.LightEmission  = 1
+    trail.LightInfluence = 0
+    trail.Color          = ColorSequence.new({
         ColorSequenceKeypoint.new(0,   color),
         ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
         ColorSequenceKeypoint.new(1,   color),
     })
-    -- Fade in fast, hold opaque in the middle, fade out fast
-    trail.Transparency      = NumberSequence.new({
+    trail.Transparency   = NumberSequence.new({
         NumberSequenceKeypoint.new(0,    1),
         NumberSequenceKeypoint.new(0.08, 0),
         NumberSequenceKeypoint.new(0.92, 0),
         NumberSequenceKeypoint.new(1,    1),
     })
-    trail.WidthScale        = widthScale or NumberSequence.new({
+    trail.WidthScale     = widthScale or NumberSequence.new({
         NumberSequenceKeypoint.new(0, 1),
         NumberSequenceKeypoint.new(1, 0),
     })
-    -- Keep MY texture from trailProps1
-    trail.Texture           = "rbxassetid://16607923"
-    trail.TextureLength     = 15
-    trail.TextureMode       = Enum.TextureMode.Static
-    trail.Enabled           = false
+    trail.Enabled        = false
     return trail
 end
 
 -- ================================================================
--- SetupBaseTrails — replaces InitializeTrails.
--- Torso:      4 stacked Y-offset ribbon pairs (creates visual depth/volume).
--- Lower limbs: thin single trail per arm/leg (crackle at extremities).
--- All entries stored in baseTrailObjects for per-tick jitter updates.
+-- SetupBaseTrails — friend's SetupTrails, adapted:
+--   • Torso: 4 stacked Y-offset ribbon pairs (depth/volume layer)
+--   • Lower limbs: thin crackle trail per arm/leg
+--   • NO friend's ParticleEmitters — keeping MY own effects
+--   • Trail.Name stores scaledY as string so UpdateTrailActivity
+--     can read it back with tonumber() — exactly as friend does
 -- ================================================================
 local function SetupBaseTrails()
-    -- Clean up previous folder (destroys all old trails + attachments in one call)
     if baseTrailFolder and baseTrailFolder.Parent then
         baseTrailFolder:Destroy()
     end
-    baseTrailFolder = Instance.new("Folder")
+    baseTrailFolder        = Instance.new("Folder")
     baseTrailFolder.Name   = "BaseTrails"
     baseTrailFolder.Parent = CharacterRef
-    baseTrailObjects = {}
+    trailObjects           = {}
 
     local color    = GetLightningColor()
     local torso    = CharacterRef:FindFirstChild("UpperTorso")
@@ -1797,78 +1782,56 @@ local function SetupBaseTrails()
     local humanoid = CharacterRef:FindFirstChildOfClass("Humanoid")
     local hipH     = (humanoid and humanoid.HipHeight or 2)
 
-    -- ── TORSO: stacked horizontal ribbon layers ─────────────────
-    -- Each Y-offset gets its own attachment pair.
-    -- The slight A1 vertical offset means each trail has a real width axis,
-    -- making them look like ribbons rather than lines.
+    -- Torso stacked ribbons
     if torso then
         for _, yOff in ipairs(TRAIL_YOFFSETS) do
             local scaledY = yOff * (hipH / 2)
-            local dir     = (math.random() < 0.5) and -1 or 1
-            local baseX   = math.random(-150, 150) / 100
+            local dir     = (math.random() < 0.5 and -1 or 1)
+            local basePos = Vector3.new(math.random(-150, 150) / 100, scaledY, 0)
 
             local a0 = Instance.new("Attachment")
             local a1 = Instance.new("Attachment")
-            a0.Name   = "BTA"
-            a1.Name   = "BTA"
-            a0.Parent = torso
-            a1.Parent = torso
-            a0.Position = Vector3.new(baseX, scaledY, 0)
-            a1.Position = Vector3.new(baseX, scaledY + dir * 0.9, 0)
+            a0.Name     = "BTA"
+            a1.Name     = "BTA"
+            a0.Parent   = torso
+            a1.Parent   = torso
+            a0.Position = basePos
+            a1.Position = basePos + Vector3.new(0, dir * 0.9, 0)
 
-            local trail = MakeBaseTrail(a0, a1, color, 0.12)
-            -- Store scaledY in Name so UpdateBaseTrailActivity can read it back
-            trail.Name   = tostring(scaledY)
-            trail.Parent = baseTrailFolder
+            local trail      = MakeTrail(a0, a1, color, 0.12)
+            trail.Name       = tostring(scaledY)   -- Y stored here for jitter recovery
+            trail.Parent     = baseTrailFolder
 
-            table.insert(baseTrailObjects, {
-                trail   = trail,
-                a0      = a0,
-                a1      = a1,
-                baseY   = scaledY,
-                baseDir = dir,
-                isLimb  = false,
-            })
+            table.insert(trailObjects, { trail = trail, a0 = a0, a1 = a1 })
             table.insert(playerData.cleanupObjects, trail)
             table.insert(playerData.cleanupObjects, a0)
             table.insert(playerData.cleanupObjects, a1)
         end
     end
 
-    -- ── LOWER LIMBS: thin crackle trails ────────────────────────
-    -- Thin widthScale (0.8→0) and short lifetime keep these crisp.
-    -- Uses trailProps2 texture for a different visual layer.
-    local limbWidthScale = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.8),
-        NumberSequenceKeypoint.new(1, 0),
-    })
-    for _, limbName in ipairs(BASE_LIMBS) do
+    -- Lower limb thin trails
+    for _, limbName in ipairs({ "RightLowerArm", "LeftLowerArm", "RightLowerLeg", "LeftLowerLeg" }) do
         local part = CharacterRef:FindFirstChild(limbName)
         if part then
             local a0 = Instance.new("Attachment")
             local a1 = Instance.new("Attachment")
-            a0.Name   = "BTA"
-            a1.Name   = "BTA"
-            a0.Parent = part
-            a1.Parent = part
+            a0.Name     = "BTA"
+            a1.Name     = "BTA"
+            a0.Parent   = part
+            a1.Parent   = part
             a0.Position = Vector3.new(0,  0.3, 0)
             a1.Position = Vector3.new(0, -0.3, 0)
 
-            local trail = MakeBaseTrail(a0, a1, color, 0.1, limbWidthScale)
-            -- Give limb trails the crispier second texture
-            trail.Texture       = "rbxassetid://14485918528"
-            trail.TextureLength = 8
-            trail.Name          = limbName
-            trail.Parent        = baseTrailFolder
+            local trail = MakeTrail(a0, a1, color, 0.1,
+                NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.8),
+                    NumberSequenceKeypoint.new(1, 0),
+                })
+            )
+            trail.Name   = limbName    -- tonumber("RightLowerArm") = nil → Y = 0 in jitter
+            trail.Parent = baseTrailFolder
 
-            table.insert(baseTrailObjects, {
-                trail   = trail,
-                a0      = a0,
-                a1      = a1,
-                baseY   = 0,
-                baseDir = 1,
-                isLimb  = true,
-            })
+            table.insert(trailObjects, { trail = trail, a0 = a0, a1 = a1 })
             table.insert(playerData.cleanupObjects, trail)
             table.insert(playerData.cleanupObjects, a0)
             table.insert(playerData.cleanupObjects, a1)
@@ -1877,44 +1840,45 @@ local function SetupBaseTrails()
 end
 
 -- ================================================================
--- UpdateBaseTrailActivity — called every Heartbeat tick.
--- moving : bool  (vel > 4)
--- vel    : number (studs/s magnitude, horizontal-weighted)
+-- UpdateTrailActivity — friend's exact per-tick jitter system.
 --
--- When moving:
---   • Enables all base trails
---   • Jitters attachment positions scaled by speed (crackle/alive feel)
---   • Randomises WidthScale each tick (width crackle)
--- When stopped:
---   • Disables all base trails (clean cut, no ghost segments)
+-- basePos.X is fully re-randomised every tick (not a small offset
+-- from a stored position) so torso ribbons sweep the full width
+-- of the character erratically — that's the "alive" feel.
+--
+-- dir is also re-randomised every tick so the vertical spread of
+-- each ribbon pair flips unpredictably.
+--
+-- tonumber(entry.trail.Name) recovers the stored scaledY for torso
+-- trails; returns nil for limb trails, giving Y = 0 (correct).
 -- ================================================================
-local function UpdateBaseTrailActivity(moving, vel)
-    for _, entry in ipairs(baseTrailObjects) do
-        local trail = entry.trail
-        if not (trail and trail.Parent) then continue end
-
-        trail.Enabled = moving
+local function UpdateTrailActivity(moving, speed)
+    for _, entry in ipairs(trailObjects) do
+        entry.trail.Enabled = moving
 
         if moving then
-            local jitter = vel / 80  -- 0 at idle → ~5 at max speed
+            local jitter  = speed / 80
+            local basePos = Vector3.new(
+                math.random(-150, 150) / 100,
+                tonumber(entry.trail.Name) or 0,
+                0
+            )
+            local dir = (math.random() < 0.5 and -1 or 1)
 
-            if entry.isLimb then
-                -- Limb trails: small positional jitter only (fixed attachment spread)
-                local jX = math.random(-100, 100) / 100 * jitter
-                entry.a0.Position = Vector3.new(jX,  0.3, 0)
-                entry.a1.Position = Vector3.new(jX, -0.3, 0)
-            else
-                -- Torso ribbons: jitter X position, clamp vertical spread
-                local jX0 = math.random(-100, 100) / 100 * jitter
-                local jX1 = math.random(-100, 100) / 100 * jitter
-                local spread = math.clamp(0.5 + jitter, 0.4, 1.2)
-                entry.a0.Position = Vector3.new(jX0, entry.baseY, 0)
-                entry.a1.Position = Vector3.new(jX1, entry.baseY + entry.baseDir * spread, 0)
-            end
+            entry.a0.Position = basePos + Vector3.new(
+                math.random(-100, 100) / 100 * jitter,
+                0,
+                0
+            )
+            entry.a1.Position = basePos + Vector3.new(
+                math.random(-100, 100) / 100 * jitter,
+                dir * math.clamp(0.5 + jitter, 0.4, 1.2),
+                0
+            )
 
-            -- Width crackle: random scale 0.5–1.4 each tick
+            -- Width crackle: random thickness every tick
             local w = math.random(5, 14) / 10
-            trail.WidthScale = NumberSequence.new({
+            entry.trail.WidthScale = NumberSequence.new({
                 NumberSequenceKeypoint.new(0, w),
                 NumberSequenceKeypoint.new(1, 0),
             })
@@ -1936,21 +1900,22 @@ end
 
 -- ================================================================
 -- HeartbeatUpdate — runs every frame while speed is active.
--- Trail jitter/crackle is now handled by UpdateBaseTrailActivity.
--- Water detection and TODC preserved exactly as before.
+-- Trail jitter/crackle handed off to UpdateTrailActivity.
+-- Water detection and TODC preserved exactly.
 -- ================================================================
+local heartbeatFrame = 0
+
 local function HeartbeatUpdate()
     heartbeatFrame += 1
 
-    -- ── Base trail: jitter + width crackle ──────────────────────
-    -- Velocity sampled from HRP; horizontal-weighted (matches friend's system).
+    -- Per-frame trail jitter + width crackle (friend's system)
     if HRP and HRP.Parent then
-        local vel     = (HRP.AssemblyLinearVelocity * Vector3.new(1, 0.5, 1)).Magnitude
-        local moving  = vel > 4
-        UpdateBaseTrailActivity(moving, vel)
+        local vel    = (HRP.AssemblyLinearVelocity * Vector3.new(1, 0.5, 1)).Magnitude
+        local moving = vel > 4
+        UpdateTrailActivity(moving, vel)
     end
 
-    -- Water detection (original behavior preserved)
+    -- Water detection (preserved)
     if heartbeatFrame % 30 == 0 then
         for _, Part in pairs(workspace:GetChildren()) do
             if Part.Name == "Water" and Part:IsA("BasePart") then
@@ -2115,8 +2080,6 @@ local function enableAll()
     enabled = true
     h.WalkSpeed = defaultWalkSpeed
     SetupBaseTrails()
-    -- Disconnect any existing heartbeat before overwriting (prevents leaked walkspeed-lock heartbeats
-    -- from accumulating every enable/disable cycle and overriding WalkSpeed reset on disable)
     if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
     heartbeatConnection = RunService.Heartbeat:Connect(HeartbeatUpdate)
 
@@ -2154,12 +2117,11 @@ local function disableAll()
     
     wasRunning = false
     
-    -- Destroy all base trail objects via their folder (single call, no loop)
     if baseTrailFolder and baseTrailFolder.Parent then
         baseTrailFolder:Destroy()
     end
-    baseTrailFolder  = nil
-    baseTrailObjects = {}
+    baseTrailFolder = nil
+    trailObjects    = {}
     if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
     if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
     cam.FieldOfView = 70
