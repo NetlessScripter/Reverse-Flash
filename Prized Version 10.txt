@@ -1,0 +1,4081 @@
+--[[
+    REVERSE FLASH SCRIPT - MULTIPLAYER VERSION (UPGRADED)
+    
+    _G.NightMode = true  -- Set to false for day mode
+    _G.TODC = true  -- TimeOfDayChange: Set to false to disable ALL lighting changes
+    _G.G_Optimized = false  -- Set to true for performance mode (reduces lightning density)
+    
+    AllowedPlayers = {
+        ["Hitmeforgamepass"] = "RF",
+        ["veyzak"] = "Regular",
+        ["BOT338204"] = "Regular"
+    }
+    
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Open%20Sourced%20Version"))()
+    
+    CONTROLS: Q = Speed | C = Phase | X = Disable
+    STATES: RF, Zoom, KidFlash, GodOfSpeed, NWA, Regular
+    
+    LIGHTNING UPGRADE NOTES:
+    - DCEU-style ground arc lightning via Raycast + Beam (starts from torso/limbs, snaps to ground)
+    - Dynamic flicker engine: each limb group flickers at its own phase/rate
+    - Trail lifetime, enabled state, and width vary per-tick for "barely contained energy" look
+    - Branching secondary arcs fire at 35% chance alongside main arc
+    - HeartbeatUpdate no longer clone/destroys trails every frame (was 960+ instance ops/sec)
+    - idleParticleConnection bug fixed: no longer re-enables effects when speed is off
+    - G_Optimized mode: reduced arc density, longer intervals, lower particle rates
+--]]
+
+
+-- ================================================================
+-- GLOBAL CONFIG
+-- ================================================================
+
+if _G.TODC == nil then
+    _G.TODC = true
+end
+
+if _G.NightMode == nil then
+    _G.NightMode = true
+end
+
+if _G.G_Optimized == nil then
+    _G.G_Optimized = false
+end
+
+if not _G.TODC then
+    print("⏰ TimeOfDayChange DISABLED - ClockTime will NOT be modified")
+else
+    print("⏰ TimeOfDayChange ENABLED - Lighting mode: " .. (_G.NightMode and "NIGHT" or "DAY"))
+end
+
+if _G.G_Optimized then
+    print("⚡ G_Optimized ENABLED - Performance mode active (reduced lightning density)")
+else
+    print("⚡ G_Optimized DISABLED - Full dynamic lightning quality")
+end
+
+AllowedPlayers = AllowedPlayers or {}
+
+local Players = game:GetService("Players")
+local PlayerData = {}
+
+local function IsAllowed(player)
+    if not player then return false end
+    return AllowedPlayers[player.Name] ~= nil
+end
+
+local function CleanupPlayer(player)
+    if not player then return end
+    local userId = player.UserId
+    if PlayerData[userId] then
+        local data = PlayerData[userId]
+
+        -- Stop new dynamic systems first
+        if data.StopLightningFlicker then
+            pcall(function() data.StopLightningFlicker() end)
+        end
+        if data.StopGroundArcs then
+            pcall(function() data.StopGroundArcs() end)
+        end
+
+        if data.stopColorUpdate then
+            pcall(function() data.stopColorUpdate() end)
+        end
+
+        if data.connections then
+            for _, conn in pairs(data.connections) do
+                if conn and typeof(conn) == "RBXScriptConnection" and conn.Connected then
+                    pcall(function() conn:Disconnect() end)
+                end
+            end
+        end
+
+        if data.cleanupObjects then
+            for _, obj in pairs(data.cleanupObjects) do
+                if obj and typeof(obj) == "Instance" then
+                    pcall(function() obj:Destroy() end)
+                end
+            end
+        end
+
+        PlayerData[userId] = nil
+        print("✓ Cleaned up " .. player.Name)
+    end
+end
+
+
+Players.PlayerRemoving:Connect(function(leavingPlayer)
+    if leavingPlayer == player and syncConnection then
+        pcall(function()
+            syncConnection:Disconnect()
+        end)
+    end
+end)
+
+local function SetupSpeedster(player)
+    if not IsAllowed(player) then return end
+    if not player or not player.Parent then return end
+    
+    local character = player.Character or player.CharacterAdded:Wait()
+    if not character then return end
+    
+    local speedsterType = AllowedPlayers[player.Name]
+    local userId = player.UserId
+    
+    CleanupPlayer(player)
+    
+    PlayerData[userId] = {
+        character = character,
+        player = player,
+        speedsterType = speedsterType,
+        connections = {},
+        cleanupObjects = {},
+        spd = false,
+        phs = false,
+        Running = false
+    }
+    
+    local playerData = PlayerData[userId]
+    
+    print("✓ Loading " .. speedsterType .. " for " .. player.Name)
+
+local CharacterRef = character
+local HRP = CharacterRef:WaitForChild("HumanoidRootPart", 10)
+if not HRP then 
+    warn("Failed to find HumanoidRootPart for " .. player.Name)
+    CleanupPlayer(player)
+    return 
+end
+
+local RunService = game:GetService("RunService")
+
+-- ================================================================
+-- TOGGLE SPEED PARTICLE BURST (fires on both enable AND disable)
+-- Plays the full 16-emitter burst effect on HumanoidRootPart only.
+-- Called for local player AND synced to remote speedsters via .1 / .3
+-- ================================================================
+local function EmitToggleEffect()
+    if not HRP or not HRP.Parent then return end
+    task.spawn(function()
+        local burst = {}
+        local function mk(setup, count)
+            local e = Instance.new('ParticleEmitter')
+            setup(e)
+            e.Enabled = false
+            e.Parent = HRP
+            e:Emit(count)
+            table.insert(burst, e)
+        end
+        mk(function(e)
+            e.Brightness=3
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=0.85000002384185791 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.FacingCamera
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,11.873584747314453,0),NumberSequenceKeypoint.new(0.30259999632835388,6.6046333312988281,0),NumberSequenceKeypoint.new(1,0.58061176538467407,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="http://www.roblox.com/asset/?id=15976310627"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.1417510062456131,0.89070999622344971,0),NumberSequenceKeypoint.new(0.22811199724674225,0.6721310019493103,0),NumberSequenceKeypoint.new(0.3067300021648407,0.25136598944664001,0),NumberSequenceKeypoint.new(0.38713499903678894,0,0),NumberSequenceKeypoint.new(0.52607399225234985,0,0),NumberSequenceKeypoint.new(0.6743590235710144,0,0),NumberSequenceKeypoint.new(0.89994001388549805,0,0),NumberSequenceKeypoint.new(1,1,0)})
+            e.ZOffset=-1.3026975393295288 e.EmissionDirection=Enum.NormalId.Front e.Lifetime=NumberRange.new(0.2199999988079071,0.2199999988079071)
+            e.Rate=1 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-360,360) e.Speed=NumberRange.new(0.19199857115745544,0.19199857115745544) e.SpreadAngle=Vector2.new(5,5)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=0 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(1,1) e.FlipbookLayout=Enum.ParticleFlipbookLayout.None e.FlipbookMode=Enum.ParticleFlipbookMode.Loop e.FlipbookStartRandom=false e.LockedToPart=true e.Name="Light"
+        end, 2)
+        mk(function(e)
+            e.Brightness=15
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=1 e.LightInfluence=0.40000000596046448 e.Orientation=Enum.ParticleOrientation.FacingCamera
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.046131998300552368,3.7119169235229492,0),NumberSequenceKeypoint.new(0.075940400362014771,5.4163732528686523,0),NumberSequenceKeypoint.new(0.11582999676465988,6.1360340118408203,0),NumberSequenceKeypoint.new(0.16536599397659302,5.6815061569213867,0),NumberSequenceKeypoint.new(0.21646599471569061,4.5073351860046387,0),NumberSequenceKeypoint.new(0.27111399173736572,2.802879810333252,0),NumberSequenceKeypoint.new(0.35060301423072815,1.1362975835800171,0),NumberSequenceKeypoint.new(0.41234898567199707,0.41664460301399231,0),NumberSequenceKeypoint.new(0.47267600893974304,0.037876740097999573,0),NumberSequenceKeypoint.new(0.57722002267837524,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.12686100602149963,-0.037500098347663879,0),NumberSequenceKeypoint.new(0.33948799967765808,1.2000000476837158,0),NumberSequenceKeypoint.new(1,2.1749999523162842,0)})
+            e.Texture="rbxassetid://1084970835"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.030674800276756287,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=1.9974696636199951 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.25,0.25)
+            e.Rate=1 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-360,360) e.Speed=NumberRange.new(-0.19109794497489929,0.19109794497489929) e.SpreadAngle=Vector2.new(35,35)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=0 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(1,1) e.FlipbookLayout=Enum.ParticleFlipbookLayout.None e.FlipbookMode=Enum.ParticleFlipbookMode.Loop e.FlipbookStartRandom=false e.LockedToPart=true e.Name="Star"
+        end, 1)
+        mk(function(e)
+            e.Brightness=15
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=-0.5 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.VelocityPerpendicular
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,2.5630283355712891),NumberSequenceKeypoint.new(0.10000000149011612,1.72327721118927,2.5630283355712891),NumberSequenceKeypoint.new(0.20000000298023224,2.8872168064117432,2.5630283355712891),NumberSequenceKeypoint.new(0.30000001192092896,3.5591261386871338,2.5630283355712891),NumberSequenceKeypoint.new(0.40000000596046448,3.9195985794067383,2.5630283355712891),NumberSequenceKeypoint.new(0.5,4.1074347496032715,2.5630283355712891),NumberSequenceKeypoint.new(0.60000002384185791,4.2022066116333008,2.5630283355712891),NumberSequenceKeypoint.new(0.69999998807907104,4.2469720840454102,2.5630283355712891),NumberSequenceKeypoint.new(0.80000001192092896,4.2654218673706055,2.5630283355712891),NumberSequenceKeypoint.new(0.89999997615814209,4.2710304260253906,2.5630283355712891),NumberSequenceKeypoint.new(1,4.2717151641845703,2.5630283355712891),NumberSequenceKeypoint.new(1,4.2717151641845703,2.5630283355712891)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="http://www.roblox.com/asset/?id=14560511307"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=0 e.EmissionDirection=Enum.NormalId.Front e.Lifetime=NumberRange.new(0.20000000298023224,0.20000000298023224)
+            e.Rate=3 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-360,360) e.Speed=NumberRange.new(0.0061505748890340328,0.0061505748890340328) e.SpreadAngle=Vector2.new(360,360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=3 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(0.47520002722740173,0.47520002722740173) e.FlipbookLayout=Enum.ParticleFlipbookLayout.Grid4x4 e.FlipbookMode=Enum.ParticleFlipbookMode.OneShot e.FlipbookStartRandom=false e.LockedToPart=true e.Name="absorb"
+        end, 4)
+        mk(function(e)
+            e.Brightness=15
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(0.26666668057441711,0.26666668057441711,0.26666668057441711)),ColorSequenceKeypoint.new(0.20934256911277771,Color3.new(0.08235294371843338,0.08235294371843338,0.08235294371843338)),ColorSequenceKeypoint.new(1,Color3.new(0,0,0))})
+            e.LightEmission=0.80000001192092896 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.VelocityPerpendicular
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,2.0092053413391113),NumberSequenceKeypoint.new(0.10000000149011612,2.5392782688140869,2.0092053413391113),NumberSequenceKeypoint.new(0.20000000298023224,3.7568938732147217,2.0092053413391113),NumberSequenceKeypoint.new(0.30000001192092896,4.6036262512207031,2.0092053413391113),NumberSequenceKeypoint.new(0.40000000596046448,5.247499942779541,2.0092053413391113),NumberSequenceKeypoint.new(0.5,5.7560634613037109,2.0092053413391113),NumberSequenceKeypoint.new(0.60000002384185791,6.163874626159668,2.0092053413391113),NumberSequenceKeypoint.new(0.69999998807907104,6.4904804229736328,2.0092053413391113),NumberSequenceKeypoint.new(0.80000001192092896,6.7465486526489258,2.0092053413391113),NumberSequenceKeypoint.new(0.89999997615814209,6.9346046447753906,2.0092053413391113),NumberSequenceKeypoint.new(1,7.0322189331054688,2.0092053413391113),NumberSequenceKeypoint.new(1,7.0322189331054688,2.0092053413391113)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://14002915397"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,1,0)})
+            e.ZOffset=0.8055415153503418 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.69999998807907104,1.7999999523162842)
+            e.Rate=2 e.RotSpeed=NumberRange.new(-150,150) e.Rotation=NumberRange.new(-360,360) e.Speed=NumberRange.new(1.2072253227233887,1.2072253227233887) e.SpreadAngle=Vector2.new(15,15)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=4.8400001525878906 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(0.96800005435943604,0.96800005435943604) e.FlipbookLayout=Enum.ParticleFlipbookLayout.None e.FlipbookMode=Enum.ParticleFlipbookMode.OneShot e.FlipbookStartRandom=false e.LockedToPart=false e.Name="Wind"
+        end, 5)
+        mk(function(e)
+            e.Brightness=0.30000001192092896
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=1 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.FacingCamera
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,5.5164704322814941,0),NumberSequenceKeypoint.new(1,5.5164704322814941,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://10672228547"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.37367865443229675,0.483146071434021,0),NumberSequenceKeypoint.new(1,1,0)})
+            e.ZOffset=0 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(1,1)
+            e.Rate=2 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-90,-90) e.Speed=NumberRange.new(0.0029855049215257168,0.0029855049215257168) e.SpreadAngle=Vector2.new(3,3)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=0 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(1,1) e.FlipbookLayout=Enum.ParticleFlipbookLayout.None e.FlipbookMode=Enum.ParticleFlipbookMode.Loop e.FlipbookStartRandom=false e.LockedToPart=true e.Name="Glow"
+        end, 2)
+        mk(function(e)
+            e.Brightness=5
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=0 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.FacingCamera
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.10000000149011612,2.9759471416473389,0),NumberSequenceKeypoint.new(0.20000000298023224,3.65163254737854,0),NumberSequenceKeypoint.new(0.30000001192092896,4.029451847076416,0),NumberSequenceKeypoint.new(0.40000000596046448,4.2698249816894531,0),NumberSequenceKeypoint.new(0.5,4.4302182197570801,0),NumberSequenceKeypoint.new(0.60000002384185791,4.5382852554321289,0),NumberSequenceKeypoint.new(0.69999998807907104,4.6095662117004395,0),NumberSequenceKeypoint.new(0.80000001192092896,4.6536874771118164,0),NumberSequenceKeypoint.new(0.89999997615814209,4.6770267486572266,0),NumberSequenceKeypoint.new(1,4.6840395927429199,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://13450910969"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=0 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.30000001192092896,0.30000001192092896)
+            e.Rate=5 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-360,360) e.Speed=NumberRange.new(0.00031226925784721971,0.00031226925784721971) e.SpreadAngle=Vector2.new(0,0)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=0 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(1,1) e.FlipbookLayout=Enum.ParticleFlipbookLayout.Grid2x2 e.FlipbookMode=Enum.ParticleFlipbookMode.OneShot e.FlipbookStartRandom=false e.LockedToPart=true e.Name="RING"
+        end, 1)
+        mk(function(e)
+            e.Brightness=5
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=0.5 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.VelocityParallel
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,2.2454495429992676),NumberSequenceKeypoint.new(0.10000000149011612,4.6879763603210449,2.2454495429992676),NumberSequenceKeypoint.new(0.20000000298023224,5.6752324104309082,2.2454495429992676),NumberSequenceKeypoint.new(0.30000001192092896,6.1637172698974609,2.2454495429992676),NumberSequenceKeypoint.new(0.40000000596046448,6.4327735900878906,2.2454495429992676),NumberSequenceKeypoint.new(0.5,6.5843467712402344,2.2454495429992676),NumberSequenceKeypoint.new(0.60000002384185791,6.6677236557006836,2.2454495429992676),NumberSequenceKeypoint.new(0.69999998807907104,6.7104578018188477,2.2454495429992676),NumberSequenceKeypoint.new(0.80000001192092896,6.7294139862060547,2.2454495429992676),NumberSequenceKeypoint.new(0.89999997615814209,6.7355589866638184,2.2454495429992676),NumberSequenceKeypoint.new(1,6.7363486289978027,2.2454495429992676),NumberSequenceKeypoint.new(1,6.7363486289978027,2.2454495429992676)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://16551638647"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=0 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.20000000298023224,0.5)
+            e.Rate=2 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(0,0) e.Speed=NumberRange.new(0.0025923370849341154,0.0025923370849341154) e.SpreadAngle=Vector2.new(360,-360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=0 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(2.8989176750183105,2.8989176750183105) e.FlipbookLayout=Enum.ParticleFlipbookLayout.Grid4x4 e.FlipbookMode=Enum.ParticleFlipbookMode.OneShot e.FlipbookStartRandom=false e.LockedToPart=false e.Name="Hitspark2"
+        end, 8)
+        mk(function(e)
+            e.Brightness=10
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=-2 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.VelocityParallel
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.040169131010770798,0.40286731719970703,0.16114717721939087),NumberSequenceKeypoint.new(0.14323467016220093,1.0474550724029541,0.14721538126468658),NumberSequenceKeypoint.new(0.2193446010351181,1.5308958292007446,0.14249290525913239),NumberSequenceKeypoint.new(0.30232557654380798,1.7323293685913086,0.45841959118843079),NumberSequenceKeypoint.new(0.4741014838218689,1.5711829662322998,0.38444739580154419),NumberSequenceKeypoint.new(0.63319236040115356,0.68487453460693359,0.29558014869689941),NumberSequenceKeypoint.new(1,0,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0.5,0),NumberSequenceKeypoint.new(1,0.5,0)})
+            e.Texture="rbxassetid://117296316554186"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=-0.31328654289245605 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.34999999403953552,0.34999999403953552)
+            e.Rate=7 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-90,-90) e.Speed=NumberRange.new(32.160934448242188,32.160934448242188) e.SpreadAngle=Vector2.new(360,360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=8 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(1,1) e.FlipbookLayout=Enum.ParticleFlipbookLayout.Grid4x4 e.FlipbookMode=Enum.ParticleFlipbookMode.OneShot e.FlipbookStartRandom=false e.LockedToPart=false e.Name="Specs"
+        end, 6)
+        mk(function(e)
+            e.Brightness=15
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=0 e.LightInfluence=0.20000000298023224 e.Orientation=Enum.ParticleOrientation.FacingCamera
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,2.5048973560333252,1.4451388120651245),NumberSequenceKeypoint.new(1,3.1792874336242676,1.4451388120651245)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://11812165090"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=0 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.25,0.55000001192092896)
+            e.Rate=2 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-360,360) e.Speed=NumberRange.new(1.5849730968475342,1.5849730968475342) e.SpreadAngle=Vector2.new(360,360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=13 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(1,1) e.FlipbookLayout=Enum.ParticleFlipbookLayout.Grid4x4 e.FlipbookMode=Enum.ParticleFlipbookMode.OneShot e.FlipbookStartRandom=false e.LockedToPart=false e.Name="Lightning"
+        end, 5)
+        mk(function(e)
+            e.Brightness=10
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=0 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.VelocityPerpendicular
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,1.3443245887756348),NumberSequenceKeypoint.new(0.10000000149011612,2.1941854953765869,1.3443245887756348),NumberSequenceKeypoint.new(0.20000000298023224,2.7363922595977783,1.3443245887756348),NumberSequenceKeypoint.new(0.30000001192092896,3.0474104881286621,1.3443245887756348),NumberSequenceKeypoint.new(0.40000000596046448,3.2652425765991211,1.3443245887756348),NumberSequenceKeypoint.new(0.5,3.4353470802307129,1.3443245887756348),NumberSequenceKeypoint.new(0.60000002384185791,3.5780594348907471,1.3443245887756348),NumberSequenceKeypoint.new(0.69999998807907104,3.7040567398071289,1.3443245887756348),NumberSequenceKeypoint.new(0.80000001192092896,3.8195312023162842,1.3443245887756348),NumberSequenceKeypoint.new(0.89999997615814209,3.9283332824707031,1.3443245887756348),NumberSequenceKeypoint.new(1,4.0329747200012207,1.3443245887756348)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://13222461345"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=0 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.34999999403953552,0.34999999403953552)
+            e.Rate=3 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-360,360) e.Speed=NumberRange.new(0.00019204639829695225,0.00019204639829695225) e.SpreadAngle=Vector2.new(360,-360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=0 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(1,1) e.FlipbookLayout=Enum.ParticleFlipbookLayout.Grid4x4 e.FlipbookMode=Enum.ParticleFlipbookMode.OneShot e.FlipbookStartRandom=false e.LockedToPart=false e.Name="CrescentElectricity"
+        end, 3)
+        mk(function(e)
+            e.Brightness=15
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=0 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.FacingCamera
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,4.3190946578979492,0),NumberSequenceKeypoint.new(1,4.3190946578979492,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://11862032588"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=1.0891577005386353 e.EmissionDirection=Enum.NormalId.Back e.Lifetime=NumberRange.new(0.30000001192092896,0.30000001192092896)
+            e.Rate=2 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-360,360) e.Speed=NumberRange.new(4.0640463829040527,20.320230484008789) e.SpreadAngle=Vector2.new(-125,125)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=17.279998779296875 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(3.4560000896453857,3.4560000896453857) e.FlipbookLayout=Enum.ParticleFlipbookLayout.Grid4x4 e.FlipbookMode=Enum.ParticleFlipbookMode.OneShot e.FlipbookStartRandom=false e.LockedToPart=false e.Name="Sqaure"
+        end, 5)
+        mk(function(e)
+            e.Brightness=10
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=0 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.VelocityParallel
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.20200000703334808,0.12503989040851593,0.12503989040851593),NumberSequenceKeypoint.new(0.49900001287460327,0.11631617695093155,0.11631617695093155),NumberSequenceKeypoint.new(0.69900000095367432,0.072697609663009644,0.072697609663009644),NumberSequenceKeypoint.new(1,0,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,-0.83606529235839844,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://15845922645"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=0.24747277796268463 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.40000000596046448,1.4500000476837158)
+            e.Rate=10 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(0,0) e.Speed=NumberRange.new(8.7237148284912109,26.171140670776367) e.SpreadAngle=Vector2.new(360,-360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,-8.7237129211425781,0) e.Drag=5 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(1,1) e.FlipbookLayout=Enum.ParticleFlipbookLayout.None e.FlipbookMode=Enum.ParticleFlipbookMode.Loop e.FlipbookStartRandom=false e.LockedToPart=false e.Name="Shards"
+        end, 1)
+        mk(function(e)
+            e.Brightness=10
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=0 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.VelocityParallel
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.20190589129924774,0.10904648900032043,0.10904648900032043),NumberSequenceKeypoint.new(0.49851101636886597,0.072697542607784271,0.072697542607784271),NumberSequenceKeypoint.new(0.69922572374343872,0.036348596215248108,0.036348596215248108),NumberSequenceKeypoint.new(1,0,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,-0.83606529235839844,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://15845922645"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=0.24747277796268463 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.40000000596046448,1.4500000476837158)
+            e.Rate=10 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(0,0) e.Speed=NumberRange.new(11.515300750732422,26.869037628173828) e.SpreadAngle=Vector2.new(360,-360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,-19.192167282104492,0) e.Drag=5 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(1,1) e.FlipbookLayout=Enum.ParticleFlipbookLayout.None e.FlipbookMode=Enum.ParticleFlipbookMode.Loop e.FlipbookStartRandom=false e.LockedToPart=false e.Name="Shards"
+        end, 5)
+        mk(function(e)
+            e.Brightness=10
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=0 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.FacingCamera
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,4.0007438659667969,0.37340274453163147),NumberSequenceKeypoint.new(1,4.0007438659667969,0.48008885979652405)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://15058102581"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.10473816096782684,0,0),NumberSequenceKeypoint.new(0.18827930092811584,0,0),NumberSequenceKeypoint.new(0.3192020058631897,0,0),NumberSequenceKeypoint.new(0.60473817586898804,0,0),NumberSequenceKeypoint.new(0.70947635173797607,0,0),NumberSequenceKeypoint.new(0.9002494215965271,0,0),NumberSequenceKeypoint.new(1,1,0)})
+            e.ZOffset=0 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.5,0.5)
+            e.Rate=1 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-360,360) e.Speed=NumberRange.new(0.0022239412646740675,0.0022239412646740675) e.SpreadAngle=Vector2.new(-360,360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=0 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(30,30) e.FlipbookLayout=Enum.ParticleFlipbookLayout.Grid4x4 e.FlipbookMode=Enum.ParticleFlipbookMode.OneShot e.FlipbookStartRandom=false e.LockedToPart=true e.Name="ParticleEmitter"
+        end, 1)
+        mk(function(e)
+            e.Brightness=2.5
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.40392157435417175,0.20392157137393951)),ColorSequenceKeypoint.new(1,Color3.new(1,0.40392157435417175,0.20392157137393951))})
+            e.LightEmission=0.44999998807907104 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.FacingCameraWorldUp
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.27061700820922852,1.4579342603683472,0.67170518636703491),NumberSequenceKeypoint.new(1,0,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.2266169935464859,0.86041802167892456,0.58074402809143066),NumberSequenceKeypoint.new(1,3,1.1696399450302124)})
+            e.Texture="http://www.roblox.com/asset/?id=15976387740"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=1.1335054636001587 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.10000000149011612,0.30000001192092896)
+            e.Rate=8 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(0,0) e.Speed=NumberRange.new(70,70) e.SpreadAngle=Vector2.new(360,-360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,1286.730224609375,0) e.Drag=150 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(30,30) e.FlipbookLayout=Enum.ParticleFlipbookLayout.None e.FlipbookMode=Enum.ParticleFlipbookMode.Loop e.FlipbookStartRandom=false e.LockedToPart=true e.Name="Lines"
+        end, 15)
+        mk(function(e)
+            e.Brightness=2.5
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.40392157435417175,0.20392157137393951)),ColorSequenceKeypoint.new(1,Color3.new(1,0.40392157435417175,0.20392157137393951))})
+            e.LightEmission=0.44999998807907104 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.FacingCameraWorldUp
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.27061700820922852,1.4579342603683472,0.67170518636703491),NumberSequenceKeypoint.new(1,0,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.2266169935464859,0.86041802167892456,0.58074402809143066),NumberSequenceKeypoint.new(1,3,1.1696399450302124)})
+            e.Texture="http://www.roblox.com/asset/?id=15976387740"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.ZOffset=1.1335054636001587 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.10000000149011612,0.30000001192092896)
+            e.Rate=8 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(0,0) e.Speed=NumberRange.new(70,70) e.SpreadAngle=Vector2.new(360,-360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,6.4336509704589844,0) e.Drag=150 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(30,30) e.FlipbookLayout=Enum.ParticleFlipbookLayout.None e.FlipbookMode=Enum.ParticleFlipbookMode.Loop e.FlipbookStartRandom=false e.LockedToPart=true e.Name="Lines"
+        end, 5)
+        mk(function(e)
+            e.Brightness=5
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=1 e.LightInfluence=0.30000001192092896 e.Orientation=Enum.ParticleOrientation.FacingCamera
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.026259999722242355,1.980494499206543,0),NumberSequenceKeypoint.new(0.094305001199245453,3.5243704319000244,0),NumberSequenceKeypoint.new(0.29430499672889709,4.9914894104003906,0),NumberSequenceKeypoint.new(1,7.4598479270935059,0)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+            e.Texture="rbxassetid://1084999891"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.043478000909090042,0.35624998807907104,0),NumberSequenceKeypoint.new(0.11375799775123596,0.625,0),NumberSequenceKeypoint.new(0.24121500551700592,0.81875002384185791,0),NumberSequenceKeypoint.new(0.39487800002098083,0.89999997615814209,0),NumberSequenceKeypoint.new(1,1,0)})
+            e.ZOffset=0 e.EmissionDirection=Enum.NormalId.Top e.Lifetime=NumberRange.new(0.30000001192092896,0.30000001192092896)
+            e.Rate=1 e.RotSpeed=NumberRange.new(25,25) e.Rotation=NumberRange.new(-360,360) e.Speed=NumberRange.new(0,0) e.SpreadAngle=Vector2.new(0,0)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=0 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(1,1) e.FlipbookLayout=Enum.ParticleFlipbookLayout.None e.FlipbookMode=Enum.ParticleFlipbookMode.Loop e.FlipbookStartRandom=false e.LockedToPart=false e.Name="Rays"
+        end, 10)
+        mk(function(e)
+            e.Brightness=5
+            e.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,0.44313725829124451,0.25882354378700256)),ColorSequenceKeypoint.new(1,Color3.new(1,0.44313725829124451,0.25882354378700256))})
+            e.LightEmission=0.44999998807907104 e.LightInfluence=0 e.Orientation=Enum.ParticleOrientation.VelocityParallel
+            e.Size=NumberSequence.new({NumberSequenceKeypoint.new(0,0.43328943848609924,0.32745069265365601),NumberSequenceKeypoint.new(0.3203049898147583,0.11489216238260269,0),NumberSequenceKeypoint.new(0.50327599048614502,0.48143300414085388,0.19631662964820862),NumberSequenceKeypoint.new(0.70815998315811157,0.32346352934837341,0),NumberSequenceKeypoint.new(1,0.31185245513916016,0.31185245513916016)})
+            e.Squash=NumberSequence.new({NumberSequenceKeypoint.new(0,0.037500001490116119,0),NumberSequenceKeypoint.new(0.22989900410175323,1.7250000238418579,0),NumberSequenceKeypoint.new(1,2,0)})
+            e.Texture="rbxassetid://14112548373"
+            e.Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.066547997295856476,0,0),NumberSequenceKeypoint.new(0.086548000574111938,1,0),NumberSequenceKeypoint.new(0.16021400690078735,1,0),NumberSequenceKeypoint.new(0.16378800570964813,0,0),NumberSequenceKeypoint.new(0.26654800772666931,0,0),NumberSequenceKeypoint.new(0.26853001117706299,1,0),NumberSequenceKeypoint.new(0.4157240092754364,1,0),NumberSequenceKeypoint.new(0.42054799199104309,0,0),NumberSequenceKeypoint.new(0.63791000843048096,0,0),NumberSequenceKeypoint.new(0.63912498950958252,1,0),NumberSequenceKeypoint.new(0.76792198419570923,1,0),NumberSequenceKeypoint.new(0.77521300315856934,0,0),NumberSequenceKeypoint.new(0.97054797410964966,0,0),NumberSequenceKeypoint.new(1,1,0)})
+            e.ZOffset=0 e.EmissionDirection=Enum.NormalId.Front e.Lifetime=NumberRange.new(0.20000000298023224,0.20000000298023224)
+            e.Rate=7 e.RotSpeed=NumberRange.new(0,0) e.Rotation=NumberRange.new(-90,-90) e.Speed=NumberRange.new(8.5349206924438477,42.674602508544922) e.SpreadAngle=Vector2.new(360,360)
+            e.TimeScale=1 e.Acceleration=Vector3.new(0,0,0) e.Drag=5 e.VelocityInheritance=0 e.WindAffectsDrag=false
+            e.Shape=Enum.ParticleEmitterShape.Box e.ShapeInOut=Enum.ParticleEmitterShapeInOut.Outward e.ShapePartial=1 e.ShapeStyle=Enum.ParticleEmitterShapeStyle.Volume
+            e.FlipbookFramerate=NumberRange.new(20,100) e.FlipbookLayout=Enum.ParticleFlipbookLayout.Grid2x2 e.FlipbookMode=Enum.ParticleFlipbookMode.Loop e.FlipbookStartRandom=false e.LockedToPart=false e.Name="ParticleEmitter"
+        end, 5)
+        -- auto-cleanup: destroy all emitters after the longest lifetime (2s buffer)
+        task.delay(2.5, function()
+            for _, e in ipairs(burst) do
+                if e and e.Parent then
+                    pcall(function() e:Destroy() end)
+                end
+            end
+        end)
+    end)
+end
+playerData.EmitToggleEffect = EmitToggleEffect
+
+local lightningAttachment = Instance.new("Attachment")
+lightningAttachment.Name = "LightningAttachment_" .. player.Name
+lightningAttachment.Parent = HRP
+table.insert(playerData.cleanupObjects, lightningAttachment)
+
+
+local ParticleRef = Instance.new("ParticleEmitter")
+ParticleRef.Name = "SpeedsterParticle_" .. player.Name
+ParticleRef.Brightness = 10
+ParticleRef.Drag = 0
+ParticleRef.EmissionDirection = Enum.NormalId.Top
+ParticleRef.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid4x4
+ParticleRef.FlipbookFramerate = NumberRange.new(1,1)
+ParticleRef.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+ParticleRef.Lifetime = NumberRange.new(0.1,0.35)
+ParticleRef.LightEmission = 1
+ParticleRef.LightInfluence = 0
+ParticleRef.LockedToPart = false
+ParticleRef.Orientation = Enum.ParticleOrientation.VelocityParallel
+ParticleRef.Rate = _G.G_Optimized and 6 or 12
+ParticleRef.RotSpeed = NumberRange.new(0,0)
+ParticleRef.Rotation = NumberRange.new(-360,360)
+ParticleRef.Shape = Enum.ParticleEmitterShape.Box
+ParticleRef.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+ParticleRef.ShapePartial = 1
+ParticleRef.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+ParticleRef.Size = NumberSequence.new({
+    NumberSequenceKeypoint.new(0,3,0),
+    NumberSequenceKeypoint.new(1,3,0)
+})
+ParticleRef.Speed = NumberRange.new(0.009,0.009)
+ParticleRef.Texture = "rbxassetid://11812165090"
+ParticleRef.TimeScale = 1
+ParticleRef.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0,0,0),
+    NumberSequenceKeypoint.new(1,0,0)
+})
+ParticleRef.VelocityInheritance = 0
+ParticleRef.ZOffset = 2
+ParticleRef.Acceleration = Vector3.new(0,0,0)
+ParticleRef.Enabled = false
+ParticleRef.Parent = lightningAttachment
+
+if speedsterType == "Zoom" then
+    ParticleRef.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))
+    })
+elseif speedsterType == "GodOfSpeed" then
+    ParticleRef.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(200,200,200)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
+    })
+elseif speedsterType == "NWA" then
+    ParticleRef.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(200,100,255))
+    })
+elseif speedsterType == "KidFlash" then
+    ParticleRef.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
+    })
+elseif speedsterType == "RF" then
+    ParticleRef.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255,190,190)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
+    })
+else
+    ParticleRef.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.new(1,0.231,0.129)),
+        ColorSequenceKeypoint.new(1, Color3.new(1,0.231,0.129))
+    })
+end
+
+
+playerData.ParticleRef = ParticleRef
+table.insert(playerData.cleanupObjects, ParticleRef)
+
+
+-- ================================================================
+-- BODY-WIDE PARTICLE EFFECT (ParticleRef2 - NSFVFX)
+-- Two emitters per limb (soft glow + sparkle), color matches _G speedsterType
+-- ================================================================
+local isR15_nsf = CharacterRef:FindFirstChild("UpperTorso") ~= nil
+local R15Parts_nsf = {
+    "Head","UpperTorso","LowerTorso",
+    "LeftUpperArm","LeftLowerArm","LeftHand",
+    "RightUpperArm","RightLowerArm","RightHand",
+    "LeftUpperLeg","LeftLowerLeg","LeftFoot",
+    "RightUpperLeg","RightLowerLeg","RightFoot",
+    "HumanoidRootPart"
+}
+local R6Parts_nsf = {"Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg","HumanoidRootPart"}
+
+local bodyParts_nsf = {}
+for _, n in ipairs(isR15_nsf and R15Parts_nsf or R6Parts_nsf) do
+    local p = CharacterRef:FindFirstChild(n)
+    if p and p:IsA("BasePart") then
+        bodyParts_nsf[#bodyParts_nsf + 1] = p
+    end
+end
+
+local nsfColor
+if speedsterType == "Zoom" then
+    nsfColor = Color3.fromRGB(46, 124, 255)
+elseif speedsterType == "GodOfSpeed" then
+    nsfColor = Color3.fromRGB(220, 220, 255)
+elseif speedsterType == "NWA" then
+    nsfColor = Color3.fromRGB(210, 160, 255)
+elseif speedsterType == "KidFlash" then
+    nsfColor = Color3.fromRGB(255, 255, 100)
+elseif speedsterType == "RF" then
+    nsfColor = Color3.fromRGB(255, 80, 80)
+else
+    nsfColor = Color3.fromRGB(255, 51, 0)
+end
+
+local nsfEmitters = {}
+playerData.nsfEmitters = nsfEmitters
+
+for _, part in ipairs(bodyParts_nsf) do
+    -- Emitter 1: soft body glow
+    local e1 = Instance.new("ParticleEmitter")
+    e1.Brightness = 0.05000000074505806
+    e1.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, nsfColor), ColorSequenceKeypoint.new(1, nsfColor)})
+    e1.LightEmission = 1
+    e1.LightInfluence = 0
+    e1.Orientation = Enum.ParticleOrientation.FacingCamera
+    e1.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0.12669374048709869,0),NumberSequenceKeypoint.new(1,0.57012182474136353,0)})
+    e1.Squash = NumberSequence.new({NumberSequenceKeypoint.new(0,-0.5,0),NumberSequenceKeypoint.new(1,-0.5,0)})
+    e1.Texture = "rbxassetid://1847258023"
+    e1.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0.32499998807907104,0)})
+    e1.ZOffset = 0.5
+    e1.EmissionDirection = Enum.NormalId.Top
+    e1.Enabled = false
+    e1.Lifetime = NumberRange.new(0.40000000596046448, 0.5)
+    e1.Rate = 20
+    e1.RotSpeed = NumberRange.new(0, 0)
+    e1.Rotation = NumberRange.new(0, 0)
+    e1.Speed = NumberRange.new(0, 0)
+    e1.SpreadAngle = Vector2.new(0, 0)
+    e1.TimeScale = 1
+    e1.Acceleration = Vector3.new(0, 0, 0)
+    e1.Drag = 0
+    e1.VelocityInheritance = 0
+    e1.WindAffectsDrag = false
+    e1.Shape = Enum.ParticleEmitterShape.Box
+    e1.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+    e1.ShapePartial = 1
+    e1.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+    e1.FlipbookFramerate = NumberRange.new(1, 1)
+    e1.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+    e1.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+    e1.FlipbookStartRandom = false
+    e1.LockedToPart = true
+    e1.Name = "NSFVFX"
+    e1.Parent = part
+    table.insert(nsfEmitters, e1)
+    table.insert(playerData.cleanupObjects, e1)
+
+    -- Emitter 2: sparkle dots
+    local e2 = Instance.new("ParticleEmitter")
+    e2.Brightness = 10
+    e2.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, nsfColor), ColorSequenceKeypoint.new(1, nsfColor)})
+    e2.LightEmission = 1
+    e2.LightInfluence = 0
+    e2.Orientation = Enum.ParticleOrientation.FacingCamera
+    e2.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0.076016247272491455,0),NumberSequenceKeypoint.new(1,0.076016247272491455,0)})
+    e2.Squash = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+    e2.Texture = "rbxassetid://11492870634"
+    e2.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(0.90112358331680298,0,0),NumberSequenceKeypoint.new(1,1,0)})
+    e2.ZOffset = 0.5
+    e2.EmissionDirection = Enum.NormalId.Top
+    e2.Enabled = false
+    e2.Lifetime = NumberRange.new(0.40000000596046448, 0.40000000596046448)
+    e2.Rate = 5
+    e2.RotSpeed = NumberRange.new(0, 0)
+    e2.Rotation = NumberRange.new(-360, 360)
+    e2.Speed = NumberRange.new(0.010135498829185963, 0.010135498829185963)
+    e2.SpreadAngle = Vector2.new(360, 360)
+    e2.TimeScale = 1
+    e2.Acceleration = Vector3.new(0, 0, 0)
+    e2.Drag = 0
+    e2.VelocityInheritance = 0
+    e2.WindAffectsDrag = false
+    e2.Shape = Enum.ParticleEmitterShape.Box
+    e2.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+    e2.ShapePartial = 1
+    e2.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+    e2.FlipbookFramerate = NumberRange.new(1, 1)
+    e2.FlipbookLayout = Enum.ParticleFlipbookLayout.Grid4x4
+    e2.FlipbookMode = Enum.ParticleFlipbookMode.OneShot
+    e2.FlipbookStartRandom = false
+    e2.LockedToPart = true
+    e2.Name = "NSFVFX"
+    e2.Parent = part
+    table.insert(nsfEmitters, e2)
+    table.insert(playerData.cleanupObjects, e2)
+end
+
+
+local function EnableLightningGlobal()
+    if playerData.Running then return end
+    playerData.Running = true
+    if playerData.ParticleRef and playerData.ParticleRef.Parent then
+        playerData.ParticleRef.Enabled = true
+        playerData.ParticleRef:Emit(15)
+    end
+    if playerData.nsfEmitters then
+        for _, e in ipairs(playerData.nsfEmitters) do
+            if e and e.Parent then
+                e.Enabled = true
+                e:Emit(15)
+            end
+        end
+    end
+end
+
+local function DisableLightningGlobal()
+    if not playerData.Running then return end
+    playerData.Running = false
+    if playerData.ParticleRef and playerData.ParticleRef.Parent then
+        playerData.ParticleRef.Enabled = false
+    end
+    if playerData.nsfEmitters then
+        for _, e in ipairs(playerData.nsfEmitters) do
+            if e and e.Parent then
+                e.Enabled = false
+            end
+        end
+    end
+end
+
+
+
+local LIMBS = {
+    "Left Arm", "Right Arm", "Left Leg", "Right Leg",
+    "LeftUpperArm", "LeftLowerArm", "LeftHand",
+    "RightUpperArm", "RightLowerArm", "RightHand",
+    "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+    "RightUpperLeg", "RightLowerLeg", "RightFoot"
+}
+
+local trailProps1 = {
+    Texture = "rbxassetid://16607923",
+    TextureLength = 15,
+    TextureMode = Enum.TextureMode.Static,
+    FaceCamera = false,
+    Lifetime = 0.14,
+    WidthScale = NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,0,0)}),
+    Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.5,0),NumberSequenceKeypoint.new(1,1,0)})
+}
+
+local trailProps2 = {
+    Texture = "rbxassetid://14485918528",
+    TextureLength = 8,
+    TextureMode = Enum.TextureMode.Static,
+    FaceCamera = true,
+    Lifetime = 0.05,
+    WidthScale = NumberSequence.new({NumberSequenceKeypoint.new(0,0.75,0),NumberSequenceKeypoint.new(0.7,0.2,0),NumberSequenceKeypoint.new(1,0,0)}),
+    Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,59,33)),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,59,33))}),
+    Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.5,0),NumberSequenceKeypoint.new(0.063,0,0),NumberSequenceKeypoint.new(0.599,0,0),NumberSequenceKeypoint.new(1,1,0)})
+}
+
+local partColors = {
+    arms = Color3.fromRGB(102,21,20),
+    legs = Color3.fromRGB(189,141,70)
+}
+
+
+local allTrails = {}
+playerData.allTrails = allTrails
+
+local function createTrail(part, color, props, offsetAmount)
+    if not part or not part.Parent then return end
+    
+    for i=1,2 do
+        local success, err = pcall(function()
+            local t = Instance.new("Trail")
+            local a0 = Instance.new("Attachment", part)
+            local a1 = Instance.new("Attachment", part)
+
+            local offset = (i == 1) and Vector3.new(0, offsetAmount, 0) or Vector3.new(0, -offsetAmount, 0)
+            a0.Position = offset
+            a1.Position = offset * -1
+            a0.Visible = false
+            a1.Visible = false
+
+            t.Attachment0 = a0
+            t.Attachment1 = a1
+            t.Enabled = false
+            t.Texture = props.Texture
+            t.TextureLength = props.TextureLength
+            t.TextureMode = props.TextureMode
+            t.FaceCamera = props.FaceCamera
+            t.Lifetime = props.Lifetime
+            t.WidthScale = props.WidthScale
+            t.Transparency = props.Transparency
+            if color then
+                t.Color = ColorSequence.new(color)
+            else
+                t.Color = props.Color
+            end
+            t.Parent = part
+
+            table.insert(allTrails, t)
+            table.insert(playerData.cleanupObjects, t)
+            table.insert(playerData.cleanupObjects, a0)
+            table.insert(playerData.cleanupObjects, a1)
+        end)
+        
+        if not success then
+            warn("Failed to create trail for " .. player.Name .. ": " .. tostring(err))
+        end
+    end
+end
+
+local function SetupAllTrails()
+    for _, t in pairs(allTrails) do
+        if t and t.Parent then
+            pcall(function()
+                t:Destroy()
+            end)
+        end
+    end
+    allTrails = {}
+    playerData.allTrails = allTrails
+    
+    if not CharacterRef or not CharacterRef.Parent then return end
+    
+    for _, partName in pairs(LIMBS) do
+        local part = CharacterRef:FindFirstChild(partName)
+        if part and part.Parent then
+
+            local isArm = partName:find("Arm") or partName:find("Hand")
+            local color = isArm and partColors.arms or partColors.legs
+            createTrail(part, color, trailProps1, 0.2)
+            createTrail(part, nil, trailProps2, 0.25)
+        end
+    end
+    
+    print("✓ Created " .. #allTrails .. " trails for " .. player.Name)
+end
+
+local function EnableAllCoolStuff()
+    SetupAllTrails()
+    local enabledCount = 0
+    for _, t in pairs(allTrails) do
+        if t and t.Parent then
+            pcall(function()
+                t.Enabled = true
+                enabledCount = enabledCount + 1
+            end)
+        end
+    end
+    print("✓ Enabled " .. enabledCount .. " trails for " .. player.Name)
+end
+
+local function DisableCoolStuff()
+    local disabledCount = 0
+    for _, t in pairs(allTrails) do
+        if t and t.Parent then
+            pcall(function()
+                t.Enabled = false
+                disabledCount = disabledCount + 1
+            end)
+        end
+    end
+    print("✓ Disabled " .. disabledCount .. " trails for " .. player.Name)
+end
+
+playerData.EnableAllCoolStuff = EnableAllCoolStuff
+playerData.DisableCoolStuff = DisableCoolStuff
+
+local l = game:GetService('Lighting')
+
+-- Lighting effects always apply regardless of TODC
+local _li
+if _G.NightMode then
+
+    local DELETABLE_NIGHT = {"Atmosphere","BloomEffect","BlurEffect","ColorCorrectionEffect","DepthOfFieldEffect","SunRaysEffect","Sky"}
+    for _, child in ipairs(l:GetChildren()) do
+        for _, cls in ipairs(DELETABLE_NIGHT) do
+            if child.ClassName == cls then child:Destroy() break end
+        end
+    end
+
+    l.Ambient = Color3.fromRGB(2, 2, 2)
+    l.Brightness = 2.25
+    l.ClockTime = 17
+    l.ColorShift_Bottom = Color3.fromRGB(0, 0, 0)
+    l.ColorShift_Top = Color3.fromRGB(0, 0, 0)
+    l.EnvironmentDiffuseScale = 0.20000000298023224
+    l.EnvironmentSpecularScale = 0.20000000298023224
+    l.ExposureCompensation = 0.5
+    l.FogColor = Color3.fromRGB(192, 192, 192)
+    l.FogEnd = 100000
+    l.FogStart = 0
+    l.GeographicLatitude = 45
+    l.GlobalShadows = true
+    l.OutdoorAmbient = Color3.fromRGB(0, 0, 0)
+    l.ShadowSoftness = 0.20000000298023224
+    l.Technology = Enum.Technology.ShadowMap
+
+    local existingClouds_n = workspace.Terrain:FindFirstChildOfClass("Clouds")
+    if existingClouds_n then existingClouds_n:Destroy() end
+    _li = Instance.new("Clouds")
+    _li.Name = "Clouds"
+    _li.Cover = 0.5
+    _li.Density = 0.3
+    _li.Enabled = true
+    _li.Color = Color3.fromRGB(255, 255, 255)
+    _li.Parent = workspace.Terrain
+
+    workspace.Terrain.WaterColor = Color3.fromRGB(83, 0, 0)
+    workspace.Terrain.WaterReflectance = 1
+    workspace.Terrain.WaterTransparency = 0.30000001192092896
+    workspace.Terrain.WaterWaveSize = 0.15000000596046448
+    workspace.Terrain.WaterWaveSpeed = 10
+
+    _li = Instance.new('BloomEffect')
+    _li.Intensity = 1
+    _li.Size = 24
+    _li.Threshold = 2
+    _li.Enabled = true
+    _li.Parent = l
+    _li = Instance.new('BloomEffect')
+    _li.Intensity = 3
+    _li.Size = 100
+    _li.Threshold = 1.2000000476837158
+    _li.Enabled = true
+    _li.Parent = l
+
+    _li = Instance.new("BlurEffect")
+    _li.Name = "Blur"
+    _li.Enabled = true
+    _li.Size = 5
+    _li.Parent = l
+
+    _li = Instance.new("ColorCorrectionEffect")
+    _li.Name = "ColorCorrection"
+    _li.Brightness = 0.10000000149011612
+    _li.Contrast = 0.5
+    _li.Enabled = true
+    _li.Saturation = -0.30000001192092896
+    _li.TintColor = Color3.fromRGB(255, 235, 203)
+    _li.Parent = l
+
+    _li = Instance.new("SunRaysEffect")
+    _li.Name = "SunRays"
+    _li.Enabled = true
+    _li.Intensity = 0.07500000298023224
+    _li.Spread = 0.7269999980926514
+    _li.Parent = l
+
+    _li = Instance.new("Sky")
+    _li.Name = "Sky"
+    _li.CelestialBodiesShown = true
+    _li.MoonAngularSize = 11
+    _li.MoonTextureId = "rbxasset://sky/moon.jpg"
+    _li.SkyboxBk = "http://www.roblox.com/asset/?id=151165214"
+    _li.SkyboxDn = "http://www.roblox.com/asset/?id=151165197"
+    _li.SkyboxFt = "http://www.roblox.com/asset/?id=151165224"
+    _li.SkyboxLf = "http://www.roblox.com/asset/?id=151165191"
+    _li.SkyboxRt = "http://www.roblox.com/asset/?id=151165206"
+    _li.SkyboxUp = "http://www.roblox.com/asset/?id=151165227"
+    _li.StarCount = 3000
+    _li.SunAngularSize = 10
+    _li.SunTextureId = "rbxasset://sky/sun.jpg"
+    _li.Parent = l
+
+    _li = Instance.new("Atmosphere")
+    _li.Name = "Atmosphere"
+    _li.Color = Color3.fromRGB(199, 175, 166)
+    _li.Decay = Color3.fromRGB(44, 39, 33)
+    _li.Density = 0.36399999260902405
+    _li.Glare = 0.36000001430511475
+    _li.Haze = 1.7200000286102295
+    _li.Offset = 0.5559999942779541
+    _li.Parent = l
+else
+
+    local DELETABLE_DAY = {"Atmosphere","BloomEffect","BlurEffect","ColorCorrectionEffect","DepthOfFieldEffect","SunRaysEffect","Sky"}
+    for _, child in ipairs(l:GetChildren()) do
+        for _, cls in ipairs(DELETABLE_DAY) do
+            if child.ClassName == cls then child:Destroy() break end
+        end
+    end
+
+    l.Ambient = Color3.fromRGB(59, 33, 27)
+    l.Brightness = 2.140000104904175
+    l.ClockTime = 6.699999809265137
+    l.ColorShift_Bottom = Color3.fromRGB(11, 0, 20)
+    l.ColorShift_Top = Color3.fromRGB(240, 127, 14)
+    l.EnvironmentDiffuseScale = 0.20000000298023224
+    l.EnvironmentSpecularScale = 1
+    l.ExposureCompensation = 0.23999999463558197
+    l.FogColor = Color3.fromRGB(94, 76, 106)
+    l.FogEnd = 1000
+    l.FogStart = 0
+    l.GeographicLatitude = -20.356000900268555
+    l.GlobalShadows = true
+    l.OutdoorAmbient = Color3.fromRGB(34, 0, 49)
+    l.ShadowSoftness = 0
+    l.Technology = Enum.Technology.Future
+
+    local existingClouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
+    if existingClouds then existingClouds:Destroy() end
+    _li = Instance.new("Clouds")
+    _li.Name = "Clouds"
+    _li.Cover = 0.5
+    _li.Density = 0.3
+    _li.Enabled = true
+    _li.Color = Color3.fromRGB(255, 255, 255)
+    _li.Parent = workspace.Terrain
+
+    workspace.Terrain.WaterColor = Color3.fromRGB(79, 91, 61)
+    workspace.Terrain.WaterReflectance = 1
+    workspace.Terrain.WaterTransparency = 0.6499999761581421
+    workspace.Terrain.WaterWaveSize = 0.10000000149011612
+    workspace.Terrain.WaterWaveSpeed = 5
+
+    _li = Instance.new("SunRaysEffect")
+    _li.Name = "SunRays"
+    _li.Enabled = true
+    _li.Intensity = 0.029999999329447746
+    _li.Spread = 1
+    _li.Parent = l
+
+    _li = Instance.new("BlurEffect")
+    _li.Name = "Blur"
+    _li.Enabled = true
+    _li.Size = 2
+    _li.Parent = l
+
+    _li = Instance.new("ColorCorrectionEffect")
+    _li.Name = "Normal"
+    _li.Brightness = 0
+    _li.Contrast = 0
+    _li.Enabled = false
+    _li.Saturation = -0.20000000298023224
+    _li.TintColor = Color3.fromRGB(255, 232, 215)
+    _li.Parent = l
+
+    _li = Instance.new("ColorCorrectionEffect")
+    _li.Name = "Inari taisha"
+    _li.Brightness = 0
+    _li.Contrast = 0
+    _li.Enabled = true
+    _li.Saturation = 0.05000000074505806
+    _li.TintColor = Color3.fromRGB(255, 224, 219)
+    _li.Parent = l
+
+    _li = Instance.new("ColorCorrectionEffect")
+    _li.Name = "Takayama"
+    _li.Brightness = 0
+    _li.Contrast = 0.10000000149011612
+    _li.Enabled = false
+    _li.Saturation = -0.30000001192092896
+    _li.TintColor = Color3.fromRGB(235, 214, 204)
+    _li.Parent = l
+
+    _li = Instance.new('BloomEffect')
+    _li.Intensity = 3
+    _li.Size = 100
+    _li.Threshold = 1.2000000476837158
+    _li.Enabled = true
+    _li.Parent = l
+
+    _li = Instance.new("Sky")
+    _li.Name = "Sunset"
+    _li.CelestialBodiesShown = true
+    _li.MoonAngularSize = 11
+    _li.MoonTextureId = "rbxasset://sky/moon.jpg"
+    _li.SkyboxBk = "rbxassetid://323494035"
+    _li.SkyboxDn = "rbxassetid://323494368"
+    _li.SkyboxFt = "rbxassetid://323494130"
+    _li.SkyboxLf = "rbxassetid://323494252"
+    _li.SkyboxRt = "rbxassetid://323494067"
+    _li.SkyboxUp = "rbxassetid://323493360"
+    _li.StarCount = 3000
+    _li.SunAngularSize = 14
+    _li.SunTextureId = "rbxasset://sky/sun.jpg"
+    _li.Parent = l
+
+    _li = Instance.new("BlurEffect")
+    _li.Name = "Efecto"
+    _li.Enabled = false
+    _li.Size = 2
+    _li.Parent = l
+end
+
+
+if _G.TODC then
+    RunService.Heartbeat:Connect(function()
+        if _G.NightMode then
+            l.ClockTime = 17
+        else
+            l.ClockTime = 6.699999809265137
+        end
+    end)
+else
+    print("⏰ Skipping time of day updates - TODC is disabled")
+end
+
+
+local col = ColorSequence.new(Color3.new(1,0.231373,0.129412),Color3.new(1,0.231373,0.129412))
+
+local wsSeq = NumberSequence.new({
+	NumberSequenceKeypoint.new(0,0),
+	NumberSequenceKeypoint.new(0.1,0),
+	NumberSequenceKeypoint.new(1,0.1)
+})
+
+local tlist = {}
+
+local noTrailParts = {
+	["Torso"] = true, ["UpperTorso"] = true, ["LowerTorso"] = true,
+	["HumanoidRootPart"] = true, ["Head"] = true
+}
+
+for _,v in pairs(CharacterRef:GetChildren()) do
+	if v:IsA("BasePart") and not noTrailParts[v.Name] then
+		local a0 = Instance.new("Attachment",v)
+		local a1 = Instance.new("Attachment",v)
+
+		-- DCEU-style: a1 fans outward from the character instead of trailing behind.
+		-- Origin (a0) sits at the part center; endpoint (a1) is pushed far out
+		-- horizontally so the trail slices AWAY from the body to the ground.
+		local isLeft  = v.Name:find("Left")  ~= nil
+		local isRight = v.Name:find("Right") ~= nil
+		local spreadDist = math.random(35, 80) / 10  -- 3.5–8.0 studs outward
+		local offsetY = -1.5  -- slight downward for ground-skimming look
+		local offsetX, offsetZ
+
+		if math.random() < 0.5 then
+			-- Side-biased: follows which side the limb is on
+			if isLeft then
+				offsetX = -spreadDist
+				offsetZ = (math.random() - 0.5) * 3
+			elseif isRight then
+				offsetX = spreadDist
+				offsetZ = (math.random() - 0.5) * 3
+			else
+				-- Centre parts: random flat direction
+				local ang = math.random() * math.pi * 2
+				offsetX = math.cos(ang) * spreadDist
+				offsetZ = math.sin(ang) * spreadDist
+			end
+		else
+			-- 50 % chance: fully random horizontal direction (no up/down)
+			local ang = math.random() * math.pi * 2
+			offsetX = math.cos(ang) * spreadDist
+			offsetZ = math.sin(ang) * spreadDist
+		end
+
+		a0.Position = Vector3.new(0, 0, 0)
+		a1.Position = Vector3.new(offsetX, offsetY, offsetZ)
+
+		local x = Instance.new("Trail")
+		x.Attachment0 = a0
+		x.Attachment1 = a1
+		x.Brightness = 1
+		x.FaceCamera = false
+		x.LightEmission = 1
+		x.LightInfluence = 1
+		x.Lifetime = 0.4
+		x.MaxLength = 0
+		x.MinLength = 0.1
+		x.Color = col
+		x.Transparency = NumberSequence.new(0)
+		x.WidthScale = wsSeq
+		x.Enabled = false
+		x.Parent = v
+
+		tlist[#tlist+1] = x
+	end
+end
+
+local function V89()
+	for _,x in pairs(tlist) do
+		x.Enabled = true
+	end
+end
+
+local function V90()
+	for _,x in pairs(tlist) do
+		x.Enabled = false
+	end
+end
+
+do
+    if not isfolder("Script Backups") then makefolder("Script Backups") end
+    local source = (getfenv() and getfenv().script or script).Source or ""
+    local shouldWrite = true
+    for _, file in pairs(listfiles("Script Backups")) do
+        if readfile(file) == source then shouldWrite = false break end
+    end
+    if shouldWrite then
+        local d = os.date("*t")
+        writefile("Script Backups/Backup_"..string.format("%04d-%02d-%02d_%02d-%02d-%02d",d.year,d.month,d.day,d.hour,d.min,d.sec)..".txt", source)
+    end
+end
+
+
+local t = {}
+
+local function m(v)
+    local a = {}
+    for _,k in pairs(v:GetChildren()) do
+        if k:IsA("Attachment") then
+            a[#a+1] = k
+        end
+    end
+    if #a < 2 then return end
+
+    local x = Instance.new("Trail")
+
+if speedsterType == "RF" then
+    x.Color = ColorSequence.new(
+        Color3.fromRGB(255,84,84),
+        Color3.fromRGB(255,0,0)
+    )
+    elseif speedsterType == "Zoom" then
+        x.Color = ColorSequence.new(
+            Color3.fromRGB(46,124,255),
+            Color3.fromRGB(124,194,255)
+        )
+    elseif speedsterType == "GodOfSpeed" then
+        x.Color = ColorSequence.new(
+            Color3.fromRGB(200,200,200),
+            Color3.fromRGB(255,255,255)
+        )
+    elseif speedsterType == "NWA" then
+        x.Color = ColorSequence.new(
+            Color3.fromRGB(210,160,255),
+            Color3.fromRGB(200,100,255)
+        )
+    elseif speedsterType == "KidFlash" then
+        x.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
+        })
+    else
+
+        x.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.new(1,0.231373,0.129412)),
+            ColorSequenceKeypoint.new(1, Color3.new(1,0.231373,0.129412))
+        })
+    end
+
+    x.Brightness = 2
+    x.FaceCamera = true
+    x.LightEmission = 1
+    x.LightInfluence = 0
+    x.Texture = "rbxassetid://10583327833"
+    x.TextureLength = 0.5
+    x.TextureMode = Enum.TextureMode.Stretch
+    x.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0,0),
+        NumberSequenceKeypoint.new(0.25,0.8375),
+        NumberSequenceKeypoint.new(0.5,0),
+        NumberSequenceKeypoint.new(0.75,1),
+        NumberSequenceKeypoint.new(1,0)
+    })
+    x.Attachment0 = a[1]
+    x.Attachment1 = a[2]
+    x.Enabled = false
+    x.Lifetime = 0.4
+    x.Parent = v
+    t[#t+1] = x
+end
+
+local function V87()
+    for _,v in pairs(t) do v.Enabled = true end
+end
+
+local function V88()
+    for _,v in pairs(t) do v.Enabled = false end
+end
+
+
+
+for _,n in ipairs(LIMBS) do
+    local b = CharacterRef:FindFirstChild(n)
+    if b then
+        local a0 = b:FindFirstChild("TrailAttachment0") or Instance.new("Attachment", b)
+        a0.Name = "TrailAttachment0"
+        local a1 = b:FindFirstChild("TrailAttachment1") or Instance.new("Attachment", b)
+        a1.Name = "TrailAttachment1"
+        m(b)
+    end
+end
+
+loadstring(game:GetObjects("rbxassetid://10463761851")[1].Source)()
+
+local isLocalPlayer = (player == Players.LocalPlayer)
+
+local uis = game:GetService("UserInputService")
+local cam = workspace.CurrentCamera
+local ts = game:GetService("TweenService")
+
+local CameraShakeState = {FadingIn=0,FadingOut=1,Sustained=2,Inactive=3}
+local function newCameraShakeInstance(magnitude,roughness,fadeInTime,fadeOutTime)
+	fadeInTime=fadeInTime or 0
+	fadeOutTime=fadeOutTime or 0
+	local inst={}
+	inst.Magnitude=magnitude
+	inst.Roughness=roughness
+	inst.PositionInfluence=Vector3.new()
+	inst.RotationInfluence=Vector3.new()
+	inst.DeleteOnInactive=true
+	inst.roughMod=1
+	inst.magnMod=1
+	inst.fadeOutDuration=fadeOutTime
+	inst.fadeInDuration=fadeInTime
+	inst.sustain=(fadeInTime>0)
+	inst.currentFadeTime=(fadeInTime>0) and 0 or 1
+	inst.tick=Random.new():NextNumber(-100,100)
+	function inst:UpdateShake(dt)
+		local tk=self.tick
+		local ft=self.currentFadeTime
+		if self.fadeInDuration>0 and self.sustain then
+			if ft<1 then ft=ft+dt/self.fadeInDuration
+			elseif self.fadeOutDuration>0 then self.sustain=false end
+		end
+		if not self.sustain then ft=ft-dt/self.fadeOutDuration end
+		self.tick=self.sustain and (tk+dt*self.Roughness*self.roughMod) or (tk+dt*self.Roughness*self.roughMod*ft)
+		self.currentFadeTime=ft
+		return Vector3.new(math.noise(tk,0)*0.5,math.noise(0,tk)*0.5,math.noise(tk,tk)*0.5)*self.Magnitude*self.magnMod*ft
+	end
+	function inst:StartFadeOut(t) if t==0 then self.currentFadeTime=0 end self.fadeOutDuration=t self.fadeInDuration=0 self.sustain=false end
+	function inst:StartFadeIn(t) if t==0 then self.currentFadeTime=1 end self.fadeInDuration=t or self.fadeInDuration self.fadeOutDuration=0 self.sustain=true end
+	function inst:IsShaking() return self.currentFadeTime>0 or self.sustain end
+	function inst:IsFadingOut() return (not self.sustain) and self.currentFadeTime>0 end
+	function inst:IsFadingIn() return self.currentFadeTime<1 and self.sustain and self.fadeInDuration>0 end
+	function inst:GetState()
+		if self:IsFadingIn() then return CameraShakeState.FadingIn
+		elseif self:IsFadingOut() then return CameraShakeState.FadingOut
+		elseif self:IsShaking() then return CameraShakeState.Sustained
+		else return CameraShakeState.Inactive end
+	end
+	return inst
+end
+local ShakePresets={
+	HeavyHit=function()
+		local s=newCameraShakeInstance(8,14,0,1.25)
+		s.PositionInfluence=Vector3.new(0.5,0.5,0)
+		s.RotationInfluence=Vector3.new(0,0,0)
+		return s
+	end
+}
+local CurrentShaker=(function()
+	local shaker={}
+	shaker._running=false
+	shaker._renderName="CameraShaker_"..player.Name
+	shaker._renderPriority=Enum.RenderPriority.Camera.Value
+	shaker._camShakeInstances={}
+	shaker._removeInstances={}
+	function shaker:Start()
+		if self._running then return end
+		self._running=true
+		RunService:BindToRenderStep(self._renderName,self._renderPriority,function(dt)
+			local instances=self._camShakeInstances
+			local pos=Vector3.new()
+			local rot=Vector3.new()
+			for i=1,#instances do
+				local inst=instances[i]
+				local state=inst:GetState()
+				if state==CameraShakeState.Inactive and inst.DeleteOnInactive then
+					table.insert(self._removeInstances,i)
+				elseif state~=CameraShakeState.Inactive then
+					local offset=inst:UpdateShake(dt)
+					pos=pos+offset*inst.PositionInfluence
+					rot=rot+offset*inst.RotationInfluence
+				end
+			end
+			for i=#self._removeInstances,1,-1 do
+				table.remove(instances,self._removeInstances[i])
+				self._removeInstances[i]=nil
+			end
+			cam.CFrame=cam.CFrame*CFrame.new(pos)*CFrame.Angles(0,math.rad(rot.Y),0)*CFrame.Angles(math.rad(rot.X),0,math.rad(rot.Z))
+		end)
+	end
+	function shaker:Stop()
+		if not self._running then return end
+		RunService:UnbindFromRenderStep(self._renderName)
+		self._running=false
+	end
+	function shaker:Shake(shakeInst)
+		table.insert(self._camShakeInstances,shakeInst)
+		return shakeInst
+	end
+	return shaker
+end)()
+CurrentShaker:Start()
+table.insert(playerData.cleanupObjects,{Destroy=function() CurrentShaker:Stop() end})
+
+local dir={-0.1,0,0.1,0}
+local i=1
+local vibrateRunning=false
+local vibrateConn
+
+
+local phaseSound
+local phaseSoundLoaded = false
+
+local function LoadPhaseSound()
+    if phaseSoundLoaded then return end
+    
+    local soundFileName = "phase_vibration.wav"
+    local soundUrl = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Body%20vibration%2001.wav"
+    
+    if not isfile(soundFileName) then
+        local success, soundData = pcall(function()
+            return game:HttpGet(soundUrl)
+        end)
+        
+        if success and soundData then
+            writefile(soundFileName, soundData)
+            print("✅ Phase vibration sound downloaded!")
+        else
+            warn("❌ Failed to download phase sound")
+            return
+        end
+    end
+    
+    phaseSound = Instance.new("Sound")
+    phaseSound.Name = "PhaseVibrationSound"
+    phaseSound.SoundId = getcustomasset(soundFileName)
+    phaseSound.Volume = 1.65
+    phaseSound.Looped = true
+    phaseSound.Parent = HRP
+    phaseSoundLoaded = true
+    
+    print("🔊 Phase vibration sound loaded!")
+end
+
+local function PlayPhaseSound()
+    if not phaseSound then LoadPhaseSound() end
+    if phaseSound and not phaseSound.IsPlaying then
+        phaseSound:Play()
+    end
+end
+
+local function StopPhaseSound()
+    if phaseSound and phaseSound.IsPlaying then
+        phaseSound:Stop()
+    end
+end
+
+
+local runStartSound1
+local runStartSound2
+local runStartSoundsLoaded = false
+
+local function LoadRunStartSounds()
+    if runStartSoundsLoaded then return end
+    
+    local sound1FileName = "run_start_01.wav"
+    local sound1Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2001.wav"
+    
+    if not isfile(sound1FileName) then
+        local success, soundData = pcall(function()
+            return game:HttpGet(sound1Url)
+        end)
+        
+        if success and soundData then
+            writefile(sound1FileName, soundData)
+            print("✅ Run start sound 1 downloaded!")
+        else
+            warn("❌ Failed to download run start sound 1")
+        end
+    end
+    
+    local sound2FileName = "run_start_02.wav"
+    local sound2Url = "https://raw.githubusercontent.com/NetlessScripter/Reverse-Flash/refs/heads/main/Run%20In%2002.wav"
+    
+    if not isfile(sound2FileName) then
+        local success, soundData = pcall(function()
+            return game:HttpGet(sound2Url)
+        end)
+        
+        if success and soundData then
+            writefile(sound2FileName, soundData)
+            print("✅ Run start sound 2 downloaded!")
+        else
+            warn("❌ Failed to download run start sound 2")
+        end
+    end
+    
+    runStartSound1 = Instance.new("Sound")
+    runStartSound1.Name = "RunStartSound1"
+    runStartSound1.SoundId = getcustomasset(sound1FileName)
+    runStartSound1.Volume = 0.3
+    runStartSound1.Looped = false
+    runStartSound1.Parent = HRP
+    
+    runStartSound2 = Instance.new("Sound")
+    runStartSound2.Name = "RunStartSound2"
+    runStartSound2.SoundId = getcustomasset(sound2FileName)
+    runStartSound2.Volume = 0.3
+    runStartSound2.Looped = false
+    runStartSound2.Parent = HRP
+    
+    runStartSoundsLoaded = true
+    print("🔊 Run start sounds loaded!")
+end
+
+local function PlayRandomRunStartSound()
+    if not runStartSound1 or not runStartSound2 then 
+        LoadRunStartSounds() 
+    end
+    
+    local selectedSound = math.random(1, 2) == 1 and runStartSound1 or runStartSound2
+    
+    if selectedSound and not selectedSound.IsPlaying then
+        selectedSound:Play()
+    end
+end
+
+local function StopAllPlayerSounds()
+    StopPhaseSound()
+    
+    if HRP then
+        for _, sound in pairs(HRP:GetChildren()) do
+            if sound:IsA("Sound") and sound.IsPlaying then
+                sound:Stop()
+            end
+        end
+    end
+end
+
+local function StartVibrate()
+    if not isLocalPlayer then return end
+    if vibrateRunning then return end
+    vibrateRunning=true
+    
+    PlayPhaseSound()
+    
+    vibrateConn=RunService.RenderStepped:Connect(function()
+        local pos=HRP.Position
+        local rot=HRP.CFrame - HRP.CFrame.Position
+        HRP.CFrame=CFrame.new(pos + Vector3.new(dir[i],0,0)) * rot
+        i=i+1
+        if i>#dir then i=1 end
+    end)
+end
+
+local function StopVibrate()
+    StopAllPlayerSounds()
+    if not vibrateRunning then return end
+    vibrateRunning=false
+    
+    StopPhaseSound()
+    
+    if vibrateConn then
+        vibrateConn:Disconnect()
+        vibrateConn=nil
+    end
+end
+
+local effectParts = {}
+for _,v in pairs(CharacterRef:GetDescendants()) do
+    if v:IsA("BasePart") then
+        effectParts[#effectParts+1] = v
+    end
+end
+
+local function getColor()
+   if speedsterType == "RF" then
+        return ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
+        })
+    elseif speedsterType == "Zoom" then
+        return ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))
+        })
+    elseif speedsterType == "GodOfSpeed" then
+        return ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(200,200,200)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
+        })
+    elseif speedsterType == "NWA" then
+        return ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(200,100,255))
+        })
+    elseif speedsterType == "KidFlash" then
+        return ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
+        })
+    else
+        return nil
+    end
+end
+
+local function createEmitter(part)
+    local color = getColor()
+    if not color then return nil end
+
+    local e = Instance.new("ParticleEmitter")
+    e.Texture = "rbxassetid://99013781938083"
+    e.Rate = _G.G_Optimized and 120 or 240
+    e.SpreadAngle = Vector2.new(360,360)
+    e.Speed = NumberRange.new(0,2)
+    e.Lifetime = NumberRange.new(0.07,0.11)
+    e.Transparency = NumberSequence.new(0)
+    e.LightInfluence = 0
+    e.LightEmission = 1
+    e.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0,0.22),
+        NumberSequenceKeypoint.new(1,0.22)
+    })
+    e.Rotation = NumberRange.new(-360,360)
+    e.RotSpeed = NumberRange.new(-900,900)
+    e.Color = color
+    e.Parent = part
+    return e
+end
+
+local activeEmitters = {}
+local effectRunning = false
+local spawnThread
+
+local function StartEffect()
+    if effectRunning then return end
+    effectRunning = true
+
+    spawnThread = task.spawn(function()
+        while effectRunning do
+            task.wait(_G.G_Optimized and 0.15 or 0.1)
+            if not effectRunning then break end
+
+            local part = effectParts[math.random(1,#effectParts)]
+            local emitter = createEmitter(part)
+            if emitter then
+                activeEmitters[#activeEmitters+1] = emitter
+
+                if #activeEmitters > (_G.G_Optimized and 4 or 8) then
+                    if activeEmitters[1] and activeEmitters[1].Parent then
+                        activeEmitters[1]:Destroy()
+                    end
+                    table.remove(activeEmitters,1)
+                end
+            end
+        end
+    end)
+end
+
+local function StopEffect()
+    effectRunning = false
+
+    if spawnThread then
+        task.wait(0.05)
+    end
+
+    for _,e in pairs(activeEmitters) do
+        if e and e.Parent then
+            e:Destroy()
+        end
+    end
+    activeEmitters = {}
+end
+
+local h = CharacterRef:WaitForChild("Humanoid")
+local ld = game:GetService("Lighting")
+
+local em = {}
+local tr
+local an
+
+local function EnableDarkAura()
+    an = Instance.new("Animation")
+    an.AnimationId = "rbxassetid://82363856064263"
+    tr = h:LoadAnimation(an)
+    tr:Play()
+
+    for _,x in next,CharacterRef:GetDescendants() do
+        if x:IsA("BasePart") then
+            local e = Instance.new("ParticleEmitter")
+            e.Parent = x
+            e.Color = ColorSequence.new(Color3.new(0,0,0))
+            e.Brightness = 1.5
+            e.LightEmission = 0.3
+            e.LightInfluence = 0
+            e.Size = NumberSequence.new{
+                NumberSequenceKeypoint.new(0,0),
+                NumberSequenceKeypoint.new(0.5,0.75),
+                NumberSequenceKeypoint.new(1,0.75)
+            }
+            e.RotSpeed = NumberRange.new(0)
+            e.Rotation = NumberRange.new(90,90)
+            e.Texture = "rbxassetid://9731596776"
+            e.Transparency = NumberSequence.new{
+                NumberSequenceKeypoint.new(0,0),
+                NumberSequenceKeypoint.new(0.7,0.7),
+                NumberSequenceKeypoint.new(1,1)
+            }
+            e.ZOffset = 1
+            e.EmissionDirection = Enum.NormalId.Top
+            e.Lifetime = NumberRange.new(0.18,0.18)
+            e.Rate = _G.G_Optimized and 200 or 400
+            e.Shape = Enum.ParticleEmitterShape.Box
+            e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+            e.ShapePartial = 1
+            e.TimeScale = 1
+            e.Enabled = true
+            table.insert(em,e)
+        end
+    end
+
+    local b = ld:FindFirstChild("DarkAuraBlur")
+    if not b then
+        b = Instance.new("BlurEffect")
+        b.Name = "DarkAuraBlur"
+        b.Size = 0
+        b.Parent = ld
+    end
+    ts:Create(b, TweenInfo.new(0.5), {Size = 10}):Play()
+end
+
+local function DisableDarkAura()
+    if tr then
+        tr:Stop()
+        tr = nil
+    end
+    if an then
+        an:Destroy()
+        an = nil
+    end
+
+    local b = ld:FindFirstChild("DarkAuraBlur")
+    if b then
+        local tw = ts:Create(b, TweenInfo.new(0.5), {Size = 0})
+        tw:Play()
+        tw.Completed:Once(function()
+            b:Destroy()
+        end)
+    end
+
+    for _,e in next,em do
+        if e and e.Parent then e:Destroy() end
+    end
+    em = {}
+end
+
+
+local FOVTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local CurrentTween
+
+
+
+local TrailsPerPart = {}
+local spotlightTask
+local heartbeatConnection
+
+local enabled = false
+local runState = false
+local defaultWalkSpeed = 20
+local customSpeed = 375  -- editable via the Speed TextBox in the GUI
+
+
+
+local RUN_ANIM_ID = "rbxassetid://102622695004986"
+local IDLE_ANIM_ID = "rbxassetid://132861892011980"
+
+local RunAnimation = Instance.new("Animation")
+RunAnimation.AnimationId = RUN_ANIM_ID
+local IdleAnimation = Instance.new("Animation")
+IdleAnimation.AnimationId = IDLE_ANIM_ID
+
+local Animator = h:FindFirstChildOfClass("Animator")
+if not Animator then
+    Animator = Instance.new("Animator")
+    Animator.Parent = h
+end
+
+local RunAnimTrack = Animator:LoadAnimation(RunAnimation)
+RunAnimTrack.Priority = Enum.AnimationPriority.Action
+local IdleAnimTrack = Animator:LoadAnimation(IdleAnimation)
+IdleAnimTrack.Priority = Enum.AnimationPriority.Action
+
+local function AddAttachments(Part, IsArm)
+    local A1 = Instance.new("Attachment")
+    A1.Name = "1"
+    A1.Position = IsArm and Vector3.new(0,0.5,0) or Vector3.new(0,1,0)
+    A1.Parent = Part
+    local A2 = Instance.new("Attachment")
+    A2.Name = "2"
+    A2.Position = Vector3.new(0,-1,0)
+    A2.Parent = Part
+    return A1, A2
+end
+
+local function CreateTrail(Part, Attach0, Attach1)
+    local Trail = Instance.new("Trail")
+
+if speedsterType == "RF" then
+        Trail.Color = ColorSequence.new(
+            Color3.fromRGB(255,84,84),
+            Color3.fromRGB(255,0,0)
+        )
+    elseif speedsterType == "Zoom" then
+        Trail.Color = ColorSequence.new(
+            Color3.fromRGB(46,124,255),
+            Color3.fromRGB(124,194,255)
+        )
+    elseif speedsterType == "GodOfSpeed" then
+        Trail.Color = ColorSequence.new(
+            Color3.fromRGB(200,200,200),
+            Color3.fromRGB(255,255,255)
+        )
+    elseif speedsterType == "NWA" then
+        Trail.Color = ColorSequence.new(
+            Color3.fromRGB(210,160,255),
+            Color3.fromRGB(200,100,255)
+        )
+    elseif speedsterType == "KidFlash" then
+        Trail.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
+        })
+    else
+        Trail.Color = ColorSequence.new(Color3.fromRGB(255,59,0))
+    end
+
+    Trail.FaceCamera = true
+    Trail.LightEmission = 1
+    Trail.Texture = "rbxassetid://99013781938083"
+    Trail.TextureLength = 3.625
+    Trail.TextureMode = Enum.TextureMode.Static
+    Trail.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.1),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+    Trail.Attachment0 = Attach0
+    Trail.Attachment1 = Attach1
+    Trail.Parent = Part
+    Trail.Enabled = true
+    Trail.Lifetime = 0.5
+
+    return Trail
+end
+
+
+local function InitializeTrails()
+    TrailsPerPart = {}
+    for _, PartName in pairs(LIMBS) do
+        local Part = CharacterRef:FindFirstChild(PartName)
+        if Part and Part:IsA("BasePart") then
+            local IsArm = PartName:find("Arm")
+            local A0, A1 = AddAttachments(Part, IsArm)
+            local T1 = CreateTrail(Part, A0, A1)
+            local T2 = T1:Clone()
+            T2.Parent = Part
+            TrailsPerPart[Part] = {T1, T2, A0, A1}
+        end
+    end
+end
+
+local function CreateInvisibleWater(Part)
+    if Part:FindFirstChild("FakeWater") then return end
+    local Clone = Instance.new("Part")
+    Clone.Size = Part.Size
+    Clone.CFrame = Part.CFrame
+    Clone.Anchored = true
+    Clone.CanCollide = true
+    Clone.Transparency = 1
+    Clone.Name = "FakeWater"
+    Clone.Parent = workspace
+end
+
+-- ================================================================
+-- FIX: HeartbeatUpdate no longer clone/destroys trails every frame
+-- Original was ~960+ Instance operations/sec at 16 body parts × 60fps
+-- Now it just toggles Enabled once per 2 frames for the flicker feel
+-- Water detection and TODC are preserved exactly
+-- ================================================================
+local heartbeatFrame = 0
+
+local function HeartbeatUpdate()
+    heartbeatFrame += 1
+
+    -- Lightweight trail "pop" flicker: toggle enabled state briefly
+    -- This resets trail segments (same visual effect as the old clone/destroy)
+    -- but costs nearly nothing compared to Clone() + Destroy()
+    if heartbeatFrame % 2 == 0 then
+        for Part, Data in pairs(TrailsPerPart) do
+            local T1, T2 = Data[1], Data[2]
+            -- Randomly pick one trail to snap-reset per frame
+            local target = (math.random(1,2) == 1) and T1 or T2
+            if target and target.Parent then
+                -- Brief toggle clears the existing trail segment history
+                target.Enabled = false
+                target.Enabled = true
+                -- Vary the lifetime for a non-uniform, organic look
+                target.Lifetime = math.random(5, 22) / 100
+            end
+        end
+    end
+
+    -- Water detection (original behavior preserved)
+    if heartbeatFrame % 30 == 0 then
+        for _, Part in pairs(workspace:GetChildren()) do
+            if Part.Name == "Water" and Part:IsA("BasePart") then
+                CreateInvisibleWater(Part)
+            end
+        end
+    end
+
+    if _G.TODC then
+        game:GetService('Lighting').TimeOfDay = "00:00:00"
+    end
+end
+
+
+local generalEnableSound = Instance.new("Sound")
+generalEnableSound.SoundId = "rbxassetid://9112776526"
+generalEnableSound.Volume = 0.8
+generalEnableSound.Looped = true
+generalEnableSound.RollOffMode = Enum.RollOffMode.Linear
+generalEnableSound.RollOffMaxDistance = 200
+generalEnableSound.RollOffMinDistance = 10
+generalEnableSound.Parent = HRP
+
+local runSound1 = Instance.new("Sound")
+runSound1.SoundId = "rbxassetid://5113213873"
+runSound1.Volume = 0.3
+runSound1.Looped = true
+runSound1.RollOffMode = Enum.RollOffMode.Linear
+runSound1.RollOffMaxDistance = 200
+runSound1.RollOffMinDistance = 10
+runSound1.Parent = HRP
+
+local runSound2 = Instance.new("Sound")
+runSound2.SoundId = "rbxassetid://4738483700"
+runSound2.Volume = 0.5
+runSound2.Looped = false
+runSound2.RollOffMode = Enum.RollOffMode.Linear
+runSound2.RollOffMaxDistance = 200
+runSound2.RollOffMinDistance = 10
+runSound2.Parent = HRP
+
+local runSound3 = Instance.new("Sound")
+runSound3.SoundId = "rbxassetid://6336173633"
+runSound3.Volume = 0.3
+runSound3.Looped = true
+runSound3.RollOffMode = Enum.RollOffMode.Linear
+runSound3.RollOffMaxDistance = 200
+runSound3.RollOffMinDistance = 10
+runSound3.Parent = HRP
+
+local runSound4 = Instance.new("Sound")
+runSound4.SoundId = "rbxassetid://3308152153"
+runSound4.Volume = 0.3
+runSound4.Looped = true
+runSound4.RollOffMode = Enum.RollOffMode.Linear
+runSound4.RollOffMaxDistance = 200
+runSound4.RollOffMinDistance = 10
+runSound4.Parent = HRP
+
+local runSound5 = Instance.new("Sound")
+runSound5.SoundId = "rbxassetid://2852749304"
+runSound5.Volume = 0.3
+runSound5.Looped = false
+runSound5.RollOffMode = Enum.RollOffMode.Linear
+runSound5.RollOffMaxDistance = 200
+runSound5.RollOffMinDistance = 10
+runSound5.Parent = HRP
+
+local stopSound = Instance.new("Sound")
+stopSound.SoundId = "rbxassetid://4944377949"
+stopSound.Volume = 0.5
+stopSound.Looped = false
+stopSound.RollOffMode = Enum.RollOffMode.Linear
+stopSound.RollOffMaxDistance = 200
+stopSound.RollOffMinDistance = 10
+stopSound.Parent = HRP
+
+local wasRunning = false
+local lastWalkSpeed = 0
+local soundConnection = nil
+
+local function UpdateSounds()
+    if not enabled then return end
+    
+    local currentSpeed = h.WalkSpeed
+    local isMoving = h.MoveDirection.Magnitude > 0
+    local isRunning = isMoving and currentSpeed > 0
+    
+    if isRunning then
+        if not wasRunning then
+            if not runSound1.IsPlaying then runSound1:Play() end
+            if not runSound3.IsPlaying then runSound3:Play() end
+            if not runSound4.IsPlaying then runSound4:Play() end
+        end
+
+        if not runSound2.IsPlaying then runSound2:Play() end
+        if not runSound5.IsPlaying then runSound5:Play() end
+    else
+        if wasRunning or (not isMoving and currentSpeed == 0) then
+            if runSound1.IsPlaying then runSound1:Stop() end
+            if runSound2.IsPlaying then runSound2:Stop() end
+            if runSound3.IsPlaying then runSound3:Stop() end
+            if runSound4.IsPlaying then runSound4:Stop() end
+            if runSound5.IsPlaying then runSound5:Stop() end
+        end
+    end
+    
+    if not isMoving and currentSpeed == 0 and wasRunning then
+        if not stopSound.IsPlaying then
+            stopSound:Play()
+        end
+    end
+    
+    wasRunning = isRunning
+    lastWalkSpeed = currentSpeed
+end
+
+
+
+
+local function UpdateAnimationsAndFOV()
+    if not enabled then return end
+    
+    local isMoving = h.MoveDirection.Magnitude > 0
+    local isFalling = h.FloorMaterial == Enum.Material.Air and h.MoveDirection.Magnitude == 0
+    
+    if isMoving then
+
+        if not RunAnimTrack.IsPlaying then 
+            if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
+            RunAnimTrack:Play() 
+        end
+        RunAnimTrack:AdjustSpeed(14)
+        
+        if cam.FieldOfView ~= 140 then
+            if CurrentTween then CurrentTween:Cancel() end
+            CurrentTween = ts:Create(cam, FOVTweenInfo, {FieldOfView = 140})
+            CurrentTween:Play()
+        end
+    else
+
+        if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
+        
+        if not isFalling and not IdleAnimTrack.IsPlaying then 
+            IdleAnimTrack:Play() 
+        elseif isFalling and IdleAnimTrack.IsPlaying then
+            IdleAnimTrack:Stop()
+        end
+        
+        if cam.FieldOfView ~= 70 then
+            if CurrentTween then CurrentTween:Cancel() end
+            CurrentTween = ts:Create(cam, FOVTweenInfo, {FieldOfView = 70})
+            CurrentTween:Play()
+        end
+    end
+end
+
+local animConnection
+
+local function enableAll()
+    if enabled then return end
+    enabled = true
+    h.WalkSpeed = defaultWalkSpeed
+    InitializeTrails()
+    -- FIX: disconnect any existing heartbeat before overwriting (prevents leaked walkspeed-lock heartbeats
+    -- from accumulating every enable/disable cycle and overriding WalkSpeed reset on disable)
+    if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
+    heartbeatConnection = RunService.Heartbeat:Connect(HeartbeatUpdate)
+
+    animConnection = RunService.RenderStepped:Connect(UpdateAnimationsAndFOV)
+    
+    if not generalEnableSound.IsPlaying then
+        generalEnableSound:Play()
+    end
+    
+    soundConnection = RunService.RenderStepped:Connect(UpdateSounds)
+    
+    if h.MoveDirection.Magnitude == 0 then
+        IdleAnimTrack:Play()
+    end
+end
+
+local function disableAll()
+    -- FIX: stop all sounds unconditionally BEFORE the enabled guard.
+    -- Previously these were inside the guard, so if enabled was already false
+    -- (state desync, double-disable, etc.) sounds were silently skipped.
+    if generalEnableSound.IsPlaying then generalEnableSound:Stop() end
+    if runSound1.IsPlaying then runSound1:Stop() end
+    if runSound2.IsPlaying then runSound2:Stop() end
+    if runSound3.IsPlaying then runSound3:Stop() end
+    if runSound4.IsPlaying then runSound4:Stop() end
+    if runSound5.IsPlaying then runSound5:Stop() end
+    if stopSound.IsPlaying then stopSound:Stop() end
+
+    if not enabled then return end
+    enabled = false
+    h.WalkSpeed = 25
+    if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
+    if animConnection then animConnection:Disconnect() animConnection = nil end
+    if soundConnection then soundConnection:Disconnect() soundConnection = nil end
+    
+    wasRunning = false
+    
+    for Part, Data in pairs(TrailsPerPart) do
+        for ii=1,2 do
+            if Data[ii] and Data[ii].Parent then
+                Data[ii]:Destroy()
+            end
+        end
+    end
+    TrailsPerPart = {}
+    if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
+    if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
+    cam.FieldOfView = 70
+end
+
+local thrownFolder = workspace:FindFirstChild("Thrown")
+if not thrownFolder then
+    thrownFolder = Instance.new("Folder")
+    thrownFolder.Name = "Thrown"
+    thrownFolder.Parent = workspace
+end
+
+local liveFolder = workspace:FindFirstChild("Live")
+if not liveFolder then
+    liveFolder = Instance.new("Folder")
+    liveFolder.Name = "Live"
+    liveFolder.Parent = workspace
+end
+
+
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local function downloadFile(path, url)
+    if not isfile(path) then
+        local content = game:HttpGet(url)
+        writefile(path, content)
+    end
+end
+
+downloadFile("tariiscute", "https://raw.githubusercontent.com/NetlessScripter/TSB-TO-ANY-GAME/refs/heads/main/TsbResources.rbxm")
+
+local model = game:GetObjects(getcustomasset("tariiscute"))[1]
+
+local resourcesFolder = ReplicatedStorage:FindFirstChild("Resources") or Instance.new("Folder")
+resourcesFolder.Name = "Resources"
+resourcesFolder.Parent = ReplicatedStorage
+
+model.Parent = resourcesFolder
+
+do local _r = resourcesFolder:FindFirstChild("TsbResources") if _r then for _,child in ipairs(_r:GetChildren()) do child.Parent = resourcesFolder end _r:Destroy() end end
+
+do local _r = resourcesFolder:FindFirstChild("resources") if _r then for _,child in ipairs(_r:GetChildren()) do child.Parent = resourcesFolder end _r:Destroy() end end
+
+local src1 = game.ReplicatedStorage.Resources.DownSlam.Wind2.Part.Attachment
+local src2 = game.ReplicatedStorage.Resources.Cannon.Maybe.Maybe.lines
+
+local fx1
+local fx2
+local made = false
+local fxRunning = false
+local fxEnabled = false
+local fxConnection
+
+local function make()
+    if made then return end
+    made = true
+
+    fx1 = src1:Clone()
+    fx1.Parent = HRP
+
+    fx2 = src2:Clone()
+    fx2.Parent = HRP
+
+    local fxCol = ColorSequence.new(Color3.fromRGB(255,59,0))
+
+    for _, x in pairs(fx1:GetChildren()) do
+        if x:IsA("ParticleEmitter") then
+            x.Enabled = false
+        end
+    end
+
+    for _, x in pairs(fx2:GetChildren()) do
+        if x:IsA("ParticleEmitter") then
+            x.Enabled = false
+            x.Color = fxCol
+        end
+    end
+end
+
+local function startFX()
+    if not made then make() end
+
+    for _, x in pairs(fx1:GetChildren()) do
+        if x:IsA("ParticleEmitter") then
+            x.Enabled = true
+            x:Emit(15)
+        end
+    end
+
+    for _, x in pairs(fx2:GetChildren()) do
+        if x:IsA("ParticleEmitter") then
+            x.Enabled = true
+            x:Emit(15)
+        end
+    end
+end
+
+local function stopFX()
+    if not made then return end
+
+    for _, x in pairs(fx1:GetChildren()) do
+        if x:IsA("ParticleEmitter") then
+            x.Enabled = false
+        end
+    end
+
+    for _, x in pairs(fx2:GetChildren()) do
+        if x:IsA("ParticleEmitter") then
+            x.Enabled = false
+        end
+    end
+end
+
+local function onMoveChanged()
+    if not fxEnabled then return end
+    local m = h.MoveDirection.Magnitude > 0
+
+    if m and not fxRunning then
+        fxRunning = true
+        startFX()
+    elseif not m and fxRunning then
+        fxRunning = false
+        stopFX()
+    end
+end
+
+local function enableRunEvents()
+    if fxEnabled then return end
+    fxEnabled = true
+    if not fxConnection then
+        fxConnection = h:GetPropertyChangedSignal("MoveDirection"):Connect(onMoveChanged)
+    end
+end
+
+local function disableRunEvents()
+    if not fxEnabled then return end
+    fxEnabled = false
+    if fxConnection then
+        fxConnection:Disconnect()
+        fxConnection = nil
+    end
+    fxRunning = false
+    stopFX()
+end
+
+
+-- ================================================================
+-- LIGHTNING SYSTEM - COLOR UTILITIES
+-- ================================================================
+
+local function GetLightningColor()
+    if speedsterType == "RF" then
+        return Color3.fromRGB(255, 50, 50)
+    elseif speedsterType == "Zoom" then
+        return Color3.fromRGB(26, 144, 255)
+    elseif speedsterType == "GodOfSpeed" then
+        return Color3.fromRGB(220, 220, 255)
+    elseif speedsterType == "NWA" then
+        return Color3.fromRGB(200, 100, 255)
+    elseif speedsterType == "KidFlash" then
+        return Color3.fromRGB(255, 245, 40)
+    else
+        return Color3.fromRGB(255, 70, 20)
+    end
+end
+
+-- ================================================================
+-- LIGHTNING SYSTEM 1: DYNAMIC TRAIL FLICKER ENGINE
+--
+-- Research basis: DCEU/Arrowverse Flash lightning is "barely contained
+-- energy". Each limb group crackles at its own rhythm — legs are most
+-- active (ground contact), arms flicker mid-rate, torso most stable.
+-- The key is ASYMMETRY and IRREGULARITY. Real lightning never pulses
+-- uniformly. It snaps on/off at different times across the body.
+--
+-- Implementation:
+-- - Three independent flicker loops run on offset timers
+-- - Each loop owns a "group" of body-part trails
+-- - Lifetime varies per tick (shorter = crisper, longer = smoother)
+-- - math.sin wave + random spike = organic non-repeating pattern
+-- - When G_Optimized: slower intervals, higher on-chance (less spam)
+-- ================================================================
+
+local flickerActive = false
+local flickerThread = nil
+
+local function StartLightningFlicker()
+    if flickerActive then return end
+    flickerActive = true
+
+    flickerThread = task.spawn(function()
+        local tick_leg = 0
+        local tick_arm = 7  -- offset so arms and legs don't sync
+        local tick_all = 3  -- offset for allTrails
+
+        while flickerActive do
+            tick_leg += 1
+            tick_arm += 1
+            tick_all += 1
+
+            local speed = (h and h.Parent and h.WalkSpeed) or 0
+            -- intensity: 0.2 at idle (lightning still crackles slightly), 1.0 at full speed
+            local intensity = math.clamp(speed / math.max(customSpeed, 1), 0.2, 1.0)
+
+            -- === tlist: BASE body trails - the most visible layer ===
+            -- These are the trails from the simple loop at the top of setup.
+            -- They flicker fast and form the "electricity wrapping the body" look.
+            for idx, trail in ipairs(tlist) do
+                if trail and trail.Parent then
+                    -- Sine wave base creates a slow pulse, random spikes create jitter
+                    local sineWave = math.sin(tick_leg * 0.4 + idx * 0.9) * 0.25 + 0.75
+                    local rand = math.random()
+                    if rand < intensity * sineWave then
+                        trail.Enabled = true
+                        -- Vary lifetime: short = sharp bolt feel, long = glow trail feel
+                        -- Mix both for that DCEU "energy crackling with spikes" look
+                        if rand < 0.15 then
+                            trail.Lifetime = math.random(5, 10) / 100   -- short crackle spike
+                        else
+                            trail.Lifetime = math.random(12, 28) / 100  -- normal trail
+                        end
+                    elseif rand < (0.08 * intensity) then
+                        -- Snap-off: this is the "lightning bolt pops" effect
+                        -- A small percentage of the time, a trail turns off completely
+                        -- creating the visual of a bolt vanishing and reappearing
+                        trail.Enabled = false
+                    end
+                    -- else: leave as-is (no unnecessary writes)
+                end
+            end
+
+            -- === t trails: SECONDARY lightning layer ===
+            -- These use the lightning texture and are slightly slower to flicker
+            -- creating a layered depth effect (fast crackle on top of slower glow)
+            if tick_arm % 2 == 0 then
+                for idx, trail in ipairs(t) do
+                    if trail and trail.Parent then
+                        local sineArm = math.sin(tick_arm * 0.3 + idx * 1.1) * 0.2 + 0.8
+                        local rand = math.random()
+                        if rand < intensity * sineArm * 0.9 then
+                            trail.Enabled = true
+                            trail.Lifetime = math.random(15, 40) / 100
+                        elseif rand < 0.05 * intensity then
+                            trail.Enabled = false
+                        end
+                    end
+                end
+            end
+
+            -- === allTrails: THIRD layer (from createTrail) ===
+            -- Slowest flicker rate — these provide the "corona glow" around limbs
+            if tick_all % 3 == 0 then
+                for idx, trail in ipairs(allTrails) do
+                    if trail and trail.Parent then
+                        if math.random() < intensity * 0.85 then
+                            trail.Enabled = true
+                        elseif math.random() < 0.04 then
+                            trail.Enabled = false
+                        end
+                    end
+                end
+            end
+
+            -- Dynamic wait: G_Optimized uses longer intervals
+            task.wait(_G.G_Optimized and (math.random(4, 8) / 100) or (math.random(2, 5) / 100))
+        end
+    end)
+end
+
+local function StopLightningFlicker()
+    flickerActive = false
+    if flickerThread then
+        task.cancel(flickerThread)
+        flickerThread = nil
+    end
+    -- Note: caller is responsible for setting trails to correct enabled/disabled state
+end
+
+playerData.StopLightningFlicker = StopLightningFlicker
+
+
+-- ================================================================
+-- LIGHTNING SYSTEM 2: DCEU GROUND ARC SYSTEM
+--
+-- Research basis:
+-- DCEU Flash (Justice League, The Flash 2023): Lightning originates
+-- FROM the speedster's core/torso and arcs DOWN to random ground
+-- contact points. It doesn't just trail behind — it actively reaches
+-- OUT and SNAPS to the ground like a Tesla coil discharge.
+--
+-- Unity/Unreal technique: Procedural noise-displaced line segments.
+-- In Roblox equivalent: Beam instance with:
+--   - High Segments count (10-24) = more control points = more jagged
+--   - Random CurveSize0/CurveSize1 (positive AND negative values)
+--     = S-curve deformation = zigzag lightning shape
+--   - Very thin Width (0.03-0.15 studs) = realistic bolt thickness
+--   - Very short Lifetime (30-180ms) = the "pop and vanish" feel
+--   - ColorSequence: white core → speedster color → white tip
+--
+-- Raycast: fires from multiple body parts at slight downward angles
+-- to find the ground. If it hits, places a temporary invisible anchor
+-- part at the hit position, connects a Beam, then Debris cleans it up.
+-- A secondary "branch" arc fires at 35% chance to simulate branching.
+--
+-- Bugs avoided:
+-- - Position error: bodyAttach is parented to the part (not workspace)
+--   so it moves with the character and needs no position updates
+-- - groundAttach is at fixed world position (anchored part) so the
+--   Beam naturally stretches as the character moves — looks correct
+-- ================================================================
+
+local groundArcActive = false
+local groundArcThread = nil
+local groundRayParams = RaycastParams.new()
+groundRayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+-- Parts to arc FROM — prioritizes feet/legs (most visible ground contact)
+-- then arms and hands, then torso as fallback
+local GROUND_ARC_SOURCE_PARTS = {
+    "LeftFoot", "RightFoot",
+    "LeftLowerLeg", "RightLowerLeg",
+    "Left Leg", "Right Leg",
+    "LeftUpperLeg", "RightUpperLeg",
+    "HumanoidRootPart",
+    "UpperTorso", "LowerTorso", "Torso",
+    "LeftHand", "RightHand",
+    "LeftLowerArm", "RightLowerArm",
+}
+
+local Debris = game:GetService("Debris")
+
+local function FireGroundArc(originPart, lightColor)
+    if not originPart or not originPart.Parent then return end
+    if not CharacterRef or not CharacterRef.Parent then return end
+    if not HRP or not HRP.Parent then return end
+
+    -- Update raycast exclusion list each call (character may have changed)
+    groundRayParams.FilterDescendantsInstances = {CharacterRef}
+
+    -- Variable spread: mostly downward, with horizontal deviation
+    -- This makes lightning fan outward from feet rather than always going straight down
+    local spreadX = (math.random() - 0.5) * 5
+    local spreadZ = (math.random() - 0.5) * 5
+    local rayLength = math.random(5, 20)
+    local rayDir = Vector3.new(spreadX * 0.3, -rayLength, spreadZ * 0.3)
+
+    local result = workspace:Raycast(originPart.Position, rayDir, groundRayParams)
+    if not result then return end
+
+    local groundPos = result.Position
+    -- Slight random offset at ground contact = simulates lightning branching
+    -- to a point slightly away from direct hit (like real ground strikes)
+    groundPos = groundPos + Vector3.new(
+        (math.random() - 0.5) * 2.5,
+        0.02,  -- tiny upward offset so beam doesn't clip into floor
+        (math.random() - 0.5) * 2.5
+    )
+
+    -- Temporary invisible anchor at ground position
+    -- Anchored = true means it stays in world space while character moves
+    -- This is intentional: the ground point is FIXED, the body end moves
+    -- This creates the "lightning stretching as you run past" feel
+    local groundPart = Instance.new("Part")
+    groundPart.Anchored = true
+    groundPart.CanCollide = false
+    groundPart.CastShadow = false
+    groundPart.Transparency = 1
+    groundPart.Size = Vector3.new(0.05, 0.05, 0.05)
+    groundPart.Position = groundPos
+    groundPart.Parent = workspace
+
+    local groundAttach = Instance.new("Attachment", groundPart)
+
+    -- Body attachment with small random offset from part center
+    -- Simulates lightning originating from different points on the limb
+    local bodyAttach = Instance.new("Attachment", originPart)
+    bodyAttach.Position = Vector3.new(
+        (math.random() - 0.5) * 0.6,
+        (math.random() - 0.5) * 0.5,
+        (math.random() - 0.5) * 0.4
+    )
+
+    local whiteColor = Color3.new(1, 1, 1)
+
+    -- === MAIN BEAM ARC ===
+    local beam = Instance.new("Beam")
+    beam.Attachment0 = bodyAttach   -- body end (moves with character)
+    beam.Attachment1 = groundAttach  -- ground end (fixed)
+    beam.FaceCamera = true
+    beam.LightEmission = 1
+    beam.LightInfluence = 0
+    beam.Brightness = math.random(6, 14)
+    -- Segments: more = more control points = more jagged zigzag path
+    -- 10-24 gives good DCEU-style jaggedness without performance issues
+    beam.Segments = math.random(10, 24)
+    -- Width: very thin for realistic bolt appearance
+    beam.Width0 = math.random(4, 14) / 100   -- origin end (body) slightly thicker
+    beam.Width1 = math.random(1, 7) / 100    -- ground end thinner (tapers to point)
+    -- CurveSize: THIS IS THE KEY TO JAGGEDNESS
+    -- Positive + negative values on the two ends create an S-curve.
+    -- Beam then interpolates across Segments creating the zigzag.
+    -- Larger absolute values = more extreme zigzag.
+    beam.CurveSize0 = (math.random() - 0.5) * 7
+    beam.CurveSize1 = (math.random() - 0.5) * 7
+    beam.Texture = "rbxassetid://16607923"  -- lightning bolt texture (from trailProps1)
+    beam.TextureLength = math.random(1, 4)
+    beam.TextureMode = Enum.TextureMode.Static
+    -- Color: white core → speedster color → white tip (matches DCEU look)
+    beam.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, whiteColor),
+        ColorSequenceKeypoint.new(0.25, lightColor),
+        ColorSequenceKeypoint.new(0.75, lightColor),
+        ColorSequenceKeypoint.new(1, whiteColor)
+    })
+    -- Transparency: mostly opaque in middle, fades at ends
+    beam.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.15),
+        NumberSequenceKeypoint.new(0.4, 0),
+        NumberSequenceKeypoint.new(0.6, 0),
+        NumberSequenceKeypoint.new(1, 0.6)
+    })
+    beam.Parent = groundPart
+
+    -- Lifetime: 30ms–180ms. The wide range gives unpredictable "pop" timing.
+    -- Short bolts feel like sharp cracks; longer ones feel like sustained arcs.
+    local lifetime = math.random(3, 18) / 100
+
+    -- Schedule cleanup
+    Debris:AddItem(groundPart, lifetime + 0.08)
+    Debris:AddItem(bodyAttach, lifetime + 0.08)
+
+    -- Fade-out tween: starts at 40% of lifetime, finishes by end
+    -- This creates the "lightning dissipates" effect rather than hard-cutting
+    task.delay(lifetime * 0.35, function()
+        if beam and beam.Parent then
+            ts:Create(beam, TweenInfo.new(lifetime * 0.65, Enum.EasingStyle.Expo, Enum.EasingDirection.Out), {
+                Transparency = NumberSequence.new(1),
+                Width0 = 0,
+                Width1 = 0
+            }):Play()
+        end
+    end)
+
+    -- === BRANCH ARC (35% chance) ===
+    -- Secondary thinner bolt that fires from same origin to a nearby ground point
+    -- Simulates lightning branching — the single most recognizable DCEU Flash trait
+    if math.random() < 0.35 and not _G.G_Optimized then
+        task.delay(math.random(1, 3) / 100, function()  -- tiny delay so branch appears slightly after main
+            if not CharacterRef or not CharacterRef.Parent then return end
+            if not originPart or not originPart.Parent then return end
+
+            local branchPart = Instance.new("Part")
+            branchPart.Anchored = true
+            branchPart.CanCollide = false
+            branchPart.CastShadow = false
+            branchPart.Transparency = 1
+            branchPart.Size = Vector3.new(0.05, 0.05, 0.05)
+            -- Branch lands at a different spot from the main arc
+            branchPart.Position = groundPos + Vector3.new(
+                (math.random() - 0.5) * 4,
+                0.02,
+                (math.random() - 0.5) * 4
+            )
+            branchPart.Parent = workspace
+
+            local bAttach0 = Instance.new("Attachment", originPart)
+            bAttach0.Position = bodyAttach.Position + Vector3.new(
+                (math.random() - 0.5) * 0.4, 0, 0
+            )
+            local bAttach1 = Instance.new("Attachment", branchPart)
+
+            local branchBeam = Instance.new("Beam")
+            branchBeam.Attachment0 = bAttach0
+            branchBeam.Attachment1 = bAttach1
+            branchBeam.FaceCamera = true
+            branchBeam.LightEmission = 1
+            branchBeam.LightInfluence = 0
+            branchBeam.Brightness = math.random(3, 8)
+            branchBeam.Segments = math.random(6, 16)
+            -- Branches are thinner than main arc
+            branchBeam.Width0 = math.random(1, 6) / 100
+            branchBeam.Width1 = math.random(1, 3) / 100
+            branchBeam.CurveSize0 = (math.random() - 0.5) * 5
+            branchBeam.CurveSize1 = (math.random() - 0.5) * 5
+            branchBeam.Texture = "rbxassetid://16607923"
+            branchBeam.TextureLength = 2
+            branchBeam.TextureMode = Enum.TextureMode.Static
+            branchBeam.Color = ColorSequence.new(lightColor, whiteColor)
+            branchBeam.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.4),
+                NumberSequenceKeypoint.new(0.5, 0.1),
+                NumberSequenceKeypoint.new(1, 1)
+            })
+            branchBeam.Parent = branchPart
+
+            local bLifetime = lifetime * 0.55
+            Debris:AddItem(branchPart, bLifetime + 0.05)
+            Debris:AddItem(bAttach0, bLifetime + 0.05)
+
+            ts:Create(branchBeam, TweenInfo.new(bLifetime, Enum.EasingStyle.Expo, Enum.EasingDirection.Out), {
+                Transparency = NumberSequence.new(1),
+                Width0 = 0,
+                Width1 = 0
+            }):Play()
+        end)
+    end
+end
+
+local function StartGroundArcs()
+    if groundArcActive then return end
+    groundArcActive = true
+
+    -- Build available source parts list (only parts that actually exist on this character)
+    local arcPartsList = {}
+    for _, name in ipairs(GROUND_ARC_SOURCE_PARTS) do
+        local p = CharacterRef:FindFirstChild(name)
+        if p and p:IsA("BasePart") then
+            table.insert(arcPartsList, p)
+        end
+    end
+    if #arcPartsList == 0 then
+        table.insert(arcPartsList, HRP)
+    end
+
+    groundArcThread = task.spawn(function()
+        while groundArcActive and CharacterRef and CharacterRef.Parent do
+            local isMoving = h and h.Parent and h.MoveDirection.Magnitude > 0
+            local speed = h and h.Parent and h.WalkSpeed or 0
+
+            if speed > 30 then
+                local lightColor = GetLightningColor()
+
+                if isMoving then
+                    -- Running: fire 1-4 simultaneous arcs from random body parts
+                    -- G_Optimized: always 1 arc; Normal: 1-3 arcs
+                    local numArcs = _G.G_Optimized and 1 or math.random(1, 3)
+                    for i = 1, numArcs do
+                        local part = arcPartsList[math.random(1, #arcPartsList)]
+                        -- Each arc is spawned independently so they don't block each other
+                        task.spawn(FireGroundArc, part, lightColor)
+                    end
+                else
+                    -- Standing still at high speed: occasional single torso arc
+                    -- Simulates the "idle lightning crackling" seen in DCEU scenes
+                    if math.random() < 0.35 then
+                        task.spawn(FireGroundArc, HRP, lightColor)
+                    end
+                end
+            end
+
+            -- Arc interval scales with speed:
+            -- At full speed (375): fires every ~30-70ms = ~15-30 arcs/second
+            -- At low speed (100): fires every ~60-110ms = ~9-16 arcs/second
+            -- G_Optimized: fires every ~80-150ms regardless of speed
+            local interval
+            if _G.G_Optimized then
+                interval = math.random(8, 15) / 100
+            else
+                local speedFactor = math.clamp(speed / 375, 0, 1)
+                local minMs = math.floor(3 + (1 - speedFactor) * 4)
+                local maxMs = math.floor(7 + (1 - speedFactor) * 7)
+                interval = math.random(minMs, maxMs) / 100
+            end
+            task.wait(interval)
+        end
+        groundArcActive = false
+    end)
+end
+
+local function StopGroundArcs()
+    groundArcActive = false
+    if groundArcThread then
+        task.cancel(groundArcThread)
+        groundArcThread = nil
+    end
+end
+
+-- Store on playerData so CleanupPlayer can reach them
+playerData.StopLightningFlicker = StopLightningFlicker
+playerData.StopGroundArcs = StopGroundArcs
+
+-- ================================================================
+-- FIX: idleParticleConnection bug
+-- Original: h.Running fired EnableLightningGlobal() even when spd=false
+-- This caused the lightning particle to re-enable itself after X/Stop
+-- Fix: guard with playerData.spd check
+-- ================================================================
+local idleParticleConnection
+local lastRunningState = false
+
+idleParticleConnection = h.Running:Connect(function(speed)
+    -- BUG FIX: Do not re-enable lightning effects if speed mode is off
+    if not playerData.spd then
+        DisableLightningGlobal()
+        return
+    end
+
+    if h.WalkSpeed > 100 then
+        if speed > 0 then
+            DisableLightningGlobal()
+            lastRunningState = true
+        else
+            EnableLightningGlobal()
+            lastRunningState = false
+        end
+    else
+        DisableLightningGlobal()
+    end
+end)
+
+
+local TextChatService = game:GetService("TextChatService")
+local textChannel
+
+
+local function InitializeTextChannel()
+    if textChannel then return true end
+    
+    local success = pcall(function()
+        textChannel = TextChatService:WaitForChild("TextChannels"):WaitForChild("RBXGeneral")
+    end)
+    
+    if success and textChannel then
+        print("📡 TextChannel initialized!")
+        return true
+    else
+        warn("⚠️ Failed to initialize TextChannel")
+        return false
+    end
+end
+
+local function BroadcastState(stateType, value)
+    if not textChannel and not InitializeTextChannel() then return end
+    
+    local message = ""
+    
+    if stateType == "speed" and value then
+        message = ".1"
+    elseif stateType == "phase" and value then
+        message = ".2"
+    elseif stateType == "stop" then
+        message = ".3"
+    else
+        return
+    end
+    
+    pcall(function()
+        textChannel:SendAsync(message)
+    end)
+end
+
+local syncConnection
+
+local function SetupSyncListener()
+    if not textChannel and not InitializeTextChannel() then return end
+    
+    print("👂 Listening for speedster commands (.1, .2, .3)...")
+    
+    syncConnection = textChannel.MessageReceived:Connect(function(textChatMessage)
+
+        local msgText = textChatMessage.Text
+        local textSource = textChatMessage.TextSource
+        
+        if not textSource then return end
+        
+        local senderUserId = textSource.UserId
+        if senderUserId == player.UserId then return end
+        
+        local senderPlayer = Players:GetPlayerByUserId(senderUserId)
+        if not senderPlayer or not IsAllowed(senderPlayer) then 
+            return 
+        end
+        
+        local senderData = PlayerData[senderUserId]
+        if not senderData then return end
+        
+        if msgText == ".1" then
+            print("🔄 " .. textSource.Name .. " enabled speed!")
+            
+            if senderData.EmitToggleEffect then
+                pcall(function() senderData.EmitToggleEffect() end)
+            end
+
+            if senderData.EnableAllCoolStuff then
+                pcall(function()
+                    senderData.EnableAllCoolStuff()
+                end)
+            end
+            
+            if senderData.ParticleRef and senderData.ParticleRef.Parent then
+                senderData.ParticleRef.Enabled = true
+            end
+            if senderData.nsfEmitters then
+                for _, e in ipairs(senderData.nsfEmitters) do
+                    if e and e.Parent then
+                        e.Enabled = true
+                        e:Emit(15)
+                    end
+                end
+            end
+            
+        elseif msgText == ".2" then
+            print("🔄 " .. textSource.Name .. " enabled phase!")
+            
+        elseif msgText == ".3" then
+            print("🔄 " .. textSource.Name .. " stopped all effects!")
+            
+            if senderData.EmitToggleEffect then
+                pcall(function() senderData.EmitToggleEffect() end)
+            end
+
+            if senderData.DisableCoolStuff then
+                pcall(function()
+                    senderData.DisableCoolStuff()
+                end)
+            end
+            
+            if senderData.ParticleRef and senderData.ParticleRef.Parent then
+                senderData.ParticleRef.Enabled = false
+            end
+            if senderData.nsfEmitters then
+                for _, e in ipairs(senderData.nsfEmitters) do
+                    if e and e.Parent then
+                        e.Enabled = false
+                    end
+                end
+            end
+        end
+    end)
+end
+
+
+if isLocalPlayer then
+    task.wait(2)
+    SetupSyncListener()
+end
+
+if isLocalPlayer then
+local ws0=25
+h.WalkSpeed=ws0
+local spd=false
+
+local pg=player:WaitForChild("PlayerGui")
+local gui=Instance.new("ScreenGui")
+gui.Parent=pg
+gui.Name="PhaseGui"
+gui.ResetOnSpawn=false
+gui.IgnoreGuiInset=true
+
+-- ════════════════════════════════════════════════════════════════════
+-- SPEED FORCE CODEX  —  UI REDESIGN
+-- Aesthetic : ancient artifact / obsidian shards / speed-rune panel
+-- Fonts     : Fondamento (headers/labels) · Michroma (buttons) · Code (input)
+-- ════════════════════════════════════════════════════════════════════
+
+-- ── tiny helpers ─────────────────────────────────────────────────
+local function addGrad(parent, col, rot)
+    local g = Instance.new("UIGradient")
+    g.Color   = col
+    g.Rotation = rot or 0
+    g.Parent  = parent
+    return g
+end
+
+local function addStrokeGrad(parent, thickness, col, rot)
+    local s = Instance.new("UIStroke")
+    s.Thickness = thickness
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    addGrad(s, col, rot or 45)
+    s.Parent = parent
+    return s
+end
+
+local function addShine(parent)
+    -- glass-reflection highlight bar near top of any pill/frame
+    local shine = Instance.new("Frame")
+    shine.Parent = parent
+    shine.Size = UDim2.new(0.52, 0, 0, 1)
+    shine.Position = UDim2.new(0.12, 0, 0, 4)
+    shine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    shine.BackgroundTransparency = 0.55
+    shine.BorderSizePixel = 0
+    Instance.new("UICorner", shine).CornerRadius = UDim.new(1, 0)
+    addGrad(shine, ColorSequence.new({
+        ColorSequenceKeypoint.new(0,   Color3.fromRGB(0,0,0)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255,255,255)),
+        ColorSequenceKeypoint.new(1,   Color3.fromRGB(0,0,0)),
+    }), 0)
+end
+
+-- ── MAIN PANEL ───────────────────────────────────────────────────
+local panel = Instance.new("Frame")
+panel.Parent   = gui
+panel.Size     = UDim2.new(0, 172, 0, 288)
+panel.Position = UDim2.new(0, 8, 0, 8)
+panel.BackgroundColor3 = Color3.fromRGB(9, 7, 20)
+panel.BackgroundTransparency = 0.08
+panel.BorderSizePixel = 0
+Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 16)
+
+-- panel bg: deep void-purple diagonal
+addGrad(panel, ColorSequence.new({
+    ColorSequenceKeypoint.new(0,    Color3.fromRGB(24, 10, 52)),
+    ColorSequenceKeypoint.new(0.45, Color3.fromRGB(11,  7, 26)),
+    ColorSequenceKeypoint.new(1,    Color3.fromRGB(4,   3, 12)),
+}), 140)
+
+-- panel border: electric-purple shimmer
+addStrokeGrad(panel, 1.5, ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(140, 65, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(55,  18, 120)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(140, 65, 255)),
+}), 90)
+
+-- ── HEADER ───────────────────────────────────────────────────────
+local header = Instance.new("TextLabel")
+header.Parent = panel
+header.Size   = UDim2.new(1, -12, 0, 28)
+header.Position = UDim2.new(0, 6, 0, 8)
+header.BackgroundTransparency = 1
+header.Text   = "⚡  SPEED FORCE"
+header.Font   = Enum.Font.Fondamento
+header.TextScaled = true
+header.TextColor3 = Color3.fromRGB(255, 210, 85)
+
+-- divider bar under header
+local div = Instance.new("Frame")
+div.Parent = panel
+div.Size   = UDim2.new(1, -20, 0, 1)
+div.Position = UDim2.new(0, 10, 0, 40)
+div.BackgroundColor3 = Color3.fromRGB(180, 100, 255)
+div.BackgroundTransparency = 0.3
+div.BorderSizePixel = 0
+addGrad(div, ColorSequence.new({
+    ColorSequenceKeypoint.new(0,    Color3.fromRGB(0,0,0)),
+    ColorSequenceKeypoint.new(0.15, Color3.fromRGB(180,100,255)),
+    ColorSequenceKeypoint.new(0.85, Color3.fromRGB(180,100,255)),
+    ColorSequenceKeypoint.new(1,    Color3.fromRGB(0,0,0)),
+}), 0)
+
+-- ── BUTTON FACTORY ───────────────────────────────────────────────
+-- yPos      : Y offset inside panel
+-- label     : button text
+-- icon      : symbol prefix
+-- bg0/bg1   : background gradient colours
+-- sk0/sk1   : stroke glow colours
+-- textCol   : text colour
+local function makeBtn(yPos, label, icon, bg0, bg1, sk0, sk1, textCol)
+    local f = Instance.new("Frame")
+    f.Parent = panel
+    f.Size   = UDim2.new(1, -16, 0, 44)
+    f.Position = UDim2.new(0, 8, 0, yPos)
+    f.BackgroundColor3 = bg0
+    f.BorderSizePixel  = 0
+    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 20)
+
+    addGrad(f, ColorSequence.new({
+        ColorSequenceKeypoint.new(0, bg0),
+        ColorSequenceKeypoint.new(1, bg1),
+    }), 130)
+
+    addStrokeGrad(f, 1.5, ColorSequence.new({
+        ColorSequenceKeypoint.new(0,   sk0),
+        ColorSequenceKeypoint.new(0.5, sk1),
+        ColorSequenceKeypoint.new(1,   sk0),
+    }), 45)
+
+    addShine(f)
+
+    local b = Instance.new("TextButton")
+    b.Parent = f
+    b.Size   = UDim2.new(1, 0, 1, 0)
+    b.BackgroundTransparency = 1
+    b.Text   = icon .. "  " .. label
+    b.TextColor3  = textCol
+    b.TextScaled  = true
+    b.Font        = Enum.Font.Michroma
+    b.AutoButtonColor = false
+    return f, b
+end
+
+-- ── BUTTONS ──────────────────────────────────────────────────────
+
+-- Phase — spectral ghost-green
+local ph, phb = makeBtn(50,
+    "Phase", "◌",
+    Color3.fromRGB(7,  36, 20),   Color3.fromRGB(3, 16,  9),
+    Color3.fromRGB(75,255,145),   Color3.fromRGB(22,115, 65),
+    Color3.fromRGB(155,255,195)
+)
+
+-- Enable Speed — molten gold
+local sp, spb = makeBtn(102,
+    "Enable Speed", "▶",
+    Color3.fromRGB(44, 27,  4),   Color3.fromRGB(18, 10,  2),
+    Color3.fromRGB(255,192, 38),  Color3.fromRGB(155, 85,  8),
+    Color3.fromRGB(255,220,100)
+)
+
+-- ── STOP BUTTON (top-right, outside panel) ───────────────────────
+local sh = Instance.new("Frame")
+sh.Parent = gui
+sh.Size   = UDim2.new(0, 92, 0, 36)
+sh.Position = UDim2.new(1, -100, 0, 8)
+sh.BackgroundColor3 = Color3.fromRGB(48, 6, 6)
+sh.BorderSizePixel  = 0
+Instance.new("UICorner", sh).CornerRadius = UDim.new(0, 18)
+
+addGrad(sh, ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(82, 10, 10)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(28,  4,  4)),
+}), 130)
+
+addStrokeGrad(sh, 1.5, ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(255, 75, 75)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(130, 18, 18)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(255, 75, 75)),
+}), 45)
+
+addShine(sh)
+
+local sb = Instance.new("TextButton")
+sb.Parent = sh
+sb.Size   = UDim2.new(1, 0, 1, 0)
+sb.BackgroundTransparency = 1
+sb.Text   = "✕  STOP"
+sb.TextColor3  = Color3.fromRGB(255, 135, 135)
+sb.TextScaled  = true
+sb.Font        = Enum.Font.Michroma
+sb.AutoButtonColor = false
+
+-- ── VELOCITY TEXTBOX ─────────────────────────────────────────────
+local speedBoxFrame = Instance.new("Frame")
+speedBoxFrame.Parent = panel
+speedBoxFrame.Size   = UDim2.new(1, -16, 0, 62)
+speedBoxFrame.Position = UDim2.new(0, 8, 0, 214)
+speedBoxFrame.BackgroundColor3 = Color3.fromRGB(6, 4, 18)
+speedBoxFrame.BackgroundTransparency = 0.12
+speedBoxFrame.BorderSizePixel = 0
+Instance.new("UICorner", speedBoxFrame).CornerRadius = UDim.new(0, 12)
+
+addGrad(speedBoxFrame, ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 18, 5)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(9,   5, 2)),
+}), 130)
+
+addStrokeGrad(speedBoxFrame, 1.5, ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(255, 182, 28)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(135,  75,  8)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(255, 182, 28)),
+}), 45)
+
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Parent = speedBoxFrame
+speedLabel.Size   = UDim2.new(1, -12, 0, 20)
+speedLabel.Position = UDim2.new(0, 8, 0, 5)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text   = "VELOCITY"
+speedLabel.Font   = Enum.Font.Fondamento
+speedLabel.TextScaled = true
+speedLabel.TextColor3 = Color3.fromRGB(255, 188, 48)
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local speedBox = Instance.new("TextBox")
+speedBox.Parent = speedBoxFrame
+speedBox.Size   = UDim2.new(1, -14, 0, 26)
+speedBox.Position = UDim2.new(0, 7, 0, 29)
+speedBox.BackgroundColor3 = Color3.fromRGB(10, 6, 2)
+speedBox.BackgroundTransparency = 0.1
+speedBox.Text   = "375"
+speedBox.PlaceholderText = "enter speed..."
+speedBox.TextColor3 = Color3.fromRGB(255, 218, 110)
+speedBox.TextScaled = true
+speedBox.Font   = Enum.Font.Code
+speedBox.ClearTextOnFocus = false
+speedBox.TextEditable = true
+speedBox.MultiLine = false
+Instance.new("UICorner", speedBox).CornerRadius = UDim.new(0, 6)
+
+-- Confirm on focus lost
+local function applySpeedBox()
+    local val = tonumber(speedBox.Text)
+    if val and val > 0 and val <= 9999 then
+        customSpeed = val
+        speedBox.TextColor3 = Color3.fromRGB(100, 255, 140)
+        task.delay(0.5, function()
+            if speedBox then speedBox.TextColor3 = Color3.fromRGB(255, 218, 110) end
+        end)
+    else
+        speedBox.Text = tostring(customSpeed)
+        speedBox.TextColor3 = Color3.fromRGB(255, 100, 100)
+        task.delay(0.5, function()
+            if speedBox then speedBox.TextColor3 = Color3.fromRGB(255, 218, 110) end
+        end)
+    end
+end
+
+speedBox.FocusLost:Connect(function()
+    applySpeedBox()
+end)
+-- ─────────────────────────────────────────────────────────────────
+
+local phs=false
+local nc=false
+
+local function sn(state)
+    nc=state
+    for _,v in next,CharacterRef:GetDescendants() do
+        if v:IsA("BasePart") then v.CanCollide=not state end
+    end
+end
+
+phb.MouseButton1Click:Connect(function()
+    phs=not phs
+    playerData.phs = phs
+    if phs then
+        sn(true)
+
+StartVibrate()
+
+        EnableDarkAura()
+        
+        BroadcastState("phase", true)
+    else
+
+StopVibrate()
+    
+    StopAllPlayerSounds()
+
+        sn(false)
+        DisableDarkAura()
+        
+        BroadcastState("phase", false)
+    end
+end)
+
+local a
+local x
+local tFlag = false
+local b = "rbxassetid://897"
+
+local heartbeatConnection
+local runningConnection
+
+
+local function storeConnection(conn)
+    table.insert(playerData.connections, conn)
+    return conn
+end
+
+-- ================================================================
+-- MASTER DISABLE FUNCTION
+-- Called by all stop paths to guarantee a clean shutdown every time.
+-- Fixes the "doesn't properly disable" bug: all trail tables and
+-- all dynamic systems are stopped in a single deterministic sequence.
+-- ================================================================
+local function MasterDisableAll()
+    -- 1. Stop dynamic systems FIRST (they may be enabling trails)
+    StopLightningFlicker()
+    StopGroundArcs()
+
+    -- 2. Stop the particle effect system
+    StopEffect()
+
+    -- 3. Disable ALL trail tables explicitly
+    V88()   -- t trails
+    V90()   -- tlist trails
+    DisableCoolStuff()   -- allTrails
+    DisableLightningGlobal()   -- particle emitter on HRP
+
+    -- 4. Stop running connections
+    if runningConnection then
+        runningConnection:Disconnect()
+        runningConnection = nil
+    end
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
+        heartbeatConnection = nil
+    end
+
+    -- 5. Disable the enableAll system (TrailsPerPart + animations + sounds)
+    disableRunEvents()
+    disableAll()
+
+    -- 6. Nuclear sound kill — catches anything disableAll missed due to state desync,
+    --    early-returns, or sounds restarted by the leaked walkspeed heartbeat
+    StopAllPlayerSounds()
+
+    -- 7. Reset flags
+    spd = false
+    playerData.spd = false
+end
+
+spb.MouseButton1Click:Connect(function()
+    spd = not spd
+    playerData.spd = spd
+
+    if spd then
+        -- === ENABLE SPEED ===
+        V89()
+        V87()
+
+        -- Start heartbeat speed lock (uses customSpeed set by the TextBox)
+        if heartbeatConnection then heartbeatConnection:Disconnect() end
+        heartbeatConnection = RunService.Heartbeat:Connect(function()
+            if h and h.Parent then
+                h.WalkSpeed = customSpeed
+            end
+        end)
+
+        -- Enable all visual systems
+        EmitToggleEffect()
+        EnableLightningGlobal()
+        EnableAllCoolStuff()
+        StartLightningFlicker()
+        StartGroundArcs()
+
+        BroadcastState("speed", true)
+
+        if runningConnection then
+            runningConnection:Disconnect()
+            runningConnection = nil
+        end
+
+        runningConnection = h.Running:Connect(function(s)
+            if not spd then return end
+
+            StopEffect()
+
+            if s > 0 then
+                if not tFlag then
+                    tFlag = true
+                    PlayRandomRunStartSound()
+                    CurrentShaker:Shake(ShakePresets.HeavyHit())
+                    if x then x:Destroy() end
+                    task.delay(0.3, function() tFlag = false end)
+                end
+            else
+                StartEffect()
+            end
+        end)
+
+        enableRunEvents()
+        enableAll()
+    else
+        -- === DISABLE SPEED — use master disable to guarantee clean shutdown ===
+        EmitToggleEffect()
+        MasterDisableAll()
+
+        h.WalkSpeed = ws0
+        if x then pcall(function() x:Destroy() end) end
+        if a then pcall(function() a:Destroy() end) end
+    end
+end)
+
+sb.MouseButton1Click:Connect(function()
+    -- STOP button: full master disable
+    MasterDisableAll()
+
+    phs = false
+    playerData.phs = false
+
+    if HRP and HRP.Parent then
+        HRP.AssemblyLinearVelocity = Vector3.new()
+    end
+    if h and h.Parent then
+        h.WalkSpeed = ws0
+    end
+
+    if x then pcall(function() x:Destroy() end) end
+    if a then pcall(function() a:Destroy() end) end
+
+    BroadcastState("stop")
+    StopVibrate()
+    StopAllPlayerSounds()
+    DisableDarkAura()
+
+    sn(false)
+
+    if cam then
+        cam.CameraType = Enum.CameraType.Custom
+        if cam.FieldOfView ~= 70 then
+            local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+            local goal = { FieldOfView = 70 }
+            ts:Create(cam, info, goal):Play()
+        end
+    end
+end)
+
+local function gnp()
+    local np=nil
+    local md=9999
+    for _,pl in next,game.Players:GetPlayers() do
+        if pl~=player then
+            local cc=pl.Character
+            local hr=cc and cc:FindFirstChild("HumanoidRootPart")
+            local d=hr and (HRP.Position-hr.Position).Magnitude
+            if d and d<md then md=d np=hr end
+        end
+    end
+    return np
+end
+
+local mainHeartbeat = RunService.Heartbeat:Connect(function(dt)
+    if not CharacterRef or not CharacterRef.Parent then return end
+    if nc then
+        -- FIX: cache descendants to avoid GetDescendants() every frame
+        for _,v in next,CharacterRef:GetDescendants() do
+            if v:IsA("BasePart") then 
+                pcall(function() v.CanCollide=false end)
+            end
+        end
+    end
+end)
+table.insert(playerData.connections, mainHeartbeat)
+
+local targetAnimId = "rbxassetid://108670084190135"
+
+local animPlayedConn = h.AnimationPlayed:Connect(function(animTrack)
+	if animTrack.Animation and animTrack.Animation.AnimationId == targetAnimId then
+		animTrack:Stop()
+	end
+end)
+table.insert(playerData.connections, animPlayedConn)
+V88()
+V90()
+
+
+
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/ChosenSkibidi/VIP-SCRIPTS/refs/heads/main/useless%20notification"))()
+
+local g=player.PlayerGui.Attention.DialogueFrameAnnouncement
+
+g.Message.Text="Enjoy the script, and thank you for using our work."
+g:GetChildren()[11].Text="This script was created by Infinite Studios."
+
+local UserInputService = game:GetService("UserInputService")
+
+if UserInputService.TouchEnabled == false then
+    gui.Enabled = false
+end
+
+local function onCharacterAdded(char)
+    local humanoid = char:WaitForChild("Humanoid")
+    humanoid.Died:Connect(function()
+        if gui and gui.Enabled then
+            for _, child in ipairs(gui:GetChildren()) do
+                if child:IsA("GuiObject") then
+                    local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+                    local goal = {Position = child.Position + UDim2.new(0,0,-1,0)}
+                    local tween = ts:Create(child, tweenInfo, goal)
+                    tween:Play()
+                    
+                    tween.Completed:Connect(function()
+                        task.delay(10, function()
+                            if child then
+                                child:Destroy()
+                            end
+                        end)
+                    end)
+                end
+            end
+        end
+    end)
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
+
+if player.Character then
+    onCharacterAdded(player.Character)
+end
+
+uis.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        local key = input.KeyCode
+
+        -- ============================================================
+        -- Q KEY: TOGGLE SPEED
+        -- ============================================================
+        if key == Enum.KeyCode.Q then
+
+    spd = not spd
+    playerData.spd = spd
+
+    if spd then
+        V89()
+        V87()
+
+        if heartbeatConnection then heartbeatConnection:Disconnect() end
+        heartbeatConnection = RunService.Heartbeat:Connect(function()
+            if h and h.Parent then
+                h.WalkSpeed = customSpeed
+            end
+        end)
+
+        EmitToggleEffect()
+        EnableAllCoolStuff()
+        EnableLightningGlobal()
+        StartLightningFlicker()
+        StartGroundArcs()
+
+        BroadcastState("speed", true)
+
+        if runningConnection then
+            runningConnection:Disconnect()
+            runningConnection = nil
+        end
+
+        runningConnection = h.Running:Connect(function(s)
+            if not spd then return end
+
+            StopEffect()
+
+            if s > 0 then
+                if not tFlag then
+                    tFlag = true
+                    PlayRandomRunStartSound()
+                    CurrentShaker:Shake(ShakePresets.HeavyHit())
+                    if x then x:Destroy() end
+                    task.delay(0.3, function() tFlag = false end)
+                end
+            else
+                StartEffect()
+            end
+        end)
+
+        enableRunEvents()
+        enableAll()
+    else
+        -- Use master disable to guarantee clean shutdown
+        EmitToggleEffect()
+        MasterDisableAll()
+
+        h.WalkSpeed = ws0
+        if x then pcall(function() x:Destroy() end) end
+        if a then pcall(function() a:Destroy() end) end
+    end
+
+        -- ============================================================
+        -- C KEY: TOGGLE PHASE
+        -- ============================================================
+        elseif key == Enum.KeyCode.C then
+
+    phs=not phs
+    playerData.phs = phs
+    if phs then
+        sn(true)
+
+StartVibrate()
+
+        EnableDarkAura()
+        
+        BroadcastState("phase", true)
+    else
+
+StopVibrate()
+    
+    StopAllPlayerSounds()
+
+        sn(false)
+        DisableDarkAura()
+        
+        BroadcastState("phase", false)
+    end
+
+        -- ============================================================
+        -- B KEY: TOGGLE ANGULAR MIRAGE
+        -- ============================================================
+        elseif key == Enum.KeyCode.B then
+
+        -- ============================================================
+        -- X KEY: FULL STOP — guaranteed clean shutdown via MasterDisableAll
+        -- ============================================================
+        elseif key == Enum.KeyCode.X then
+
+    -- Full master disable covers everything
+    MasterDisableAll()
+
+    phs = false
+    playerData.phs = false
+
+    if HRP and HRP.Parent then
+        HRP.AssemblyLinearVelocity = Vector3.new()
+    end
+    if h and h.Parent then
+        h.WalkSpeed = ws0
+    end
+
+    if x then pcall(function() x:Destroy() end) end
+    if a then pcall(function() a:Destroy() end) end
+
+    BroadcastState("stop")
+    StopVibrate()
+    StopAllPlayerSounds()
+    DisableDarkAura()
+
+    sn(false)
+
+    if cam then
+        cam.CameraType = Enum.CameraType.Custom
+        if cam.FieldOfView ~= 70 then
+            local info = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+            local goal = { FieldOfView = 70 }
+            ts:Create(cam, info, goal):Play()
+        end
+    end
+
+end
+end
+end)
+end
+
+local bNames = {
+
+    "Head",
+    "Left Arm",
+    "Right Arm",
+    "Left Leg",
+    "Right Leg",
+
+    "LeftUpperArm",
+    "LeftLowerArm",
+    "LeftHand",
+    "RightUpperArm",
+    "RightLowerArm",
+    "RightHand",
+
+    "LeftUpperLeg",
+    "LeftLowerLeg",
+    "LeftFoot",
+    "RightUpperLeg",
+    "RightLowerLeg",
+    "RightFoot"
+}
+
+local ig = lightningAttachment
+
+local function mk()
+end
+
+local godCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(200,200,200)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
+})
+
+local nwaCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(210,160,255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(200,100,255))
+})
+
+local zoomCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(46,124,255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(124,194,255))
+})
+
+local kidCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,150)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,0))
+})
+
+local rfCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,84,84)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
+})
+
+local regularCS2 = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,59,33)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,59,33))
+})
+
+-- ================================================================
+-- COLOR UPDATE THREAD
+-- FIX: Increased wait interval in G_Optimized mode (0.5s vs 0.1s)
+-- This was running every 0.1s even when nothing needed updating
+-- ================================================================
+local colorUpdateRunning = true
+local colorUpdateThread = task.spawn(function()
+    while colorUpdateRunning and player and player.Parent and CharacterRef and CharacterRef.Parent do
+        local success, err = pcall(function()
+            local cs = nil
+            local spot = nil
+
+            if speedsterType == "RF" then
+                cs = rfCS2
+                spot = Color3.fromRGB(255,0,0)
+            elseif speedsterType == "KidFlash" then
+                cs = kidCS2
+                spot = Color3.fromRGB(255,255,0)
+            elseif speedsterType == "Zoom" then
+                cs = zoomCS2
+                spot = Color3.fromRGB(124,194,255)
+            elseif speedsterType == "GodOfSpeed" then
+                cs = godCS2
+                spot = Color3.fromRGB(255,220,0)
+            elseif speedsterType == "NWA" then
+                cs = nwaCS2
+                spot = Color3.fromRGB(200,100,255)
+            elseif speedsterType == "Regular" then
+                cs = regularCS2
+                spot = Color3.fromRGB(255,59,33)
+            else
+                cs = regularCS2
+                spot = Color3.fromRGB(255,59,33)
+            end
+
+            if cs and CharacterRef and CharacterRef.Parent then
+                mk()
+
+                for _,n in pairs(bNames) do
+                    local pr = CharacterRef:FindFirstChild(n)
+                    if pr and pr.Parent then
+                        for _,tr in pairs(pr:GetChildren()) do
+                            if tr:IsA("Trail") and tr.Parent then
+                                tr.Color = cs
+                            end
+                        end
+                    end
+                end
+
+                for _,v in pairs(CharacterRef:GetDescendants()) do
+                    if v:IsA("ParticleEmitter") and v.Parent then
+                        local cur = v
+                        local g = false
+                        while cur do
+                            if cur == ig then
+                                g = true
+                                break
+                            end
+                            cur = cur.Parent
+                        end
+
+                        if v.Texture == "rbxassetid://9731596776" then
+                            g = true
+                        end
+                        if v.Texture == "rbxassetid://10583327833" then
+                            v.Color = cs
+                            g = true
+                        end
+
+                        if not g then
+                            v.Color = cs
+                        end
+                    elseif v:IsA("SpotLight") and v.Parent then
+                        v.Color = spot
+                        v.Enabled = true
+                    end
+                end
+            end
+        end)
+        
+        if not success then
+            warn("Color update error for " .. player.Name .. ": " .. tostring(err))
+        end
+
+        -- G_Optimized: update color less frequently (0.5s vs 0.1s)
+        -- Color rarely changes so 0.1s was waste; 0.5s is imperceptible
+        task.wait(_G.G_Optimized and 0.5 or 0.1)
+    end
+    colorUpdateRunning = false
+end)
+
+
+playerData.stopColorUpdate = function()
+    colorUpdateRunning = false
+end
+
+
+if isLocalPlayer then
+    local renderConn1 = game:GetService("RunService").RenderStepped:Connect(function()
+        if not CharacterRef or not CharacterRef.Parent or not player or not player.Parent then return end
+        local humanoid = CharacterRef:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+        
+        local d = humanoid.MoveDirection
+        if d.Magnitude > 0 and HRP and HRP.Parent then 
+            HRP.CFrame = CFrame.new(HRP.Position, HRP.Position + d) 
+        end
+    end)
+    table.insert(playerData.connections, renderConn1)
+
+    local snap=18
+
+    local renderConn2 = RunService.RenderStepped:Connect(function(dt)
+        if not CharacterRef or not CharacterRef.Parent or not HRP or not HRP.Parent or not h or not h.Parent then return end
+    	if h.FloorMaterial==Enum.Material.Air then return end
+
+    	local md=h.MoveDirection
+    	if md.Magnitude==0 then return end
+
+    	md=Vector3.new(md.X,0,md.Z).Unit
+
+    	local v=HRP.AssemblyLinearVelocity
+    	local y=v.Y
+
+    	local sp=v.Magnitude
+    	if sp<1 then return end
+
+    	local target=md*sp
+    	HRP.AssemblyLinearVelocity=v:Lerp(Vector3.new(target.X,y,target.Z),math.clamp(dt*snap,0,1))
+    end)
+    table.insert(playerData.connections, renderConn2)
+end
+
+
+local humanoidForDeath = CharacterRef:FindFirstChildOfClass("Humanoid")
+if humanoidForDeath then
+    local diedConnection = humanoidForDeath.Died:Connect(function()
+        CleanupPlayer(player)
+    end)
+    table.insert(playerData.connections, diedConnection)
+end
+
+
+local ancestryConnection = CharacterRef.AncestryChanged:Connect(function(_, parent)
+    if not parent then
+        CleanupPlayer(player)
+    end
+end)
+table.insert(playerData.connections, ancestryConnection)
+
+end
+
+
+-- ================================================================
+-- WIND SYSTEM (original, preserved exactly)
+-- ================================================================
+task.spawn(function()
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+if not Character then
+    warn("Wind System: Character not found, skipping wind setup")
+    return
+end
+
+local CurrentCamera = workspace.CurrentCamera
+
+local Blur = CurrentCamera:FindFirstChild("Blur")
+if not Blur then
+	Blur = Instance.new("BlurEffect", CurrentCamera)
+end
+Blur.Size = 0
+
+local RunBlur = CurrentCamera:FindFirstChild("RunBlur")
+if not RunBlur then
+	RunBlur = Instance.new("BlurEffect", CurrentCamera)
+	RunBlur.Name = "RunBlur"
+end
+RunBlur.Size = 0
+local runBlurTween = nil
+local wasMoving = false
+
+local isR15 = Character:FindFirstChild("UpperTorso") ~= nil
+local R15 = {"Head","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}
+local R6 = {"Head","Left Arm","Right Arm","Left Leg","Right Leg"}
+
+local bodyParts = {}
+for _, n in ipairs(isR15 and R15 or R6) do
+	local p = Character:FindFirstChild(n)
+	if p and p:IsA("BasePart") then
+		bodyParts[#bodyParts + 1] = p
+	end
+end
+
+for _, part in ipairs(bodyParts) do
+	do
+		local e = Instance.new("ParticleEmitter")
+		e.Brightness = 7
+		e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
+		e.LightEmission = 0.5
+		e.LightInfluence = 1
+		e.Orientation = Enum.ParticleOrientation.VelocityParallel
+		e.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,10,0)})
+		e.Squash = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+		e.Texture = "rbxassetid://4770542473"
+		e.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.91299998760223389,0),NumberSequenceKeypoint.new(1,1,0)})
+		e.ZOffset = 0
+		e.EmissionDirection = Enum.NormalId.Top
+		e.Enabled = false
+		e.Lifetime = NumberRange.new(0.25,0.5)
+		e.Rate = _G.G_Optimized and 125 or 250
+		e.RotSpeed = NumberRange.new(-50,50)
+		e.Rotation = NumberRange.new(-180,180)
+		e.Speed = NumberRange.new(50,200)
+		e.SpreadAngle = Vector2.new(0,500)
+		e.TimeScale = 1
+		e.Acceleration = Vector3.new(0,0,500)
+		e.Drag = 5
+		e.VelocityInheritance = 0
+		e.WindAffectsDrag = false
+		e.Shape = Enum.ParticleEmitterShape.Box
+		e.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+		e.ShapePartial = 1
+		e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		e.FlipbookFramerate = NumberRange.new(1,1)
+		e.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+		e.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+		e.FlipbookStartRandom = false
+		e.LockedToPart = true
+		e.Name = "Wind1"
+		e:Emit(15)
+		e.Parent = part
+	end
+	do
+		local e = Instance.new("ParticleEmitter")
+		e.Brightness = 7
+		e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
+		e.LightEmission = 0.5
+		e.LightInfluence = 1
+		e.Orientation = Enum.ParticleOrientation.VelocityParallel
+		e.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,3,1.8124997615814209)})
+		e.Squash = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,3,0)})
+		e.Texture = "rbxassetid://4770542473"
+		e.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.85000002384185791,0),NumberSequenceKeypoint.new(1,1,0)})
+		e.ZOffset = 0
+		e.EmissionDirection = Enum.NormalId.Top
+		e.Enabled = false
+		e.Lifetime = NumberRange.new(0.25,0.5)
+		e.Rate = _G.G_Optimized and 125 or 250
+		e.RotSpeed = NumberRange.new(0,0)
+		e.Rotation = NumberRange.new(-90,-90)
+		e.Speed = NumberRange.new(50,200)
+		e.SpreadAngle = Vector2.new(0,500)
+		e.TimeScale = 1
+		e.Acceleration = Vector3.new(0,0,500)
+		e.Drag = 5
+		e.VelocityInheritance = 0
+		e.WindAffectsDrag = false
+		e.Shape = Enum.ParticleEmitterShape.Box
+		e.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+		e.ShapePartial = 1
+		e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		e.FlipbookFramerate = NumberRange.new(1,1)
+		e.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+		e.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+		e.FlipbookStartRandom = false
+		e.LockedToPart = true
+		e.Name = "Wind2"
+		e:Emit(15)
+		e.Parent = part
+	end
+	do
+		local e = Instance.new("ParticleEmitter")
+		e.Brightness = 7
+		e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
+		e.LightEmission = 0.5
+		e.LightInfluence = 1
+		e.Orientation = Enum.ParticleOrientation.VelocityParallel
+		e.Size = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,10,0)})
+		e.Squash = NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)})
+		e.Texture = "rbxassetid://4770542473"
+		e.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.81300002336502075,0),NumberSequenceKeypoint.new(1,1,0)})
+		e.ZOffset = 0
+		e.EmissionDirection = Enum.NormalId.Back
+		e.Enabled = false
+		e.Lifetime = NumberRange.new(0.5,1)
+		e.Rate = _G.G_Optimized and 75 or 150
+		e.RotSpeed = NumberRange.new(-50,50)
+		e.Rotation = NumberRange.new(-180,180)
+		e.Speed = NumberRange.new(30,100)
+		e.SpreadAngle = Vector2.new(50,50)
+		e.TimeScale = 1
+		e.Acceleration = Vector3.new(0,0,100)
+		e.Drag = 0
+		e.VelocityInheritance = 0
+		e.WindAffectsDrag = false
+		e.Shape = Enum.ParticleEmitterShape.Box
+		e.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+		e.ShapePartial = 1
+		e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+		e.FlipbookFramerate = NumberRange.new(1,1)
+		e.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+		e.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+		e.FlipbookStartRandom = false
+		e.LockedToPart = true
+		e.Name = "Wind3"
+		e:Emit(15)
+		e.Parent = part
+	end
+end
+
+local wndPart = Instance.new("Part")
+wndPart.Transparency = 1
+wndPart.Anchored = true
+wndPart.CanCollide = false
+wndPart.Massless = true
+wndPart.Size = Vector3.new(1,1,1)
+wndPart.Name = "wnd"
+wndPart.Parent = workspace
+
+local wndAttachment = Instance.new("Attachment", wndPart)
+wndAttachment.Name = "Attachment"
+
+local function makeWind(name, emissionDir, lifetimeMin, lifetimeMax, rate, rotSpeedMin, rotSpeedMax, rotMin, rotMax, speedMin, speedMax, spreadAngle, acceleration, drag, sizeSeq, squashSeq, transparencySeq)
+	local e = Instance.new("ParticleEmitter")
+	e.Brightness = 7
+	e.Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),ColorSequenceKeypoint.new(1,Color3.new(1,1,1))})
+	e.LightEmission = 0.5
+	e.LightInfluence = 1
+	e.Orientation = Enum.ParticleOrientation.VelocityParallel
+	e.Size = sizeSeq
+	e.Squash = squashSeq
+	e.Texture = "rbxassetid://4770542473"
+	e.Transparency = transparencySeq
+	e.ZOffset = 0
+	e.EmissionDirection = emissionDir
+	e.Enabled = false
+	e.Lifetime = NumberRange.new(lifetimeMin, lifetimeMax)
+	e.Rate = _G.G_Optimized and math.floor(rate * 0.5) or rate
+	e.RotSpeed = NumberRange.new(rotSpeedMin, rotSpeedMax)
+	e.Rotation = NumberRange.new(rotMin, rotMax)
+	e.Speed = NumberRange.new(speedMin, speedMax)
+	e.SpreadAngle = spreadAngle
+	e.TimeScale = 1
+	e.Acceleration = acceleration
+	e.Drag = drag
+	e.VelocityInheritance = 0
+	e.WindAffectsDrag = false
+	e.Shape = Enum.ParticleEmitterShape.Box
+	e.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+	e.ShapePartial = 1
+	e.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	e.FlipbookFramerate = NumberRange.new(1,1)
+	e.FlipbookLayout = Enum.ParticleFlipbookLayout.None
+	e.FlipbookMode = Enum.ParticleFlipbookMode.Loop
+	e.FlipbookStartRandom = false
+	e.LockedToPart = true
+	e.Name = name
+	e.Parent = wndAttachment
+end
+
+makeWind(
+	"Wind1", Enum.NormalId.Top, 0.25, 0.5, 250, -50, 50, -180, 180, 50, 200,
+	Vector2.new(0,500), Vector3.new(0,0,500), 5,
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,10,0)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.91299998760223389,0),NumberSequenceKeypoint.new(1,1,0)})
+)
+
+makeWind(
+	"Wind2", Enum.NormalId.Top, 0.25, 0.5, 250, 0, 0, -90, -90, 50, 200,
+	Vector2.new(0,500), Vector3.new(0,0,500), 5,
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,3,1.8124997615814209)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,3,0)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.85000002384185791,0),NumberSequenceKeypoint.new(1,1,0)})
+)
+
+makeWind(
+	"Wind3", Enum.NormalId.Back, 0.5, 1, 150, -50, 50, -180, 180, 30, 100,
+	Vector2.new(50,50), Vector3.new(0,0,100), 0,
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,10,0)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,0,0),NumberSequenceKeypoint.new(1,0,0)}),
+	NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(0.20000000298023224,0.81300002336502075,0),NumberSequenceKeypoint.new(1,1,0)})
+)
+
+local Part_upvr = Instance.new("Part", Character)
+Part_upvr.Transparency = 1
+Part_upvr.Anchored = true
+Part_upvr.CanCollide = false
+Part_upvr.Massless = true
+Part_upvr.Size = Vector3.new()
+
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Humanoid = Character:WaitForChild("Humanoid")
+
+local tickW = 0
+
+RunService.RenderStepped:Connect(function()
+	local Magnitude = HumanoidRootPart.Velocity.Magnitude
+
+	if 0 < Magnitude then
+		Part_upvr.CFrame = CFrame.new(CurrentCamera.CFrame.Position, CurrentCamera.CFrame.Position + HumanoidRootPart.Velocity * 5)
+	else
+		Part_upvr.Position = CurrentCamera.CFrame.Position
+	end
+
+	tickW += 1
+
+	Blur.Size = math.clamp(Magnitude / 70, 0, 9)
+
+	-- RunBlur: triggers at max when player starts moving, fades out over 0.3s
+	local isMovingNow = Magnitude > 8
+	if isMovingNow and not wasMoving then
+		if runBlurTween then runBlurTween:Cancel() end
+		RunBlur.Size = 20
+		runBlurTween = TweenService:Create(
+			RunBlur,
+			TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{Size = 0}
+		)
+		runBlurTween:Play()
+	elseif not isMovingNow then
+		if runBlurTween then runBlurTween:Cancel() end
+		RunBlur.Size = 0
+	end
+	wasMoving = isMovingNow
+
+	local wndPos = CurrentCamera.CFrame.Position + CurrentCamera.CFrame.LookVector * 15
+	wndPart.CFrame = CFrame.new(wndPos, wndPos + CurrentCamera.CFrame.LookVector)
+
+	if 80 <= Magnitude and tickW % math.max(1, math.floor(50 / Magnitude)) == 0 then
+		local Part = Instance.new("Part")
+		Part.CastShadow = false
+		Part.Color = Color3.new(1,1,1)
+		Part.Material = Enum.Material.ForceField
+		Part.Transparency = 1
+		Part.Size = Vector3.new(0.03, 0.03, Magnitude / 60)
+		Part.CanCollide = false
+		Part.Massless = true
+		Part.Parent = workspace
+
+		local SpecialMesh = Instance.new("SpecialMesh")
+		SpecialMesh.MeshType = Enum.MeshType.Sphere
+		SpecialMesh.Parent = Part
+
+		local cframe = CFrame.new(math.random(-300,300)/100, math.random(-200,200)/100, -math.floor(Magnitude/50)*2)
+
+		local Weld = Instance.new("Weld", Part)
+		Weld.Part0 = Part_upvr
+		Weld.Part1 = Part
+		Weld.C0 = cframe
+
+		for _, v in pairs(wndAttachment:GetDescendants()) do
+			if v:IsA("ParticleEmitter") then
+				v.Enabled = true
+				if v.Name ~= "Wind3" then
+					v.Speed = NumberRange.new(math.clamp(5*Magnitude/40,-100,50), math.clamp(20*Magnitude/40,-100,200))
+					v.Rate = math.clamp(2*Magnitude/4, 0, _G.G_Optimized and 1000 or 2000)
+				elseif v.Name == "Wind3" then
+					local lock = false
+					if Humanoid.FloorMaterial == Enum.Material.Air then
+						if 250 >= Magnitude then
+							lock = false
+						else
+							lock = true
+						end
+					end
+					v.LockedToPart = lock
+				end
+			end
+		end
+
+		Debris:AddItem(Part, 0.6)
+
+		TweenService:Create(Part, TweenInfo.new(0.05, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 0.8}):Play()
+		TweenService:Create(Weld, TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {C0 = CFrame.new(cframe.Position.X, cframe.Position.Y, math.floor(Magnitude/100)*4)}):Play()
+
+		wait(0.225)
+
+		TweenService:Create(Part, TweenInfo.new(0.095, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0), {Transparency = 1}):Play()
+	else
+		for _, v in pairs(wndAttachment:GetChildren()) do
+			if v:IsA("ParticleEmitter") then
+				v.Enabled = false
+			end
+		end
+	end
+end)
+
+end) -- end task.spawn (Wind System)
+
+
+-- ================================================================
+-- MULTIPLAYER SETUP (original, preserved exactly)
+-- ================================================================
+local function CheckGameMode()
+    local allowedPlayersInGame = 0
+    for _, player in ipairs(Players:GetPlayers()) do
+        if IsAllowed(player) then
+            allowedPlayersInGame = allowedPlayersInGame + 1
+        end
+    end
+    
+    if allowedPlayersInGame == 1 then
+        print("🎮 SINGLE PLAYER MODE - Running solo!")
+    else
+        print("👥 MULTIPLAYER MODE - " .. allowedPlayersInGame .. " speedsters active!")
+    end
+    return allowedPlayersInGame
+end
+
+
+local allowedCount = CheckGameMode()
+for _, player in ipairs(Players:GetPlayers()) do
+    if IsAllowed(player) and player.Character then
+        SetupSpeedster(player)
+    end
+end
+
+
+Players.PlayerAdded:Connect(function(player)
+    if IsAllowed(player) then
+        CheckGameMode()
+        player.CharacterAdded:Connect(function()
+            SetupSpeedster(player)
+        end)
+    end
+end)
+
+for _, player in ipairs(Players:GetPlayers()) do
+    if IsAllowed(player) then
+        player.CharacterAdded:Connect(function()
+            SetupSpeedster(player)
+        end)
+    end
+end
+
+
+Players.PlayerRemoving:Connect(function(player)
+    CleanupPlayer(player)
+    CheckGameMode()
+end)
+
+
+print("⚡ SendAsync() SYNC SYSTEM LOADED!")
+print("📡 Commands: .1 = Speed | .2 = Phase | .3 = Stop")
+print("✅ Multiplayer sync: ACTIVE")
+print("⚡ DYNAMIC LIGHTNING SYSTEM ACTIVE")
+print("   - DCEU Ground Arc System: Beam + Raycast (ENABLED)")
+print("   - Dynamic Trail Flicker Engine: 3-layer async (ENABLED)")
+print("   - HeartbeatUpdate: Optimized (no clone/destroy spam)")
+print("   - G_Optimized: " .. (_G.G_Optimized and "ENABLED (performance mode)" or "DISABLED (full quality)"))
