@@ -1199,8 +1199,8 @@ if speedsterType == "RF" then
     x.LightEmission = 1
     x.LightInfluence = 0
     x.Texture = "rbxassetid://10583327833"
-    x.TextureLength = 0.5
-    x.TextureMode = Enum.TextureMode.Stretch
+    x.TextureLength = 3.625
+    x.TextureMode = Enum.TextureMode.Static
     x.Transparency = NumberSequence.new({
         NumberSequenceKeypoint.new(0,0),
         NumberSequenceKeypoint.new(0.25,0.8375),
@@ -1211,7 +1211,7 @@ if speedsterType == "RF" then
     x.Attachment0 = a[1]
     x.Attachment1 = a[2]
     x.Enabled = false
-    x.Lifetime = 0.4
+    x.Lifetime = 0.15
     x.Parent = v
     t[#t+1] = x
 end
