@@ -1759,6 +1759,11 @@ local function MakeTrail(att0, att1, color, lifetime, widthScale)
     return trail
 end
 
+-- Forward declaration: GetLightningColor is defined later but called inside
+-- SetupBaseTrails. Declaring it here puts the local variable in scope for
+-- the closure so the assignment at the definition site below fills it in.
+local GetLightningColor
+
 -- ================================================================
 -- SetupBaseTrails — friend's SetupTrails, adapted:
 --   • Torso: 4 stacked Y-offset ribbon pairs (depth/volume layer)
@@ -2273,7 +2278,7 @@ end
 -- LIGHTNING SYSTEM - COLOR UTILITIES
 -- ================================================================
 
-local function GetLightningColor()
+GetLightningColor = function()
     if speedsterType == "RF" then
         return Color3.fromRGB(255, 50, 50)
     elseif speedsterType == "Zoom" then
@@ -2558,7 +2563,7 @@ local function FireGroundArc(originPart, lightColor)
     -- This creates the "lightning dissipates" effect rather than hard-cutting
     task.delay(lifetime * 0.35, function()
         if beam and beam.Parent then
-            ts:Create(beam, TweenInfo.new(lifetime * 0.65, Enum.EasingStyle.Expo, Enum.EasingDirection.Out), {
+            ts:Create(beam, TweenInfo.new(lifetime * 0.65, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
                 Transparency = NumberSequence.new(1),
                 Width0 = 0,
                 Width1 = 0
@@ -2622,7 +2627,7 @@ local function FireGroundArc(originPart, lightColor)
             Debris:AddItem(branchPart, bLifetime + 0.05)
             Debris:AddItem(bAttach0, bLifetime + 0.05)
 
-            ts:Create(branchBeam, TweenInfo.new(bLifetime, Enum.EasingStyle.Expo, Enum.EasingDirection.Out), {
+            ts:Create(branchBeam, TweenInfo.new(bLifetime, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
                 Transparency = NumberSequence.new(1),
                 Width0 = 0,
                 Width1 = 0
