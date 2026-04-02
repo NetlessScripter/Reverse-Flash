@@ -853,14 +853,14 @@ if _G.NightMode then
     workspace.Terrain.WaterWaveSpeed = 10
 
     _li = Instance.new('BloomEffect')
-    _li.Intensity = 1
-    _li.Size = 24
+    _li.Intensity = 0.5
+    _li.Size = 12
     _li.Threshold = 2
     _li.Enabled = true
     _li.Parent = l
     _li = Instance.new('BloomEffect')
-    _li.Intensity = 3
-    _li.Size = 100
+    _li.Intensity = 0.8
+    _li.Size = 24
     _li.Threshold = 1.2000000476837158
     _li.Enabled = true
     _li.Parent = l
@@ -995,8 +995,8 @@ else
     _li.Parent = l
 
     _li = Instance.new('BloomEffect')
-    _li.Intensity = 3
-    _li.Size = 100
+    _li.Intensity = 0.8
+    _li.Size = 24
     _li.Threshold = 1.2000000476837158
     _li.Enabled = true
     _li.Parent = l
