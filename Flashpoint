@@ -2439,6 +2439,36 @@ playerData.StopLightningFlicker = StopLightningFlicker
 --   Beam naturally stretches as the character moves — looks correct
 -- ================================================================
 
+-- FadeBeam: manually fades a Beam's Transparency (NumberSequence, not tweeneable)
+-- while tweening Width0/Width1 to 0 via TweenService.
+-- 'duration' is in seconds. Works for both main arc and branch arc.
+local function FadeBeam(beam, duration)
+    if not beam or not beam.Parent then return end
+    -- Tween the numeric width properties to zero (these ARE tweeneable)
+    ts:Create(beam, TweenInfo.new(duration, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
+        Width0 = 0,
+        Width1 = 0,
+    }):Play()
+    -- Manually interpolate Transparency (NumberSequence) each frame
+    task.spawn(function()
+        local steps = math.max(4, math.floor(duration / 0.016))
+        for i = 1, steps do
+            if not beam or not beam.Parent then break end
+            local t = i / steps  -- 0→1
+            -- Lerp from current transparency keypoints toward fully opaque→transparent
+            local alpha = math.min(t * 2, 1)  -- ramp up opacity then fade fast
+            beam.Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, alpha),
+                NumberSequenceKeypoint.new(1, 1),
+            })
+            task.wait(duration / steps)
+        end
+        if beam and beam.Parent then
+            beam.Transparency = NumberSequence.new(1)
+        end
+    end)
+end
+
 local groundArcActive = false
 local groundArcThread = nil
 local groundRayParams = RaycastParams.new()
@@ -2563,11 +2593,7 @@ local function FireGroundArc(originPart, lightColor)
     -- This creates the "lightning dissipates" effect rather than hard-cutting
     task.delay(lifetime * 0.35, function()
         if beam and beam.Parent then
-            ts:Create(beam, TweenInfo.new(lifetime * 0.65, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
-                Transparency = NumberSequence.new(1),
-                Width0 = 0,
-                Width1 = 0
-            }):Play()
+            FadeBeam(beam, lifetime * 0.65)
         end
     end)
 
@@ -2627,11 +2653,7 @@ local function FireGroundArc(originPart, lightColor)
             Debris:AddItem(branchPart, bLifetime + 0.05)
             Debris:AddItem(bAttach0, bLifetime + 0.05)
 
-            ts:Create(branchBeam, TweenInfo.new(bLifetime, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
-                Transparency = NumberSequence.new(1),
-                Width0 = 0,
-                Width1 = 0
-            }):Play()
+            FadeBeam(branchBeam, bLifetime)
         end)
     end
 end
