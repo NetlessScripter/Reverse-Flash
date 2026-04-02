@@ -43,6 +43,14 @@ if _G.G_Optimized == nil then
     _G.G_Optimized = false
 end
 
+if _G.CWTrail == nil then
+    _G.CWTrail = true
+end
+
+if _G.DCEUTrail == nil then
+    _G.DCEUTrail = false
+end
+
 if not _G.TODC then
     print("⏰ TimeOfDayChange DISABLED - ClockTime will NOT be modified")
 else
@@ -1642,6 +1650,15 @@ local CurrentTween
 
 
 
+-- ================================================================
+-- TRAIL MODE SELECTION
+-- _G.CWTrail  = true  → friend's CW ribbon trail system
+-- _G.DCEUTrail = true → self-contained DCEU body trail system
+-- Both true           → randomize one choice each time speed enables
+-- activeTrailMode is set at enableAll() and cleared at disableAll()
+-- ================================================================
+local activeTrailMode = nil   -- "CW" or "DCEU"
+
 -- Base trail system (friend's architecture)
 -- trailObjects entries: { trail, a0, a1 }
 -- Y position is stored in trail.Name as a string so the per-tick
@@ -1802,6 +1819,101 @@ local function SetupBaseTrails()
 end
 
 -- ================================================================
+-- DCEU TRAIL SYSTEM — self-contained, no requires.
+-- One trail per body part, attachments at ±Y on each limb.
+-- Uses our own texture + GetLightningColor() for color.
+-- Mirrors the structure from the friend's DCEU module but
+-- lives entirely inside this script with no external dependencies.
+-- ================================================================
+local dceuTrailFolder = nil
+local dceuTrailObjects = {}  -- { trail, a0, a1 }
+
+local DCEU_BODY_PARTS = {
+    "UpperTorso", "LowerTorso", "Head",
+    "RightUpperArm", "RightLowerArm", "RightHand",
+    "LeftUpperArm",  "LeftLowerArm",  "LeftHand",
+    "RightUpperLeg", "RightLowerLeg", "RightFoot",
+    "LeftUpperLeg",  "LeftLowerLeg",  "LeftFoot",
+}
+
+local function SetupDCEUTrails()
+    if dceuTrailFolder and dceuTrailFolder.Parent then
+        dceuTrailFolder:Destroy()
+    end
+    dceuTrailFolder        = Instance.new("Folder")
+    dceuTrailFolder.Name   = "DCEU_Trails"
+    dceuTrailFolder.Parent = CharacterRef
+    dceuTrailObjects       = {}
+
+    local color = GetLightningColor()
+
+    for _, partName in ipairs(DCEU_BODY_PARTS) do
+        local part = CharacterRef:FindFirstChild(partName)
+        if part then
+            local a0 = Instance.new("Attachment")
+            local a1 = Instance.new("Attachment")
+            a0.Name     = "DCEU_A"
+            a1.Name     = "DCEU_A"
+            a0.Position = Vector3.new(0, -1, 0)
+            a1.Position = Vector3.new(0,  1, 0)
+            a0.Parent   = part
+            a1.Parent   = part
+
+            local trail             = Instance.new("Trail")
+            trail.Attachment0       = a0
+            trail.Attachment1       = a1
+            trail.Lifetime          = 0.2
+            trail.MinLength         = 0
+            trail.FaceCamera        = true
+            trail.LightEmission     = 1
+            trail.LightInfluence    = 0
+            trail.Texture           = "rbxassetid://99013781938083"
+            trail.TextureLength     = 3.625
+            trail.TextureMode       = Enum.TextureMode.Static
+            trail.Color             = ColorSequence.new(color)
+            trail.Transparency      = NumberSequence.new({
+                NumberSequenceKeypoint.new(0,   0),
+                NumberSequenceKeypoint.new(0.5, 0.25),
+                NumberSequenceKeypoint.new(1,   1),
+            })
+            trail.WidthScale        = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(1, 0),
+            })
+            trail.Enabled           = false
+            trail.Parent            = dceuTrailFolder
+
+            table.insert(dceuTrailObjects, { trail = trail, a0 = a0, a1 = a1 })
+            table.insert(playerData.cleanupObjects, trail)
+            table.insert(playerData.cleanupObjects, a0)
+            table.insert(playerData.cleanupObjects, a1)
+        end
+    end
+end
+
+local function EnableDCEUTrails(moving)
+    local color = GetLightningColor()
+    for _, entry in ipairs(dceuTrailObjects) do
+        entry.trail.Enabled = moving
+        entry.trail.Color   = ColorSequence.new(color)
+    end
+end
+
+local function DisableDCEUTrails()
+    for _, entry in ipairs(dceuTrailObjects) do
+        entry.trail.Enabled = false
+    end
+end
+
+local function DestroyDCEUTrails()
+    if dceuTrailFolder and dceuTrailFolder.Parent then
+        dceuTrailFolder:Destroy()
+    end
+    dceuTrailFolder  = nil
+    dceuTrailObjects = {}
+end
+
+-- ================================================================
 -- UpdateTrailActivity — friend's exact per-tick jitter system.
 --
 -- basePos.X is fully re-randomised every tick (not a small offset
@@ -1874,7 +1986,11 @@ local function HeartbeatUpdate()
     if HRP and HRP.Parent then
         local vel    = (HRP.AssemblyLinearVelocity * Vector3.new(1, 0.5, 1)).Magnitude
         local moving = vel > 4
-        UpdateTrailActivity(moving, vel)
+        if activeTrailMode == "CW" then
+            UpdateTrailActivity(moving, vel)
+        elseif activeTrailMode == "DCEU" then
+            EnableDCEUTrails(moving)
+        end
     end
 
     -- Water detection (preserved)
@@ -2041,7 +2157,24 @@ local function enableAll()
     if enabled then return end
     enabled = true
     h.WalkSpeed = defaultWalkSpeed
-    SetupBaseTrails()
+
+    -- Resolve which trail system to use this session
+    local wantCW   = (_G.CWTrail   ~= false)
+    local wantDCEU = (_G.DCEUTrail == true)
+    if wantCW and wantDCEU then
+        activeTrailMode = math.random(2) == 1 and "CW" or "DCEU"
+        print("⚡ Trail mode randomized: " .. activeTrailMode)
+    elseif wantDCEU then
+        activeTrailMode = "DCEU"
+    else
+        activeTrailMode = "CW"
+    end
+
+    if activeTrailMode == "DCEU" then
+        SetupDCEUTrails()
+    else
+        SetupBaseTrails()
+    end
     if heartbeatConnection then heartbeatConnection:Disconnect() heartbeatConnection = nil end
     heartbeatConnection = RunService.Heartbeat:Connect(HeartbeatUpdate)
 
@@ -2084,6 +2217,8 @@ local function disableAll()
     end
     baseTrailFolder = nil
     trailObjects    = {}
+    DestroyDCEUTrails()
+    activeTrailMode = nil
     if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
     if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
     cam.FieldOfView = 70
