@@ -1,3 +1,5 @@
+-- !! READ THE HEADER FOR BETTER UNDERSTANDING ON HOW TO NOT GET ERRORS !!
+
 --[[
     REVERSE FLASH SCRIPT - MULTIPLAYER VERSION (UPGRADED)
     
@@ -24,6 +26,16 @@
     - HeartbeatUpdate no longer clone/destroys trails every frame (was 960+ instance ops/sec)
     - idleParticleConnection bug fixed: no longer re-enables effects when speed is off
     - G_Optimized mode: reduced arc density, longer intervals, lower particle rates
+
+    KNOWN FIXES (DO NOT REVERT):
+    - Beam.Transparency is a NumberSequence — TweenService cannot tween NumberSequence types,
+      only basic numeric/CFrame types. Never pass Transparency = NumberSequence.new(1) into a
+      TweenService:Create() goal on a Beam. Instead, tween Width0 and Width1 to 0; the beam
+      becomes invisible when its width reaches zero, achieving the same fade-out effect cleanly.
+      Affected lines: 2827 (main arc fade) and 2891 (branch arc fade).
+    - Enum.EasingStyle.Expo does NOT exist in Roblox — using it will throw "Expo is not a valid
+      member of Enum.EasingStyle" on every tween that references it. The correct enum member is
+      Enum.EasingStyle.Exponential. Always use the full name Exponential, never Expo.
 --]]
 
 
@@ -2825,7 +2837,6 @@ local function FireGroundArc(originPart, lightColor)
     task.delay(lifetime * 0.35, function()
         if beam and beam.Parent then
             ts:Create(beam, TweenInfo.new(lifetime * 0.65, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
-                Transparency = NumberSequence.new(1),
                 Width0 = 0,
                 Width1 = 0
             }):Play()
@@ -2889,7 +2900,6 @@ local function FireGroundArc(originPart, lightColor)
             Debris:AddItem(bAttach0, bLifetime + 0.05)
 
             ts:Create(branchBeam, TweenInfo.new(bLifetime, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
-                Transparency = NumberSequence.new(1),
                 Width0 = 0,
                 Width1 = 0
             }):Play()
