@@ -1988,10 +1988,11 @@ local customSpeed = 375  -- editable via the Speed TextBox in the GUI
 local RUN_ANIM_ID = "rbxassetid://102622695004986"
 local IDLE_ANIM_ID = "rbxassetid://132861892011980"
 
-local RunAnimation = Instance.new("Animation")
-RunAnimation.AnimationId = RUN_ANIM_ID
-local IdleAnimation = Instance.new("Animation")
-IdleAnimation.AnimationId = IDLE_ANIM_ID
+-- ================================================================
+-- RIG DETECTION (R6 / R15)
+-- ================================================================
+local isR15_run = CharacterRef:FindFirstChild("UpperTorso") ~= nil
+print("⚡ Rig detected: " .. (isR15_run and "R15" or "R6"))
 
 local Animator = h:FindFirstChildOfClass("Animator")
 if not Animator then
@@ -1999,10 +2000,65 @@ if not Animator then
     Animator.Parent = h
 end
 
-local RunAnimTrack = Animator:LoadAnimation(RunAnimation)
-RunAnimTrack.Priority = Enum.AnimationPriority.Action
+local IdleAnimation = Instance.new("Animation")
+IdleAnimation.AnimationId = IDLE_ANIM_ID
 local IdleAnimTrack = Animator:LoadAnimation(IdleAnimation)
 IdleAnimTrack.Priority = Enum.AnimationPriority.Action
+
+local RunAnimTrack
+
+if isR15_run then
+    -- ============================================================
+    -- R15: original Animator:LoadAnimation system (untouched)
+    -- ============================================================
+    local RunAnimation = Instance.new("Animation")
+    RunAnimation.AnimationId = RUN_ANIM_ID
+    RunAnimTrack = Animator:LoadAnimation(RunAnimation)
+    RunAnimTrack.Priority = Enum.AnimationPriority.Action
+    print("⚡ RunAnim: R15 standard Animator track")
+else
+    -- ============================================================
+    -- R6: Animator6D custom run animation
+    -- ID: 139468086481507 | Speed: 3 | Looped: true
+    -- ============================================================
+    local A6D_RUN_ID    = 139468086481507
+    local A6D_RUN_SPEED = 3
+
+    local function PlayRunAnim6D()
+        local ok, err = pcall(function()
+            if not getgenv().Animator6DLoadedPro then
+                loadstring(game:HttpGet(
+                    "https://raw.githubusercontent.com/NetlessScripter/Universal-KJ-Port/refs/heads/main/Animation%20Module"
+                ))()
+            end
+            getgenv().Animator6D(A6D_RUN_ID, A6D_RUN_SPEED, true)
+        end)
+        if not ok then
+            warn("[RunAnim6D] R6 failed to play run animation:", err)
+        end
+    end
+
+    local function StopRunAnim6D()
+        local ok, err = pcall(function()
+            if getgenv().Animator6DStop then
+                getgenv().Animator6DStop()
+            end
+        end)
+        if not ok then
+            warn("[RunAnim6D] R6 failed to stop run animation:", err)
+        end
+    end
+
+    -- Stub matches the AnimationTrack API so all existing RunAnimTrack
+    -- references (Play, Stop, IsPlaying, AdjustSpeed) work without changes
+    RunAnimTrack = {
+        IsPlaying   = false,
+        Play        = function(self) self.IsPlaying = true;  PlayRunAnim6D() end,
+        Stop        = function(self) self.IsPlaying = false; StopRunAnim6D() end,
+        AdjustSpeed = function() end,
+    }
+    print("⚡ RunAnim: R6 Animator6D track (id=" .. A6D_RUN_ID .. ")")
+end
 
 local function AddAttachments(Part, IsArm)
     local A1 = Instance.new("Attachment")
@@ -2252,11 +2308,11 @@ local function UpdateAnimationsAndFOV()
     
     if isMoving then
 
-        if not RunAnimTrack.IsPlaying then 
+        if not RunAnimTrack.IsPlaying then
             if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
-            RunAnimTrack:Play() 
+            RunAnimTrack:Play()
         end
-        RunAnimTrack:AdjustSpeed(14)
+        RunAnimTrack:AdjustSpeed(14)  -- no-op on R6 stub, real call on R15
         
         if cam.FieldOfView ~= 140 then
             if CurrentTween then CurrentTween:Cancel() end
@@ -2335,7 +2391,7 @@ local function disableAll()
         end
     end
     TrailsPerPart = {}
-    if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end
+    if RunAnimTrack.IsPlaying then RunAnimTrack:Stop() end  -- stops Animator6D
     if IdleAnimTrack.IsPlaying then IdleAnimTrack:Stop() end
     cam.FieldOfView = 70
 end
