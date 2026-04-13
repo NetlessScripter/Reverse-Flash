@@ -4179,7 +4179,7 @@ tool.Activated:Connect(function()
 end)
 
 tool.Equipped:Connect(function()
-	tool.Name = isActive and "Stop" or "Emote"
+	tool.Name = isActive and "Stop" or "Emote (R6)"
 end)
 
 tool.Unequipped:Connect(function()
