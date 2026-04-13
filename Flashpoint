@@ -4449,3 +4449,387 @@ print("   - DCEU Idle Arcs (body-to-body): " .. (_G.DCEU ~= false and "ENABLED" 
 print("   - Dynamic Trail Flicker Engine: 3-layer async (ENABLED)")
 print("   - HeartbeatUpdate: Optimized (no clone/destroy spam)")
 print("   - G_Optimized: " .. (_G.G_Optimized and "ENABLED (performance mode)" or "DISABLED (full quality)"))
+local player = game.Players.LocalPlayer
+local ws = game.Workspace
+local TS = game:GetService("TweenService")
+local Run = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+if not isfile("WEST.mp3") then
+writefile("WEST.mp3", game:HttpGet("https://github.com/ian49972/smth/raw/refs/heads/main/WEST.mp3"))
+end
+
+local Object = game:GetObjects("rbxassetid://104928991202331")[1]
+Object.Parent = ws
+
+local wallySeq = Object:FindFirstChild("wally")
+local vfxModelTemplate = Object:FindFirstChild("Wally"):FindFirstChild("speedster")
+
+local isActive = false
+local pAnim = nil
+local vfxModel = nil
+local activeConnections = {}
+local heartbeatConn = nil
+local originalWalkSpeed = 16
+local sound = nil
+
+local tool = Instance.new("Tool")
+tool.Name = "Emote"
+local handle = Instance.new("Part")
+handle.Name = "Handle"
+handle.Size = Vector3.new(0.1, 0.1, 0.1)
+handle.Transparency = 1
+handle.CanCollide = false
+handle.Parent = tool
+tool.Parent = player.Backpack
+
+local function PlayKeyframeSequence(Model, Seq, Speed)
+	Speed = Speed or 1
+	local All = {}
+	for _, kf in Seq:GetKeyframes() do
+		table.insert(All, {Time = kf.Time, KF = kf})
+	end
+	table.sort(All, function(a,b) return a.Time < b.Time end)
+
+	local tweens, motors, vals, poses = {}, {}, {}, {}
+
+	local function GetMotor(pose)
+		for _, m in Model:GetDescendants() do
+			if m:IsA("Motor6D") and m.Part1 and m.Part1.Name == pose.Name and m.Part0 and m.Part0.Name == pose.Parent.Name then
+				return m
+			end
+		end
+	end
+
+	for i, k in ipairs(All) do
+		poses[i] = {Time = k.Time, P = {}}
+		for _, p in k.KF:GetDescendants() do
+			if p:IsA("Pose") and p.Weight > 0 then
+				local m = motors[p.Name] or GetMotor(p)
+				if m then
+					motors[p.Name] = m
+					if not vals[p.Name] then
+						local v = Instance.new("CFrameValue")
+						v.Name = "MotorValue"
+						v.Parent = m
+						vals[p.Name] = v
+					end
+					poses[i].P[p.Name] = {M = m, P = p}
+				end
+			end
+		end
+	end
+
+	if #poses > 1 then
+		local last = {}
+		for i = 1, #poses-1 do
+			local a, b = poses[i], poses[i+1]
+			local dur = (b.Time - a.Time) / Speed
+			tweens[i] = {D = dur, T = {}}
+			for n,d in pairs(a.P) do last[n] = d end
+			for n,d in pairs(b.P) do
+				if last[n] then
+					local ti = TweenInfo.new(dur, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
+					tweens[i].T[n] = TS:Create(vals[n], ti, {Value = d.P.CFrame})
+				end
+			end
+		end
+	end
+
+	local function len() return poses[#poses] and poses[#poses].Time / Speed or 0 end
+
+	local function playOnce()
+		for _, t in tweens do
+			for _, tw in t.T do tw:Play() end
+			task.wait(t.D)
+		end
+	end
+
+	local conn = Run.Heartbeat:Connect(function()
+		for n,m in pairs(motors) do
+			if vals[n] and vals[n].Value then m.Transform = vals[n].Value end
+		end
+	end)
+
+	local function loop()
+		while isActive do
+			playOnce()
+		end
+	end
+
+	task.spawn(loop)
+
+	return {
+		getLength = len,
+		stop = function()
+			conn:Disconnect()
+			for _, t in tweens do for _, tw in t.T do tw:Cancel() end end
+		end
+	}
+end
+
+local function cleanup()
+	isActive = false
+	if pAnim then
+		pAnim.stop()
+		pAnim = nil
+	end
+	if vfxModel and vfxModel.Parent then
+		vfxModel:Destroy()
+		vfxModel = nil
+	end
+	if sound and sound.Parent then
+		sound:Stop()
+		sound:Destroy()
+		sound = nil
+	end
+	for _, conn in ipairs(activeConnections) do
+		if conn.Connected then
+			conn:Disconnect()
+		end
+	end
+	activeConnections = {}
+	if heartbeatConn and heartbeatConn.Connected then
+		heartbeatConn:Disconnect()
+		heartbeatConn = nil
+	end
+	local hum = player.Character and player.Character:FindFirstChild("Humanoid")
+	if hum then
+		hum.WalkSpeed = originalWalkSpeed
+		if hum:FindFirstChild("Animator") then
+			hum.Animator:Destroy()
+		end
+		Instance.new("Animator", hum)
+	end
+	tool.Name = "Emote"
+end
+
+local function startWally()
+	if isActive then return end
+	isActive = true
+
+	local char = player.Character or player.CharacterAdded:Wait()
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	local hum = char:FindFirstChild("Humanoid")
+	if not (hrp and hum) then cleanup() return end
+
+	originalWalkSpeed = hum.WalkSpeed
+	hum.WalkSpeed = 0
+
+	local animator = hum:FindFirstChild("Animator")
+	if animator then animator:Destroy() end
+
+	if not vfxModelTemplate then cleanup() return end
+
+	vfxModel = vfxModelTemplate:Clone()
+	if not vfxModel then cleanup() return end
+	vfxModel.Parent = char
+
+	local cframeGroup = vfxModel:FindFirstChild("cframeGroup")
+	if not cframeGroup then cleanup() return end
+	cframeGroup:PivotTo(hrp.CFrame)
+
+	local vfx1 = vfxModel:FindFirstChild("vfx1")
+	if vfx1 and vfx1:FindFirstChild("Weld") then
+		vfx1.Weld.Part0 = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or hrp
+	end
+
+	local bodyaura = vfxModel:FindFirstChild("bodyaura")
+	if bodyaura then
+		for _, part in ipairs(bodyaura:GetChildren()) do
+			if part:FindFirstChild("Weld") then
+				local target = char:FindFirstChild(part.Name)
+				if target then
+					part.Weld.Part0 = target
+				end
+			end
+		end
+	end
+
+	sound = Instance.new("Sound")
+	sound.SoundId = getcustomasset("WEST.mp3")
+	sound.Looped = true
+	sound.Volume = 1
+	sound.Parent = char:FindFirstChild("Head") or hrp
+	sound:Play()
+
+	local function enableEmitters(parent, duration)
+		if not parent then return end
+		for _, emitter in ipairs(parent:GetDescendants()) do
+			if emitter:IsA("ParticleEmitter") then
+				emitter.Enabled = true
+				task.delay(duration, function()
+					if emitter and emitter.Parent then
+						emitter.Enabled = false
+					end
+				end)
+			end
+		end
+	end
+
+	local function emitParticles(parent)
+		if not parent then return end
+		for _, emitter in ipairs(parent:GetDescendants()) do
+			if emitter:IsA("ParticleEmitter") then
+				local count = emitter:GetAttribute("EmitCount") or 10
+				emitter:Emit(count)
+			end
+		end
+	end
+
+	local function animateBeams(beamsFolder, duration, widthStart)
+		if not beamsFolder then return end
+		local beams = beamsFolder:GetDescendants()
+		local originalWidths = {}
+		for _, beam in ipairs(beams) do
+			if beam:IsA("Beam") then
+				originalWidths[beam] = {Width0 = beam.Width0, Width1 = beam.Width1}
+				beam.Width0 = 0
+				beam.Width1 = 0
+				local tweenIn = TS:Create(beam, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Width0 = widthStart, Width1 = widthStart})
+				local tweenOut = TS:Create(beam, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Width0 = 0, Width1 = 0})
+				tweenIn:Play()
+				tweenIn.Completed:Connect(function()
+					tweenOut:Play()
+				end)
+			end
+		end
+
+		local startTick = tick()
+		local conn
+		conn = Run.PreRender:Connect(function()
+			if not beamsFolder or not beamsFolder.Parent then
+				conn:Disconnect()
+				return
+			end
+			local elapsed = tick() - startTick
+			if elapsed >= duration * 2 then
+				for beam, widths in pairs(originalWidths) do
+					if beam and beam.Parent then
+						beam.Width0 = widths.Width0
+						beam.Width1 = widths.Width1
+					end
+				end
+				conn:Disconnect()
+			else
+				local rot = -5400 * (elapsed / (duration * 2))
+				beamsFolder.CFrame = beamsFolder.CFrame * CFrame.Angles(0, math.rad(rot), 0)
+			end
+		end)
+		return conn
+	end
+
+	local function playVfxCycle()
+		if not vfxModel or not vfxModel.Parent then return end
+		if vfxModel:FindFirstChild("vfx1") then enableEmitters(vfxModel.vfx1, 1.65) end
+		task.delay(0.35, function()
+			if vfxModel and vfxModel:FindFirstChild("cframeGroup") then
+				local beams = vfxModel.cframeGroup:FindFirstChild("beams")
+				if beams then table.insert(activeConnections, animateBeams(beams, 0.68, 14)) end
+			end
+		end)
+		task.delay(2.95, function()
+			if vfxModel and vfxModel:FindFirstChild("cframeGroup") then
+				local beams2 = vfxModel.cframeGroup:FindFirstChild("beams2")
+				if beams2 then table.insert(activeConnections, animateBeams(beams2, 0.11, 13.5)) end
+			end
+		end)
+		task.delay(0.366, function()
+			if vfxModel and vfxModel:FindFirstChild("cframeGroup") and vfxModel.cframeGroup:FindFirstChild("Part") then
+				enableEmitters(vfxModel.cframeGroup.Part:FindFirstChild("vfx2"), 1.15)
+			end
+		end)
+		task.delay(1.63, function()
+			if vfxModel and vfxModel:FindFirstChild("cframeGroup") and vfxModel.cframeGroup:FindFirstChild("Part") then
+				emitParticles(vfxModel.cframeGroup.Part:FindFirstChild("vfx3"))
+			end
+		end)
+		task.delay(1.73, function()
+			if vfxModel and vfxModel:FindFirstChild("cframeGroup") and vfxModel.cframeGroup:FindFirstChild("Part") then
+				emitParticles(vfxModel.cframeGroup.Part:FindFirstChild("vfx4"))
+			end
+		end)
+		task.delay(2, function()
+			if vfxModel and vfxModel:FindFirstChild("cframeGroup") and vfxModel.cframeGroup:FindFirstChild("Part") then
+				emitParticles(vfxModel.cframeGroup.Part:FindFirstChild("vfx5"))
+			end
+		end)
+		task.delay(2.02, function()
+			if vfxModel and vfxModel:FindFirstChild("bodyaura") then
+				enableEmitters(vfxModel.bodyaura, 1)
+			end
+		end)
+		task.delay(2.9, function()
+			if vfxModel and vfxModel:FindFirstChild("vfx1") then
+				enableEmitters(vfxModel.vfx1, 0.45)
+			end
+		end)
+		task.delay(2.93, function()
+			if vfxModel and vfxModel:FindFirstChild("cframeGroup") and vfxModel.cframeGroup:FindFirstChild("Part") then
+				enableEmitters(vfxModel.cframeGroup.Part:FindFirstChild("vfx6"), 0.25)
+			end
+		end)
+	end
+
+	local function startVfxLoop()
+		playVfxCycle()
+		task.delay(3.3, function()
+			if isActive then
+				startVfxLoop()
+			end
+		end)
+	end
+
+	startVfxLoop()
+
+	local blur = Instance.new("BlurEffect")
+	blur.Size = 25
+	blur.Parent = Lighting
+	TS:Create(blur, TweenInfo.new(0.15, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = 0}):Play()
+	task.delay(0.15, function()
+		if blur and blur.Parent then blur:Destroy() end
+	end)
+
+	local ccTemplate = vfxModelTemplate:FindFirstChild("ColorCorrection")
+	if ccTemplate then
+		local cc = ccTemplate:Clone()
+		cc.Parent = Lighting
+		cc.TintColor = Color3.fromRGB(0, 187, 255)
+		cc.Brightness = 0.4
+		cc.Contrast = 1
+		cc.Saturation = -0.4
+		TS:Create(cc, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+			Contrast = 0, Brightness = 0, TintColor = Color3.fromRGB(255,255,255), Saturation = 0
+		}):Play()
+		task.delay(0.5, function()
+			if cc and cc.Parent then cc:Destroy() end
+		end)
+	end
+
+	pAnim = PlayKeyframeSequence(char, wallySeq, 2.2)
+end
+
+tool.Activated:Connect(function()
+	if isActive then
+		cleanup()
+	else
+		startWally()
+		tool.Name = "Stop"
+	end
+end)
+
+tool.Equipped:Connect(function()
+	tool.Name = isActive and "Stop" or "Emote"
+end)
+
+tool.Unequipped:Connect(function()
+	tool.Name = "Emote (R6)"
+end)
+
+player.CharacterAdded:Connect(function()
+	cleanup()
+end)
+
+tool.Destroying:Connect(function()
+	cleanup()
+end)
