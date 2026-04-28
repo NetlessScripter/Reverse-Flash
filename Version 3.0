@@ -1,0 +1,1202 @@
+-- LightningTrailVFX LocalScript
+-- All systems (PartCache, LightningBolt, Trail VFX) combined into one file.
+-- Trails/lights/particles only activate when player speed exceeds SPEED_THRESHOLD.
+
+local Players      = game:GetService("Players")
+local RunService   = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Debris       = game:GetService("Debris")
+local Workspace    = game:GetService("Workspace")
+local Lighting     = game:GetService("Lighting")
+
+local LocalPlayer  = Players.LocalPlayer
+local Camera       = Workspace.CurrentCamera
+
+-- ============================================================
+--  LIGHTING SETUP
+--  All values sourced from LightingRipper output 2026-04-28
+-- ============================================================
+
+local function ApplyLighting()
+	local l = game:GetService("Lighting")
+
+	-- Clear existing sky/effects so we start clean
+	for _, child in ipairs(l:GetChildren()) do
+		if child:IsA("Sky") or child:IsA("BloomEffect") or child:IsA("BlurEffect")
+		or child:IsA("ColorCorrectionEffect") or child:IsA("DepthOfFieldEffect")
+		or child:IsA("SunRaysEffect") or child:IsA("Atmosphere") then
+			child:Destroy()
+		end
+	end
+
+	do
+		local i = Instance.new("Sky")
+		i.SkyboxBk      = "http://www.roblox.com/asset/?id=11389748784"
+		i.SkyboxDn      = "http://www.roblox.com/asset/?id=11389743619"
+		i.SkyboxFt      = "http://www.roblox.com/asset/?id=11389734712"
+		i.SkyboxLf      = "http://www.roblox.com/asset/?id=11389739259"
+		i.SkyboxRt      = "http://www.roblox.com/asset/?id=11389735910"
+		i.SkyboxUp      = "http://www.roblox.com/asset/?id=11389742333"
+		i.MoonAngularSize = 7
+		i.MoonTextureId = "rbxasset://sky/moon.jpg"
+		i.SunAngularSize  = 2
+		i.SunTextureId  = "rbxasset://sky/sun.jpg"
+		i.Parent = l
+	end
+	do
+		local i = Instance.new("BloomEffect")
+		i.Intensity  = 3
+		i.Size       = 100
+		i.Threshold  = 1.2000000476837158
+		i.Enabled    = true
+		i.Parent     = l
+	end
+	do
+		local i = Instance.new("BlurEffect")
+		i.Size    = 4
+		i.Enabled = true
+		i.Parent  = l
+	end
+	do
+		local i = Instance.new("ColorCorrectionEffect")
+		i.Brightness = 0
+		i.Contrast   = 0.30000001192092896
+		i.Saturation = 0.30000001192092896
+		i.TintColor  = Color3.new(1.1176470518112183, 1.0117647647857666, 0.9215686321258545)
+		i.Enabled    = true
+		i.Parent     = l
+	end
+	do
+		local i = Instance.new("DepthOfFieldEffect")
+		i.FarIntensity   = 0.2290000021457672
+		i.FocusDistance  = 0.05000000074505806
+		i.InFocusRadius  = 180
+		i.NearIntensity  = 0.6460000276565552
+		i.Enabled        = true
+		i.Parent         = l
+	end
+	do
+		local i = Instance.new("SunRaysEffect")
+		i.Intensity = 0.03200000151991844
+		i.Spread    = 0.7160000205039978
+		i.Enabled   = true
+		i.Parent    = l
+	end
+	do
+		local i = Instance.new("DepthOfFieldEffect")
+		i.FarIntensity  = 1
+		i.FocusDistance = 29.5
+		i.InFocusRadius = 240
+		i.NearIntensity = 0.75
+		i.Enabled       = false
+		i.Parent        = l
+	end
+
+	l.Brightness               = 0.699999988079071
+	l.ClockTime                = 14.5
+	l.FogEnd                   = 100000
+	l.FogStart                 = 0
+	l.FogColor                 = Color3.new(0.7529412508010864, 0.7529412508010864, 0.7529412508010864)
+	l.OutdoorAmbient           = Color3.new(0.27450981736183167, 0.27450981736183167, 0.27450981736183167)
+	l.Ambient                  = Color3.new(0.27450981736183167, 0.27450981736183167, 0.27450981736183167)
+	l.GlobalShadows            = true
+	l.GeographicLatitude       = 360
+	l.EnvironmentSpecularScale = 1
+	l.EnvironmentDiffuseScale  = 1
+	l.ExposureCompensation     = 0
+	l.ColorShift_Bottom        = Color3.new(0, 0, 0)
+	l.ColorShift_Top           = Color3.new(0, 0, 0)
+	l.Technology               = Enum.Technology.Future
+	l.ShadowSoftness           = 1
+	l.TimeOfDay                = "14:30:00"
+end
+
+ApplyLighting()
+
+-- ============================================================
+--  INLINE ASSET BUILDERS  (replaces ReplicatedStorage clones)
+--  All values sourced from PropertyFetcher output 2026-04-28
+-- ============================================================
+
+-- Valid R15 body-part names (replaces Assets.VFX.DefaultRig lookup)
+local VALID_BODY_PARTS = {
+	Head          = true, UpperTorso    = true, LowerTorso    = true,
+	LeftUpperArm  = true, LeftLowerArm  = true, LeftHand      = true,
+	RightUpperArm = true, RightLowerArm = true, RightHand     = true,
+	LeftUpperLeg  = true, LeftLowerLeg  = true, LeftFoot      = true,
+	RightUpperLeg = true, RightLowerLeg = true, RightFoot     = true,
+}
+
+-- Builds a fresh CW_Particle ParticleEmitter with fetched property values
+local function CreateParticle()
+	local p = Instance.new("ParticleEmitter")
+	p.Name                = "CW_Particle"
+	p.Enabled             = true
+	p.Rate                = 8
+	p.TimeScale           = 1
+	p.Texture             = "rbxassetid://16205886442"
+	p.Color               = ColorSequence.new(Color3.fromRGB(38, 103, 255))
+	p.Size                = NumberSequence.new({
+		NumberSequenceKeypoint.new(0,      0.5),
+		NumberSequenceKeypoint.new(0.1,    0.1),
+		NumberSequenceKeypoint.new(0.3,    0.1),
+		NumberSequenceKeypoint.new(0.4,    0.5),
+		NumberSequenceKeypoint.new(0.501,  0.05),
+		NumberSequenceKeypoint.new(0.699,  0.05),
+		NumberSequenceKeypoint.new(0.8,    0.5),
+		NumberSequenceKeypoint.new(0.9,    0.1),
+		NumberSequenceKeypoint.new(1,      0),
+	})
+	p.Transparency        = NumberSequence.new(0)
+	p.Squash              = NumberSequence.new({
+		NumberSequenceKeypoint.new(0,      -0.1),
+		NumberSequenceKeypoint.new(0.2997, -0.0164),
+		NumberSequenceKeypoint.new(0.5,    -1.5246),
+		NumberSequenceKeypoint.new(0.6993, -0.0164),
+		NumberSequenceKeypoint.new(1,      -0.1),
+	})
+	p.ZOffset             = 0.7
+	p.LightEmission       = 1
+	p.LightInfluence      = 0
+	p.EmissionDirection   = Enum.NormalId.Top
+	p.LockedToPart        = true
+	p.VelocityInheritance = 0
+	p.Speed               = NumberRange.new(0, 0)
+	p.SpreadAngle         = Vector2.new(0, 0)
+	p.Rotation            = NumberRange.new(-180, 180)
+	p.RotSpeed            = NumberRange.new(0, 0)
+	p.Lifetime            = NumberRange.new(0.01, 0.2)
+	p.FlipbookLayout      = Enum.ParticleFlipbookLayout.Grid4x4
+	p.FlipbookFramerate   = NumberRange.new(16, 16)
+	p.FlipbookStartRandom = false
+	p:SetAttribute("EmitCount", 8)
+	return p
+end
+
+-- Builds a fresh Lightning Trail with fetched property values
+local function BuildTrailInstance()
+	local t = Instance.new("Trail")
+	t.Enabled        = true
+	t.Lifetime       = 0.15
+	t.Color          = ColorSequence.new(Color3.fromRGB(255, 86, 30))
+	t.Transparency   = NumberSequence.new({
+		NumberSequenceKeypoint.new(0,     1),
+		NumberSequenceKeypoint.new(0.005, 0),
+		NumberSequenceKeypoint.new(0.9,   0),
+		NumberSequenceKeypoint.new(1,     1),
+	})
+	t.WidthScale     = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	t.LightEmission  = 1
+	t.LightInfluence = 0
+	t.Texture        = "rbxassetid://2583036595"
+	t.TextureLength  = 1
+	t.TextureMode    = Enum.TextureMode.Static
+	t.FaceCamera     = true
+	t.MinLength      = 0
+	return t
+end
+
+local SPEED_THRESHOLD = 48   -- trails, particles, lightning bolts all activate above this
+local TRAIL_COLOR     = Color3.fromRGB(255, 63, 63)  -- sourced from TrailColors folder
+local TRAIL_Y_OFFSETS = { -1.45, -0.65, 0.25, 1.45 }
+local TRAIL_TEXTURES  = {
+	"rbxassetid://11284509604",
+	"rbxassetid://11107837410",
+	"rbxassetid://8106199512",
+	"rbxassetid://8106198824",
+	"rbxassetid://8106199146",
+	"rbxassetid://8106199512",
+}
+
+-- ============================================================
+--  PART CACHE
+-- ============================================================
+local PartCache    = {}
+PartCache.__index  = PartCache
+
+function PartCache.new(template, precount, parent)
+	local self      = setmetatable({}, PartCache)
+	self._template  = template
+	self._parent    = parent or Workspace.Terrain
+	self._available = {}
+	self._inUse     = {}
+
+	for _ = 1, precount do
+		local p     = template:Clone()
+		p.CFrame    = CFrame.new(0, 1e8, 0)
+		p.Parent    = self._parent
+		table.insert(self._available, p)
+	end
+	return self
+end
+
+function PartCache:SetCacheParent(newParent)
+	self._parent = newParent
+	for _, p in ipairs(self._available)   do p.Parent = newParent end
+	for  p      in pairs(self._inUse)     do p.Parent = newParent end
+end
+
+function PartCache:GetPart()
+	local p
+	if #self._available > 0 then
+		p = table.remove(self._available)
+	else
+		p        = self._template:Clone()
+		p.Parent = self._parent
+	end
+	self._inUse[p] = true
+	return p
+end
+
+function PartCache:ReturnPart(p)
+	if self._inUse[p] then
+		self._inUse[p] = nil
+		p.CFrame        = CFrame.new(0, 1e8, 0)
+		table.insert(self._available, p)
+	end
+end
+
+function PartCache:IsPartInUse(p)
+	return self._inUse[p] == true
+end
+
+-- ============================================================
+--  LIGHTNING BOLT
+-- ============================================================
+local BoltTemplate               = Instance.new("Part")
+BoltTemplate.TopSurface          = Enum.SurfaceType.Smooth
+BoltTemplate.BottomSurface       = Enum.SurfaceType.Smooth
+BoltTemplate.Anchored            = true
+BoltTemplate.CanCollide          = false
+BoltTemplate.Locked              = true
+BoltTemplate.CastShadow          = false
+BoltTemplate.CanTouch            = false
+BoltTemplate.CanQuery            = false
+BoltTemplate.Shape               = Enum.PartType.Cylinder
+BoltTemplate.Name                = "BoltPart"
+BoltTemplate.Material            = Enum.Material.Neon
+BoltTemplate.Color               = Color3.new(1, 1, 1)
+BoltTemplate.Transparency        = 1
+
+local BoltCache = PartCache.new(BoltTemplate, 1000, Workspace.Terrain)
+
+-- CFrame correction so a cylinder "points" along its length toward lookAt target
+local LOOK_INVERSE = CFrame.lookAt(Vector3.new(), Vector3.new(1, 0, 0)):Inverse()
+local ActiveBolts  = {}
+
+-- Cubic Bézier
+local function BezierCurve(t, p0, p1, p2, p3)
+	local u = 1 - t
+	return u^3*p0 + 3*u^2*t*p1 + 3*u*t^2*p2 + t^3*p3
+end
+
+-- Opacity envelope for the travelling-pulse effect
+local function OpacityProfile(posRatio, elapsed, pulseSpeed, pulseLength, fadeLength, minOp, maxOp)
+	local center     = pulseLength / (2 * fadeLength)
+	local normalized = (posRatio - elapsed * pulseLength + 0.5 * pulseLength) / fadeLength
+	local proximity  = center - math.abs(normalized)
+	return math.clamp(proximity, minOp, math.max(maxOp, minOp))
+end
+
+-- Gaussian-like radial profile that tapers at both ends
+local function RadialProfile(t)
+	return math.exp(-5000 * (t - 0.5)^10)
+end
+
+local LightningBolt   = {}
+LightningBolt.__index = LightningBolt
+
+function LightningBolt.new(att0, att1, partCount)
+	local self = setmetatable({}, LightningBolt)
+	self.Enabled                = true
+	self.Attachment0            = att0
+	self.Attachment1            = att1
+	self.CurveSize0             = 0
+	self.CurveSize1             = 0
+	self.MinRadius              = 0
+	self.MaxRadius              = 2.4
+	self.Frequency              = 1
+	self.AnimationSpeed         = 7
+	self.Thickness              = 1
+	self.MinThicknessMultiplier = 0.2
+	self.MaxThicknessMultiplier = 1
+	self.MinTransparency        = 0
+	self.MaxTransparency        = 1
+	self.PulseSpeed             = 2
+	self.PulseLength            = 1000000
+	self.FadeLength             = 0.2
+	self.ContractFrom           = 0.5
+	self.Color                  = Color3.fromRGB(255, 208, 87)
+	self.ColorOffsetSpeed       = 3
+	self.SpaceCurveFunction     = BezierCurve
+	self.OpacityProfileFunction = OpacityProfile
+	self.RadialProfileFunction  = RadialProfile
+	self._Parts                 = {}
+	for i = 1, partCount or 30 do
+		self._Parts[i] = BoltCache:GetPart()
+	end
+	self._PartsHidden          = false
+	self._DisabledTransparency = 1
+	self._StartT               = os.clock()
+	self._RanNum               = math.random() * 100
+	self._RefIndex             = #ActiveBolts + 1
+	ActiveBolts[self._RefIndex] = self
+	return self
+end
+
+function LightningBolt:Destroy()
+	ActiveBolts[self._RefIndex] = nil
+	for i = 1, #self._Parts do
+		if BoltCache:IsPartInUse(self._Parts[i]) then
+			BoltCache:ReturnPart(self._Parts[i])
+		end
+	end
+end
+
+function LightningBolt:DestroyDissipate(fadeTime, expandFactor)
+	local duration       = fadeTime     or 0.2
+	local expand         = expandFactor or 0.5
+	local startT         = os.clock()
+	local origMinTrans   = self.MinTransparency
+	local origContract   = self.ContractFrom
+	local contractEdge   = self.ContractFrom + 1 / (#self._Parts * self.FadeLength)
+	local origMaxRadius  = self.MaxRadius
+	local origMinThick   = self.MinThicknessMultiplier
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		local e = os.clock() - startT
+		self.MinThicknessMultiplier = origMinThick + (-2 - origMinThick) * e / duration
+		if e < duration * 0.4 then
+			local t = e / (duration * 0.4)
+			self.MinTransparency = origMinTrans + (origContract - origMinTrans) * t
+		elseif e < duration then
+			local t = (e - duration * 0.4) / (duration * 0.6)
+			self.MinTransparency = origContract + (contractEdge - origContract) * t
+			self.MaxRadius       = origMaxRadius * (1 + expand * t)
+			self.MinRadius       = self.MinRadius + (self.MaxRadius - self.MinRadius) * t
+		else
+			if os.clock() - self._StartT < (self.PulseLength + 1) / self.PulseSpeed then
+				self:Destroy()
+			end
+			conn:Disconnect()
+			conn = nil
+		end
+	end)
+end
+
+function LightningBolt:_UpdateGeometry(part, posRatio, elapsed, thickMult, segStart, segEnd)
+	local minOp    = 1 - self.MaxTransparency
+	local maxOp    = 1 - self.MinTransparency
+	local opacity  = self.OpacityProfileFunction(posRatio, elapsed, self.PulseSpeed, self.PulseLength, self.FadeLength, minOp, maxOp)
+	local thick    = self.Thickness * thickMult * opacity
+	local visOp    = thick > 0 and opacity or 0
+	local cThresh  = 1 - self.ContractFrom
+	local n        = #self._Parts
+
+	if cThresh < visOp then
+		local len     = (segEnd - segStart).Magnitude
+		part.Size     = Vector3.new(len, thick, thick)
+		part.CFrame   = CFrame.lookAt((segStart + segEnd) * 0.5, segEnd) * LOOK_INVERSE
+		part.Transparency = 1 - visOp
+	elseif cThresh - 1 / (n * self.FadeLength) < visOp then
+		local fadeEdge  = cThresh - 1 / (n * self.FadeLength)
+		local dir       = (posRatio < elapsed * self.PulseSpeed - 0.5 * self.PulseLength) and 1 or -1
+		local edgeFac   = (1 - (visOp - fadeEdge) * n * self.FadeLength) * dir
+		local segLen    = (1 - math.abs(edgeFac)) * (segEnd - segStart).Magnitude
+		part.Size       = Vector3.new(segLen, thick, thick)
+		part.CFrame     = CFrame.lookAt(segStart + (segEnd - segStart) * (math.max(0, edgeFac) + (1 - math.abs(edgeFac)) * 0.5), segEnd) * LOOK_INVERSE
+		part.Transparency = 1 - visOp
+	else
+		part.Transparency = 1
+	end
+end
+
+function LightningBolt:_UpdateColor(part, posRatio, elapsed)
+	local color = self.Color
+	if typeof(color) == "Color3" then
+		part.Color = color
+	else
+		local offset = (self._RanNum + posRatio - elapsed * self.ColorOffsetSpeed) % 1
+		local kps    = color.Keypoints
+		for i = 1, #kps - 1 do
+			if kps[i].Time < offset and offset < kps[i+1].Time then
+				part.Color = kps[i].Value:Lerp(kps[i+1].Value,
+					(offset - kps[i].Time) / (kps[i+1].Time - kps[i].Time))
+				return
+			end
+		end
+	end
+end
+
+function LightningBolt:_Disable()
+	self.Enabled = false
+	for _, p in ipairs(self._Parts) do
+		p.Transparency = self._DisabledTransparency
+	end
+end
+
+-- Bolt update loop
+RunService.Heartbeat:Connect(function()
+	debug.profilebegin("LightningBolt")
+	for _, bolt in pairs(ActiveBolts) do
+		if bolt.Enabled then
+			bolt._PartsHidden = false
+			local minR     = bolt.MinRadius
+			local maxR     = bolt.MaxRadius
+			local parts    = bolt._Parts
+			local n        = #parts
+			local ranNum   = bolt._RanNum
+			local animSpd  = bolt.AnimationSpeed
+			local freq     = bolt.Frequency
+			local minThick = bolt.MinThicknessMultiplier
+			local maxThick = bolt.MaxThicknessMultiplier
+			local elapsed  = os.clock() - bolt._StartT
+			local curve    = bolt.SpaceCurveFunction
+			local radial   = bolt.RadialProfileFunction
+			local maxTime  = (bolt.PulseLength + 1) / bolt.PulseSpeed
+			local att0     = bolt.Attachment0
+			local att1     = bolt.Attachment1
+			local p0       = att0.WorldPosition
+			local p1       = p0 + att0.WorldAxis * bolt.CurveSize0
+			local p2       = att1.WorldPosition - att1.WorldAxis * bolt.CurveSize1
+			local p3       = att1.WorldPosition
+
+			if elapsed < maxTime then
+				local prevCurve = curve(0, p0, p1, p2, p3)
+				local prevPart  = prevCurve
+				for i = 1, n do
+					local part = parts[i]
+					local t    = i / n
+					-- Noise coordinates
+					local a    = animSpd * -elapsed + freq * 10 * t - 0.2 + ranNum * 4
+					local b    = 5 * (animSpd * 0.001 * -elapsed + freq * t) + ranNum * 4
+					-- Combined rotation angle for displacement
+					local ang1 = 0.6283185307179586  * (math.noise(5 * a, 1.5, b)       + 0.5)
+					local ang2 = 5.654866776461628   * (math.noise(0.5 * a, 1.5, 0.1*b) + 0.5)
+					local angle = ang1 + ang2
+					-- Displacement radius and thickness
+					local radius    = (minR + (maxR - minR) * (math.noise(3.4, b, a) + 0.5)) * radial(t)
+					local thickMult = minThick + (maxThick - minThick) * (math.noise(2.3, b, a) + 0.5)
+					local curvePos  = curve(t, p0, p1, p2, p3)
+					local partPos
+					if i == n then
+						partPos = curvePos
+					else
+						local lookCF   = CFrame.new(prevCurve, curvePos) * CFrame.Angles(0, 0, angle)
+						local noiseVal = math.clamp(6.123233995736766e-17 + 0.9999999999999999 * (math.noise(b, a, 2.7) + 0.5), -1, 1)
+						partPos = (lookCF * CFrame.Angles(math.acos(noiseVal), 0, 0) * CFrame.new(0, 0, -radius)).Position or curvePos
+					end
+					bolt:_UpdateGeometry(part, t, elapsed, thickMult, prevPart, partPos)
+					bolt:_UpdateColor(part, t, elapsed)
+					prevCurve = curvePos
+					prevPart  = partPos
+				end
+			else
+				bolt:Destroy()
+			end
+		elseif not bolt._PartsHidden then
+			bolt._PartsHidden = true
+			bolt:_Disable()
+		end
+	end
+	debug.profileend()
+end)
+
+-- ============================================================
+--  TRAIL VFX SYSTEM
+-- ============================================================
+local VFX          = { Users = {} }
+local _lastTrailType = nil   -- tracks Primary/Secondary alternation during setup
+
+-- Helper: is the colour so dark it needs no light emission?
+local function IsDark(color)
+	if typeof(color) == "ColorSequence" then color = color.Keypoints[1].Value end
+	return 0.299*color.R + 0.587*color.G + 0.114*color.B < 0.1
+end
+
+-- Remove all VFX data for a character
+local function DestroyUserTable(character)
+	character:SetAttribute("LastPos", nil)
+	local entry = VFX.Users[character]
+	if entry and entry[2] then entry[2]:Disconnect() end
+	local trails = character:FindFirstChild("CW_Trails")
+	if trails then
+		for _, t in pairs(trails:GetChildren()) do
+			if t:IsA("Trail") then
+				if t.Attachment0 then t.Attachment0:Destroy() end
+				if t.Attachment1 then t.Attachment1:Destroy() end
+				t:Destroy()
+			end
+		end
+		trails:Destroy()
+	end
+	for _, part in pairs(character:GetChildren()) do
+		if part:IsA("BasePart") then
+			local p = part:FindFirstChild("CW_Particle")
+			if p then
+				p.Name    = "DESTROYING"
+				p.Enabled = false
+				Debris:AddItem(p, 1)
+			end
+		end
+	end
+	VFX.Users[character] = nil
+end
+
+local function CreateTrail()
+	local t    = BuildTrailInstance()
+	t.Lifetime = 0.2
+	return t
+end
+
+-- Randomise the two attachment positions for a given trail
+local function NewAttachmentPositions(hipScale, yOffset)
+	local x    = math.random(-200, 200) / 100
+	local y    = yOffset + math.random(-50, 50) / 100 * hipScale
+	local base = Vector3.new(x, y, 0)
+	local dir  = (math.random() < 0.5 and -1 or 1)
+	return base, base + Vector3.new(0, dir, 0)
+end
+
+-- Pick a random valid body part that exists on the default rig
+local function RandomBodyPart(character)
+	local valid = {}
+	for _, p in pairs(character:GetChildren()) do
+		if p:IsA("BasePart")
+			and VALID_BODY_PARTS[p.Name]
+			and p:FindFirstChildOfClass("Attachment") then
+			table.insert(valid, p)
+		end
+	end
+	return valid[math.random(1, #valid)]
+end
+
+-- Create an attachment anchored to UpperTorso (used for trail endpoints)
+local function CreateTorsoAttachment(character)
+	local att    = Instance.new("Attachment")
+	att.Parent   = character:WaitForChild("UpperTorso")
+	return att
+end
+
+-- Create an attachment placed randomly on a surface of a random body part
+local function CreateRandomlyPlacedAttachment(character)
+	local bp  = RandomBodyPart(character)
+	local att = Instance.new("Attachment")
+	att.Parent = bp
+	local sx, sy, sz = bp.Size.X * 0.5, bp.Size.Y * 0.5, bp.Size.Z * 0.5
+	local side = math.random(1, 3)
+	local function rnd(lo, hi) return math.random(math.floor(lo*100), math.floor(hi*100)) / 100 end
+	local face = math.pow(-1, math.random(0, 1))
+	if side == 1 then
+		att.Position = Vector3.new(sx * face, rnd(-sy, sy), rnd(-sz, sz))
+	elseif side == 2 then
+		att.Position = Vector3.new(rnd(-sx, sx), sy * face, rnd(-sz, sz))
+	else
+		att.Position = Vector3.new(rnd(-sx, sx), rnd(-sy, sy), sz * face)
+	end
+	return att
+end
+
+-- Resolve which colour to display for this character's lightning
+local function GetLightningColor()
+	return TRAIL_COLOR
+end
+
+-- Spawn a brief point light at a random location on the body
+local function IdleLight(character, color)
+	local att          = CreateRandomlyPlacedAttachment(character)
+	local light        = Instance.new("PointLight")
+	light.Color        = color
+	light.Range        = math.random(100, 200) / 100
+	light.Brightness   = math.random(40, 50) / 10
+	light.Parent       = att
+	local fadeTime     = math.random(25, 50) / 100 * (shared.Flashtime and 10 or 1)
+	TweenService:Create(light, TweenInfo.new(fadeTime), { Brightness = 0 }):Play()
+	Debris:AddItem(att, shared.Flashtime and 10 or 2)
+end
+
+-- Spawn a moving surface light between two world positions
+local function ActiveLight(posA, posB, color)
+	local part             = Instance.new("Part")
+	part.Anchored          = true
+	part.CanCollide        = false
+	part.CanTouch          = false
+	part.CanQuery          = false
+	part.Transparency      = 1
+	part.CastShadow        = false
+	local dist             = (posA - posB).Magnitude
+	part.Size              = Vector3.new(3, 0.1, math.clamp(dist * 1.2, dist, dist + 20))
+	part.CFrame            = CFrame.new(posB, posA)
+	part.Position          = (posA + posB) / 2
+	local light            = Instance.new("SurfaceLight")
+	light.Color            = color
+	light.Range            = 10
+	light.Angle            = 180
+	light.Shadows          = false
+	light.Brightness       = shared.Flashtime and 0.25 or 0.75
+	light.Face             = Enum.NormalId.Bottom
+	light.Parent           = part
+	part.Parent            = Workspace:FindFirstChild("ScriptDebris")
+	TweenService:Create(light, TweenInfo.new(0.1 * (shared.Flashtime and 20 or 1), Enum.EasingStyle.Linear), { Brightness = 0 }):Play()
+	Debris:AddItem(part, 0.5 * (shared.Flashtime and 20 or 1))
+end
+
+-- Register a character and build all its VFX objects
+function VFX.Activate(character)
+	if VFX.Users[character] ~= nil then return end
+
+	VFX.Users[character] = { true }
+	character:SetAttribute("LastCWupdate", 0)
+	character:SetAttribute("LastPos", nil)
+
+	if not character:FindFirstChild("CW_Trails") then
+		local folder     = Instance.new("Folder")
+		folder.Name      = "CW_Trails"
+		folder.Parent    = character
+
+		-- Particle emitters on every relevant body part
+		local excluded   = { "HumanoidRootPart", "WaterParticle", "SonicBoomParticle" }
+		for _, part in pairs(character:GetChildren()) do
+			if part:IsA("BasePart") and not table.find(excluded, part.Name) then
+				local p    = CreateParticle()
+				p.Parent   = part
+				p.Enabled  = true
+			end
+		end
+
+		character:SetAttribute("LastTrailColor", 1)
+		local humanoid   = character:FindFirstChildOfClass("Humanoid")
+		local hipScale   = ((humanoid and humanoid.HipHeight) or 2) / 2
+		VFX.Users[character][3] = hipScale
+
+		-- Build one trail per vertical offset (alternating Primary / Secondary)
+		_lastTrailType = "Secondary"
+		for _, yOffset in ipairs(TRAIL_Y_OFFSETS) do
+			local scaledY  = yOffset * hipScale
+			local trail    = CreateTrail()
+			if _lastTrailType == "Secondary" then
+				trail:SetAttribute("Type", "Primary")
+				_lastTrailType = "Primary"
+			else
+				trail:SetAttribute("Type", "Secondary")
+				_lastTrailType = "Secondary"
+			end
+			local att0     = CreateTorsoAttachment(character)
+			local att1     = CreateTorsoAttachment(character)
+			att0.Name      = "CWattachment"
+			att1.Name      = "CWattachment"
+			trail.Attachment0 = att0
+			trail.Attachment1 = att1
+			trail.Name     = tostring(scaledY)
+			trail.Parent   = folder
+		end
+		_lastTrailType = nil
+	end
+
+	-- Auto-clean when the character is removed
+	VFX.Users[character][2] = character.AncestryChanged:Connect(function()
+		DestroyUserTable(character)
+	end)
+end
+
+-- Tear down all VFX for a character
+function VFX.Deactivate(character)
+	DestroyUserTable(character)
+end
+
+-- Main per-frame update
+RunService.Heartbeat:Connect(function()
+	for character, userData in pairs(VFX.Users) do
+		local root     = character:FindFirstChild("HumanoidRootPart")
+		local humanoid = character:FindFirstChild("Humanoid")
+
+		-- Clean up dead characters
+		if humanoid and humanoid.Health <= 0 then
+			DestroyUserTable(character)
+			continue
+		end
+
+		if not root then continue end
+		if (Camera.CFrame.Position - root.Position).Magnitude > 250 then continue end
+
+		local isGacha      = character:GetAttribute("Gacha") or false
+		local now          = tick()
+		local shouldUpdate = now >= (character:GetAttribute("LastCWupdate") or 0)
+
+		-- Velocity
+		local velocity = (root.AssemblyLinearVelocity * Vector3.new(1, 0.5, 1)).Magnitude
+		local aboveSpeed = velocity > (shared.Flashtime and 0.1 or SPEED_THRESHOLD)
+
+		-- Particle rate on all body parts (only push rate when above speed)
+		local moveDir = character:FindFirstChild("MoveDirection")
+		local moveMag = moveDir and moveDir.Value.Magnitude or 0
+		local pRate   = aboveSpeed and (1 + 4 * moveMag) * 5 or 0
+
+		for _, part in pairs(character:GetChildren()) do
+			if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+				local p = part:FindFirstChild("CW_Particle")
+				if p then
+					local rate = pRate > 0 and pRate + math.random(-3, 3) or 0
+					TweenService:Create(p, TweenInfo.new(0.5), {
+						Rate      = rate,
+						TimeScale = shared.Flashtime and 0.05 or 1,
+					}):Play()
+					p.Color         = ColorSequence.new(GetLightningColor())
+					p.LightEmission = IsDark(p.Color) and 0 or 1
+				end
+			end
+		end
+
+		-- Idle ambient lightning lights (only when above speed)
+		if aboveSpeed and shouldUpdate
+			and shared.PerformanceMode ~= true then
+			IdleLight(character, GetLightningColor())
+		end
+
+		if shouldUpdate then
+			character:SetAttribute("LastCWupdate", now + (shared.Flashtime and 0.25 or 0.05))
+		end
+
+		-- Active moving light between last and current position
+		if aboveSpeed
+			and shared.PerformanceMode ~= true then
+			local hipPos  = (root.CFrame * CFrame.new(0, humanoid.HipHeight * 1.176, 0)).Position
+			local lastPos = character:GetAttribute("LastPos") or hipPos
+			if lastPos ~= hipPos then
+				ActiveLight(hipPos, lastPos, GetLightningColor(character, true))
+			end
+			character:SetAttribute("LastPos", hipPos)
+		else
+			character:SetAttribute("LastPos", root.CFrame.Position)
+		end
+
+		-- Trail objects
+		local trailFolder = character:FindFirstChild("CW_Trails")
+		if trailFolder then
+			for _, trail in pairs(trailFolder:GetChildren()) do
+				trail.Enabled = aboveSpeed  -- only visible above SPEED_THRESHOLD
+
+				-- Colour
+				if trail:GetAttribute("Type") == "Secondary" then
+					trail.Color = ColorSequence.new(GetLightningColor(character, false))
+				else
+					trail.Color = ColorSequence.new(primaryColor or Color3.fromRGB(255, 208, 87))
+				end
+				trail.LightEmission = IsDark(trail.Color) and 0 or 1
+
+				-- Geometry / texture (only on update tick, skip the "Blur" trail)
+				if trail.Name ~= "Blur"
+					and shouldUpdate
+					and trail.Attachment0 ~= nil
+					and trail.Attachment1 ~= nil then
+
+					local hipScale   = userData[3] or 1
+					local a0, a1     = NewAttachmentPositions(hipScale, tonumber(trail.Name) or 0)
+					if not shared.Flashtime then
+						trail.Attachment0.Position = a0
+						trail.Attachment1.Position = a1
+					else
+						TweenService:Create(trail.Attachment0, TweenInfo.new(0.25), { Position = a0 }):Play()
+						TweenService:Create(trail.Attachment1, TweenInfo.new(0.25), { Position = a1 }):Play()
+					end
+
+					local width = math.random(3, 15) / 10
+					trail.WidthScale = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, width),
+						NumberSequenceKeypoint.new(1, 0),
+					})
+
+					local lifetime = math.random(10, 15) / 100
+					if shared.Flashtime then lifetime = lifetime * 20 end
+					trail.Lifetime = lifetime * (isGacha and shared.Flashtime and 2000 or 1)
+
+					trail.TextureLength = shared.Flashtime
+						and 4.2 + velocity / 12
+						or  4.2 + velocity / 150
+
+					trail.Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0,   1),
+						NumberSequenceKeypoint.new(0.1, 0),
+						NumberSequenceKeypoint.new(0.9, 0),
+						NumberSequenceKeypoint.new(1,   1),
+					})
+
+					trail.Texture = TRAIL_TEXTURES[math.random(1, #TRAIL_TEXTURES)]
+				end
+			end
+		end
+	end
+end)
+
+-- ============================================================
+--  LIGHTNING SPAWNER
+--  Periodically creates bolts between random body parts
+--  when the player is above SPEED_THRESHOLD.
+-- ============================================================
+local activeBoltsForChar = {}
+local lastBoltTime       = 0
+local BOLT_INTERVAL      = 0.06
+
+local function spawnBolt(character)
+    local parts = {}
+    for _, p in ipairs(character:GetChildren()) do
+        if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+            table.insert(parts, p)
+        end
+    end
+    if #parts < 2 then return end
+
+    local pA = parts[math.random(1, #parts)]
+    local pB = parts[math.random(1, #parts)]
+    if pA == pB then return end
+
+    local a0 = Instance.new("Attachment")
+    a0.Position = Vector3.new(0, 0, 0)
+    a0.Parent   = pA
+
+    local a1 = Instance.new("Attachment")
+    a1.Position = Vector3.new(0, 0, 0)
+    a1.Parent   = pB
+
+    local bolt            = LightningBolt.new(a0, a1, 20)
+    bolt.PulseLength      = 1
+    bolt.PulseSpeed       = 2
+    bolt.FadeLength       = 0.3
+    bolt.Thickness        = 0.08
+    bolt.MaxRadius        = 0.4
+    bolt.AnimationSpeed   = 12
+    bolt.Frequency        = 2
+
+    task.delay(0.5, function()
+        bolt:DestroyDissipate(0.2)
+        task.delay(0.3, function()
+            if a0.Parent then a0:Destroy() end
+            if a1.Parent then a1:Destroy() end
+        end)
+    end)
+end
+
+RunService.Heartbeat:Connect(function()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local ws = (root.AssemblyLinearVelocity * Vector3.new(1, 0.5, 1)).Magnitude
+    if ws <= SPEED_THRESHOLD then return end
+
+    local now = tick()
+    if now - lastBoltTime < BOLT_INTERVAL then return end
+    lastBoltTime = now
+
+    spawnBolt(char)
+end)
+local function OnCharacterAdded(character)
+	character:WaitForChild("HumanoidRootPart")
+	character:WaitForChild("Humanoid")
+	VFX.Activate(character)
+end
+
+if LocalPlayer.Character then
+	OnCharacterAdded(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
+-- ═══════════════════════════════════════════════════
+--  KJ Locomotion Controller
+--  Requires: Animation Module (loaded via loadstring)
+--
+--  Anim IDs:
+--    Fast Run  (speed > 50) : 13811491770
+--    Jump      (one-shot)   : 10921160088
+--    Jump Loop (freefall)   : 10921159222
+-- ═══════════════════════════════════════════════════
+
+-- ── 1. Load the animation module ──────────────────
+local MODULE_URL = "https://raw.githubusercontent.com/NetlessScripter/Universal-KJ-Port/refs/heads/main/Animation%20Module"
+
+if not getgenv().Animator6DLoadedPro then
+    local ok, err = pcall(loadstring(game:HttpGet(MODULE_URL)))
+    if not ok then
+        warn("[KJ Locomotion] Failed to load Animation Module:", err)
+        return
+    end
+end
+
+-- ── 2. Services & refs ────────────────────────────
+local Players    = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player    = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid  = character:WaitForChild("Humanoid")
+local rootPart  = character:WaitForChild("HumanoidRootPart")
+
+-- Kill the default Animate script immediately so it never plays
+-- its own walk/run/idle over our animations.
+local function suppressDefaultAnims(char)
+    local animate = char:FindFirstChild("Animate")
+    if animate then animate.Disabled = true end
+    local animator = char:FindFirstChildOfClass("Humanoid")
+    animator = (animator or humanoid):FindFirstChildOfClass("Animator")
+    if animator then
+        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+            track:Stop(0)
+        end
+    end
+end
+
+suppressDefaultAnims(character)
+
+-- ── Body trails ───────────────────────────────────
+local isR15 = character:FindFirstChild("UpperTorso") ~= nil
+local R15Parts = {"Head","UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot","HumanoidRootPart"}
+local R6Parts  = {"Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg","HumanoidRootPart"}
+
+local activeTrails = {}  -- all Blur trails on the current character
+
+local function applyTrails(char)
+    activeTrails = {}
+    local isR15char = char:FindFirstChild("UpperTorso") ~= nil
+    local partNames = isR15char and R15Parts or R6Parts
+    for _, n in ipairs(partNames) do
+        local part = char:FindFirstChild(n)
+        if part and part:IsA("BasePart") then
+            local a0          = Instance.new("Attachment")
+            a0.Position       = Vector3.new(0, -4, 0)
+            a0.Parent         = part
+            local a1          = Instance.new("Attachment")
+            a1.Position       = Vector3.new(0, 3, 0)
+            a1.Parent         = part
+            local t           = Instance.new("Trail")
+            t.Name            = "Blur"
+            t.Brightness      = 0.20000000298023224
+            t.Color           = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.new(1, 0.13725490868091583, 0.058823529630899429)),
+                ColorSequenceKeypoint.new(1, Color3.new(1, 0.13725490868091583, 0.058823529630899429)),
+            })
+            t.LightEmission   = 1
+            t.LightInfluence  = 0
+            t.Texture         = "http://www.roblox.com/asset/?id=16080121984"
+            t.TextureLength   = 30
+            t.TextureMode     = Enum.TextureMode.Static
+            t.Transparency    = NumberSequence.new({
+                NumberSequenceKeypoint.new(0,                          1,    0),
+                NumberSequenceKeypoint.new(0.0020000000949949026,      0.1,  0),
+                NumberSequenceKeypoint.new(0.098800003528594971,       0.25, 0),
+                NumberSequenceKeypoint.new(0.30000001192092896,        0.8,  0),
+                NumberSequenceKeypoint.new(0.7996828556060791,         1,    0),
+                NumberSequenceKeypoint.new(1,                          1,    0),
+            })
+            t.WidthScale      = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.50625002384185791, 0),
+                NumberSequenceKeypoint.new(1, 0.74374997615814209, 0),
+            })
+            t.FaceCamera      = true
+            t.Lifetime        = 0.20000000298023224
+            t.MaxLength       = 0
+            t.MinLength       = 0
+            t.Enabled         = false  -- hidden until speed > 48
+            t.Attachment0     = a0
+            t.Attachment1     = a1
+            t.Parent          = part
+            table.insert(activeTrails, t)
+        end
+    end
+end
+
+applyTrails(character)
+
+-- ── 3. Animation IDs ──────────────────────────────
+local ANIMS = {
+    FAST_RUN  = "rbxassetid://13811491770",
+    JUMP      = "rbxassetid://10921160088",
+    JUMP_LOOP = "rbxassetid://10921159222",
+}
+
+-- ── 4. Threshold ──────────────────────────────────
+local SPEED_RUN = 48
+
+-- ── 5. State ──────────────────────────────────────
+local currentState = nil  -- "idle" | "fastrun" | "jump" | "jumploop"
+
+-- ── 6. Helpers ────────────────────────────────────
+local BASE_SPEED = 16
+local function calcPlaybackSpeed(ws)
+    return math.max(0.5, ws / BASE_SPEED)
+end
+
+local function flushAnimatorTracks()
+    local animator = humanoid:FindFirstChildOfClass("Animator")
+    if not animator then return end
+    for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+        track:Stop(0)
+    end
+end
+
+local function playAnim(id, speed, looped)
+    flushAnimatorTracks()
+    getgenv().Animator6D(id, speed, looped)
+end
+
+local function stopAnim()
+    flushAnimatorTracks()
+    if getgenv().Animator6DStop then
+        getgenv().Animator6DStop()
+    end
+end
+
+local function setLiveSpeed(speed)
+    local anim = getgenv().currentAnimator6D
+    if anim and math.abs((anim.speed or 0) - speed) > 0.05 then
+        anim.speed = speed
+    end
+end
+
+-- ── 7. State machine ──────────────────────────────
+local function transitionTo(newState, ws)
+    if newState == currentState then return end
+    currentState = newState
+
+    if newState == "idle" then
+        stopAnim()
+
+    elseif newState == "fastrun" then
+        stopAnim()
+        playAnim(ANIMS.FAST_RUN, calcPlaybackSpeed(ws), true)
+
+    elseif newState == "jump" then
+        stopAnim()
+        playAnim(ANIMS.JUMP, 1, false)
+        task.spawn(function()
+            getgenv().Animation.Completed:Wait()
+            if currentState ~= "jump" then return end
+            if humanoid:GetState() == Enum.HumanoidStateType.Freefall then
+                transitionTo("jumploop", 0)
+            else
+                transitionTo("idle", 0)
+            end
+        end)
+
+    elseif newState == "jumploop" then
+        stopAnim()
+        playAnim(ANIMS.JUMP_LOOP, 1, true)
+    end
+end
+
+-- ── 8. Running state resolver ─────────────────────
+local function resolveRunningState(ws, moving)
+    if not moving or ws <= SPEED_RUN then
+        return "idle"
+    else
+        return "fastrun"
+    end
+end
+
+-- ── 9. humanoid.Running — primary locomotion driver ──
+humanoid.Running:Connect(function(ws)
+    local hs = humanoid:GetState()
+    if hs == Enum.HumanoidStateType.Jumping
+    or hs == Enum.HumanoidStateType.Freefall then return end
+
+    local moving  = humanoid.MoveDirection.Magnitude > 0.1
+    local desired = resolveRunningState(ws, moving)
+
+    if desired == currentState then
+        if currentState == "fastrun" then
+            setLiveSpeed(calcPlaybackSpeed(ws))
+        end
+        return
+    end
+
+    transitionTo(desired, ws)
+end)
+
+-- ── 10. humanoid.StateChanged — jump / freefall / land ──
+local HumState = Enum.HumanoidStateType
+
+humanoid.StateChanged:Connect(function(_, new)
+    if new == HumState.Jumping then
+        transitionTo("jump", 0)
+
+    elseif new == HumState.Freefall then
+        if currentState ~= "jump" then
+            transitionTo("jumploop", 0)
+        end
+
+    elseif new == HumState.Landed
+        or new == HumState.Running
+        or new == HumState.RunningNoPhysics then
+        if currentState == "jump" or currentState == "jumploop" then
+            local ws     = (rootPart.AssemblyLinearVelocity * Vector3.new(1,0,1)).Magnitude
+            local moving = humanoid.MoveDirection.Magnitude > 0.1
+            transitionTo(resolveRunningState(ws, moving), ws)
+        end
+    end
+end)
+
+-- ── 11. Live speed sync poll ──────────────────────
+local pollTimer = 0
+RunService.RenderStepped:Connect(function(dt)
+    pollTimer += dt
+    if pollTimer < 0.1 then return end
+    pollTimer = 0
+
+    local ws = (rootPart.AssemblyLinearVelocity * Vector3.new(1,0,1)).Magnitude
+
+    -- Toggle trails based on speed threshold
+    local trailsOn = ws > SPEED_RUN
+    for _, t in ipairs(activeTrails) do
+        if t.Parent then
+            t.Enabled = trailsOn
+        end
+    end
+
+    -- Nudge run playback speed live
+    if currentState == "fastrun" then
+        setLiveSpeed(calcPlaybackSpeed(ws))
+    end
+end)
+
+-- ── 12. Re-initialize on respawn ──────────────────
+player.CharacterAdded:Connect(function(newChar)
+    character    = newChar
+    humanoid     = newChar:WaitForChild("Humanoid")
+    rootPart     = newChar:WaitForChild("HumanoidRootPart")
+    currentState = nil
+
+    suppressDefaultAnims(newChar)
+    applyTrails(newChar)
+
+    humanoid.Running:Connect(function(ws)
+        local hs = humanoid:GetState()
+        if hs == HumState.Jumping or hs == HumState.Freefall then return end
+        local moving  = humanoid.MoveDirection.Magnitude > 0.1
+        local desired = resolveRunningState(ws, moving)
+        if desired == currentState then
+            if currentState == "fastrun" then setLiveSpeed(calcPlaybackSpeed(ws)) end
+            return
+        end
+        transitionTo(desired, ws)
+    end)
+
+    humanoid.StateChanged:Connect(function(_, new)
+        if new == HumState.Jumping then
+            transitionTo("jump", 0)
+        elseif new == HumState.Freefall then
+            if currentState ~= "jump" then transitionTo("jumploop", 0) end
+        elseif new == HumState.Landed
+            or new == HumState.Running
+            or new == HumState.RunningNoPhysics then
+            if currentState == "jump" or currentState == "jumploop" then
+                local ws     = (rootPart.AssemblyLinearVelocity * Vector3.new(1,0,1)).Magnitude
+                local moving = humanoid.MoveDirection.Magnitude > 0.1
+                transitionTo(resolveRunningState(ws, moving), ws)
+            end
+        end
+    end)
+end)
+
+print("[KJ Locomotion] Loaded. Fast run threshold: speed >", SPEED_RUN)
