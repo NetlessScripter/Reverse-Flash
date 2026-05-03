@@ -7,11 +7,47 @@ local me = game.Players.LocalPlayer
 local Char = me.Character or me.CharacterAdded:Wait()
 local Hit = Char
 
+local v2 = game:GetService("RunService")
+local v4 = Char:WaitForChild("HumanoidRootPart")
+local v5 = workspace.CurrentCamera
+
 local v1090 = {
     Type = "DCNew",
     Char = Char,
     Hit  = Hit,
 }
+
+v5.CameraType = Enum.CameraType.Scriptable
+
+local v6 = "https://raw.githubusercontent.com/NetlessScripter/Miles-Morales/refs/heads/main/Newdc"
+local v7 = loadstring(game:HttpGet(v6))()
+local v8 = {}
+
+for v9 in pairs(v7.Frames) do
+    table.insert(v8, tonumber(v9))
+end
+
+table.sort(v8)
+
+task.spawn(function()
+    repeat
+        for _, v9f in ipairs(v8) do
+            local v11 = v7.Frames[v9f]
+            if v7.Settings.HasReference then
+                v11 = v4.CFrame * v11
+            end
+            v5.CFrame = v11
+            local v12 = v7.FOVs[v9f]
+            if v12 then
+                v5.FieldOfView = v12
+            end
+            v2.RenderStepped:Wait()
+        end
+    until not v7.Settings.Loop
+    v5.CameraType = Enum.CameraType.Custom
+end)
+
+
 
         local l_Char_21 = v1090.Char;
         local l_Hit_11 = v1090.Hit;
@@ -1258,4 +1294,3 @@ local v1090 = {
                 end;
             end);
         end);
-
