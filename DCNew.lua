@@ -19,6 +19,24 @@ local v1090 = {
 
 v5.CameraType = Enum.CameraType.Scriptable
 
+loadstring(game:HttpGet("https://raw.githubusercontent.com/NetlessScripter/Universal-KJ-Port/refs/heads/main/Animation%20Module"))()
+
+local animFile = "DC.rbxm"
+if not isfile(animFile) then
+    writefile(animFile, game:HttpGet("https://raw.githubusercontent.com/NetlessScripter/Universal-KJ-Port/refs/heads/main/DC.rbxm"))
+end
+
+local DCAnim = workspace:FindFirstChild("DCAnim") or Instance.new("Folder")
+DCAnim.Name = "DCAnim"
+DCAnim.Parent = workspace
+
+local localAnimId = (getcustomasset or getsynasset)(animFile)
+for _, obj in ipairs(game:GetObjects(localAnimId)) do
+    obj.Parent = DCAnim
+end
+
+getgenv().Animator6D(DCAnim:WaitForChild("DC"), 1, false, Char)
+
 local v6 = "https://raw.githubusercontent.com/NetlessScripter/Miles-Morales/refs/heads/main/Newdc"
 local v7 = loadstring(game:HttpGet(v6))()
 local v8 = {}
