@@ -1,0 +1,546 @@
+--[[
+    MeshRipper / Property Recovery System
+    Target: workspace.Pghlego194827.UserMorph
+    Author: Custom Export Tool
+    Notes: Recovers visual/structural properties only. No position data exported.
+--]]
+
+-- ============================================================
+-- CONFIGURATION
+-- ============================================================
+
+local TARGET_PATH = workspace:FindFirstChild("Pghlego194827") and
+    workspace.Pghlego194827:FindFirstChild("UserMorph")
+
+local RECOVER_FOLDER_NAME = "RecoveredData"
+
+-- ============================================================
+-- PROPERTY MAP
+-- Format: [propertyName] = { type = "TypeName", skip = bool }
+-- ============================================================
+
+local PROPERTY_MAP = {
+    -- Appearance
+    Color                   = { type = "Color3" },
+    BrickColor              = { type = "BrickColor" },
+    Material                = { type = "Enum" },
+    MaterialVariant         = { type = "string" },
+    Transparency            = { type = "number" },
+    Reflectance             = { type = "number" },
+    CastShadow              = { type = "bool" },
+    LocalTransparencyModifier = { type = "number" },
+
+    -- Size (not position)
+    Size                    = { type = "Vector3" },
+
+    -- Surface appearance
+    TopSurface              = { type = "Enum" },
+    BottomSurface           = { type = "Enum" },
+    FrontSurface            = { type = "Enum" },
+    BackSurface             = { type = "Enum" },
+    LeftSurface             = { type = "Enum" },
+    RightSurface            = { type = "Enum" },
+
+    -- Physics
+    Anchored                = { type = "bool" },
+    CanCollide              = { type = "bool" },
+    CanTouch                = { type = "bool" },
+    CanQuery                = { type = "bool" },
+    Massless                = { type = "bool" },
+    CollisionGroupId        = { type = "number" },
+
+    -- CustomPhysicalProperties
+    CustomPhysicalProperties = { type = "PhysicalProperties" },
+
+    -- Mesh / Geometry
+    MeshId                  = { type = "string" },
+    TextureId               = { type = "string" },
+    MeshType                = { type = "Enum" },
+    Scale                   = { type = "Vector3" },
+    VertexColor             = { type = "Vector3" },
+    Offset                  = { type = "Vector3" },
+
+    -- SpecialMesh-specific
+    InitialSize             = { type = "Vector3" },
+
+    -- SurfaceAppearance
+    AlbedoMap               = { type = "string" },
+    NormalMap               = { type = "string" },
+    MetalnessMap            = { type = "string" },
+    RoughnessMap            = { type = "string" },
+    ColorMap                = { type = "string" },
+
+    -- Texture / Decal
+    Face                    = { type = "Enum" },
+    StudsPerTileU           = { type = "number" },
+    StudsPerTileV           = { type = "number" },
+
+    -- Naming & Tags
+    Name                    = { type = "string" },
+    Archivable              = { type = "bool" },
+
+    -- Lighting
+    CastShadow              = { type = "bool" },
+
+    -- Humanoid-adjacent (if present on morph)
+    BodyDepthScale          = { type = "NumberValue_val" },
+    BodyHeightScale         = { type = "NumberValue_val" },
+    BodyWidthScale          = { type = "NumberValue_val" },
+    HeadScale               = { type = "NumberValue_val" },
+
+    -- Beam / ParticleEmitter visual (if morph has effects)
+    Enabled                 = { type = "bool" },
+    Rate                    = { type = "number" },
+    Lifetime                = { type = "NumberRange" },
+    Speed                   = { type = "NumberRange" },
+    LightEmission           = { type = "number" },
+    LightInfluence          = { type = "number" },
+    RotSpeed                = { type = "NumberRange" },
+    Rotation                = { type = "NumberRange" },
+    SpreadAngle             = { type = "Vector2" },
+    ZOffset                 = { type = "number" },
+    Color                   = { type = "ColorSequence" },
+    Transparency            = { type = "NumberSequence" },
+    Size                    = { type = "NumberSequence" },
+
+    -- SelectionBox / highlight
+    SurfaceColor3           = { type = "Color3" },
+    SurfaceTransparency     = { type = "number" },
+    LineThickness           = { type = "number" },
+}
+
+-- Explicit per-class property lists for accurate coverage
+local CLASS_PROPERTY_MAP = {
+    Part = {
+        "Name","Color","BrickColor","Material","MaterialVariant","Transparency",
+        "Reflectance","CastShadow","Size","Anchored","CanCollide","CanTouch",
+        "CanQuery","Massless","TopSurface","BottomSurface","FrontSurface",
+        "BackSurface","LeftSurface","RightSurface","CustomPhysicalProperties",
+        "Archivable",
+    },
+    MeshPart = {
+        "Name","Color","BrickColor","Material","MaterialVariant","Transparency",
+        "Reflectance","CastShadow","Size","Anchored","CanCollide","CanTouch",
+        "CanQuery","Massless","MeshId","TextureID","DoubleSided",
+        "TopSurface","BottomSurface","FrontSurface","BackSurface",
+        "LeftSurface","RightSurface","CustomPhysicalProperties","Archivable",
+    },
+    SpecialMesh = {
+        "Name","MeshId","TextureId","MeshType","Scale","VertexColor","Offset",
+    },
+    Decal = {
+        "Name","Texture","Face","Color3","Transparency",
+    },
+    Texture = {
+        "Name","Texture","Face","Color3","Transparency",
+        "StudsPerTileU","StudsPerTileV","OffsetStudsU","OffsetStudsV",
+    },
+    SurfaceAppearance = {
+        "Name","AlbedoMap","NormalMap","MetalnessMap","RoughnessMap","ColorMap",
+        "AlphaMode","TexturePack",
+    },
+    ParticleEmitter = {
+        "Name","Enabled","Color","LightEmission","LightInfluence","Size",
+        "Texture","Transparency","ZOffset","Lifetime","Rate","RotSpeed",
+        "Rotation","Speed","SpreadAngle","VelocityInheritance",
+        "EmissionDirection","LockedToPart","FlipbookFramerate",
+        "FlipbookLayout","FlipbookMode","Squash",
+    },
+    Beam = {
+        "Name","Enabled","Attachment0","Attachment1","Color","Transparency",
+        "LightEmission","LightInfluence","TextureMode","Texture",
+        "TextureLength","TextureSpeed","Width0","Width1","CurveSize0",
+        "CurveSize1","FaceCamera","Segments","ZOffset",
+    },
+    PointLight = {
+        "Name","Enabled","Brightness","Color","Range","Shadows",
+    },
+    SpotLight = {
+        "Name","Enabled","Angle","Brightness","Color","Face","Range","Shadows",
+    },
+    SurfaceLight = {
+        "Name","Enabled","Angle","Brightness","Color","Face","Range","Shadows",
+    },
+    SelectionBox = {
+        "Name","Color3","LineThickness","SurfaceColor3","SurfaceTransparency","Visible",
+    },
+    BillboardGui = {
+        "Name","Active","AlwaysOnTop","Brightness","ClipsDescendants","Enabled",
+        "ExtentsOffset","ExtentsOffsetWorldSpace","LightInfluence","MaxDistance",
+        "ResetOnSpawn","Size","SizeOffset","StudsOffset","StudsOffsetWorldSpace",
+        "ZIndexBehavior",
+    },
+    ImageLabel = {
+        "Name","BackgroundColor3","BackgroundTransparency","BorderColor3",
+        "BorderMode","BorderSizePixel","Image","ImageColor3","ImageTransparency",
+        "ImageRectOffset","ImageRectSize","ScaleType","SliceCenter","SliceScale",
+        "Size","Position","AnchorPoint","Rotation","Visible","ZIndex",
+    },
+    TextLabel = {
+        "Name","Text","Font","TextSize","TextColor3","TextTransparency",
+        "TextStrokeColor3","TextStrokeTransparency","TextXAlignment",
+        "TextYAlignment","TextWrapped","TextScaled","RichText",
+        "BackgroundColor3","BackgroundTransparency","Size","Position",
+        "AnchorPoint","Rotation","Visible","ZIndex",
+    },
+    WrapLayer = {
+        "Name","AutoSkin","BindOffset","Color","DebugMode","Enabled",
+        "Order","Puffiness","ReferenceMeshId","ReferenceOrigin",
+        "ShrinkFactor",
+    },
+    WrapTarget = {
+        "Name","CageMeshId","CageOrigin","Color","DebugMode","Enabled","Stiffness",
+    },
+    Accessory = {
+        "Name","AccessoryType",
+    },
+    Hat = {
+        "Name","AttachmentPoint",
+    },
+}
+
+-- ============================================================
+-- SERIALIZERS
+-- ============================================================
+
+local function escapeString(s)
+    s = tostring(s)
+    s = s:gsub("\\", "\\\\")
+    s = s:gsub("\"", "\\\"")
+    s = s:gsub("\n", "\\n")
+    s = s:gsub("\r", "\\r")
+    s = s:gsub("\t", "\\t")
+    return '"' .. s .. '"'
+end
+
+local function roundNum(n, places)
+    places = places or 6
+    local m = 10^places
+    return math.floor(n * m + 0.5) / m
+end
+
+local function fmtNum(n)
+    return tostring(roundNum(n))
+end
+
+local function serializeColor3(v)
+    return string.format("Color3.fromRGB(%d, %d, %d)",
+        math.clamp(math.floor(v.R * 255 + 0.5), 0, 255),
+        math.clamp(math.floor(v.G * 255 + 0.5), 0, 255),
+        math.clamp(math.floor(v.B * 255 + 0.5), 0, 255)
+    )
+end
+
+local function serializeVector3(v)
+    return string.format("Vector3.new(%s, %s, %s)", fmtNum(v.X), fmtNum(v.Y), fmtNum(v.Z))
+end
+
+local function serializeVector2(v)
+    return string.format("Vector2.new(%s, %s)", fmtNum(v.X), fmtNum(v.Y))
+end
+
+local function serializeUDim2(v)
+    return string.format("UDim2.new(%s, %s, %s, %s)",
+        fmtNum(v.X.Scale), tostring(v.X.Offset),
+        fmtNum(v.Y.Scale), tostring(v.Y.Offset))
+end
+
+local function serializeUDim(v)
+    return string.format("UDim.new(%s, %d)", fmtNum(v.Scale), v.Offset)
+end
+
+local function serializeRect(v)
+    return string.format("Rect.new(%s, %s, %s, %s)",
+        fmtNum(v.Min.X), fmtNum(v.Min.Y),
+        fmtNum(v.Max.X), fmtNum(v.Max.Y))
+end
+
+local function serializeBrickColor(v)
+    return string.format("BrickColor.new(%s)", escapeString(v.Name))
+end
+
+local function serializeEnum(v)
+    local s = tostring(v)
+    -- e.g. "Enum.Material.SmoothPlastic"
+    return s
+end
+
+local function serializeCFrame(v)
+    local c = v.Components
+    -- Avoid exporting world position; only export rotation components
+    -- We zero the positional part intentionally
+    return string.format(
+        "CFrame.new(0, 0, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        fmtNum(c[4]), fmtNum(c[5]), fmtNum(c[6]),
+        fmtNum(c[7]), fmtNum(c[8]), fmtNum(c[9]),
+        fmtNum(c[10]), fmtNum(c[11]), fmtNum(c[12])
+    )
+end
+
+local function serializeColorSequence(v)
+    local parts = {}
+    for _, kp in ipairs(v.Keypoints) do
+        table.insert(parts, string.format(
+            "ColorSequenceKeypoint.new(%s, %s)",
+            fmtNum(kp.Time), serializeColor3(kp.Value)
+        ))
+    end
+    return "ColorSequence.new({" .. table.concat(parts, ", ") .. "})"
+end
+
+local function serializeNumberSequence(v)
+    local parts = {}
+    for _, kp in ipairs(v.Keypoints) do
+        table.insert(parts, string.format(
+            "NumberSequenceKeypoint.new(%s, %s, %s)",
+            fmtNum(kp.Time), fmtNum(kp.Value), fmtNum(kp.Envelope)
+        ))
+    end
+    return "NumberSequence.new({" .. table.concat(parts, ", ") .. "})"
+end
+
+local function serializeNumberRange(v)
+    return string.format("NumberRange.new(%s, %s)", fmtNum(v.Min), fmtNum(v.Max))
+end
+
+local function serializePhysicalProperties(v)
+    if typeof(v) == "PhysicalProperties" then
+        return string.format(
+            "PhysicalProperties.new(%s, %s, %s, %s, %s)",
+            fmtNum(v.Density), fmtNum(v.Friction), fmtNum(v.Elasticity),
+            fmtNum(v.FrictionWeight), fmtNum(v.ElasticityWeight)
+        )
+    end
+    return nil
+end
+
+local function serializeValue(val)
+    local t = typeof(val)
+    if t == "boolean" then
+        return tostring(val)
+    elseif t == "number" then
+        return fmtNum(val)
+    elseif t == "string" then
+        return escapeString(val)
+    elseif t == "Color3" then
+        return serializeColor3(val)
+    elseif t == "Vector3" then
+        return serializeVector3(val)
+    elseif t == "Vector2" then
+        return serializeVector2(val)
+    elseif t == "UDim2" then
+        return serializeUDim2(val)
+    elseif t == "UDim" then
+        return serializeUDim(val)
+    elseif t == "Rect" then
+        return serializeRect(val)
+    elseif t == "BrickColor" then
+        return serializeBrickColor(val)
+    elseif t == "CFrame" then
+        return serializeCFrame(val)
+    elseif t == "ColorSequence" then
+        return serializeColorSequence(val)
+    elseif t == "NumberSequence" then
+        return serializeNumberSequence(val)
+    elseif t == "NumberRange" then
+        return serializeNumberRange(val)
+    elseif t == "PhysicalProperties" then
+        return serializePhysicalProperties(val)
+    elseif t == "EnumItem" then
+        return serializeEnum(val)
+    elseif t == "Axes" or t == "Faces" then
+        return nil -- skip complex flag types
+    elseif t == "Instance" then
+        return nil -- skip references
+    else
+        return nil -- unknown/unsupported
+    end
+end
+
+-- ============================================================
+-- PROPERTY READER
+-- ============================================================
+
+-- Properties that are position-related and must never be exported
+local SKIP_POSITION_PROPS = {
+    Position = true, CFrame = true, WorldPosition = true,
+    WorldCFrame = true, AbsolutePosition = true,
+}
+
+-- Properties that are always skipped (internal/read-only noise)
+local ALWAYS_SKIP = {
+    Parent = true, ClassName = true, DataCost = true,
+    RobloxLocked = true, SourceAssetId = true,
+}
+
+local function safeGet(obj, prop)
+    local ok, val = pcall(function() return obj[prop] end)
+    if ok then return val end
+    return nil
+end
+
+local function readProperties(obj, propList)
+    local results = {}
+    for _, propName in ipairs(propList) do
+        if SKIP_POSITION_PROPS[propName] or ALWAYS_SKIP[propName] then
+            continue
+        end
+        local val = safeGet(obj, propName)
+        if val ~= nil then
+            local serialized = serializeValue(val)
+            if serialized ~= nil then
+                table.insert(results, { name = propName, value = serialized })
+            end
+        end
+    end
+    return results
+end
+
+-- ============================================================
+-- CODE GENERATOR
+-- ============================================================
+
+local function getIndent(level)
+    return string.rep("    ", level)
+end
+
+local function generateInstanceCode(obj, varName, parentVar, indentLevel)
+    local lines = {}
+    local ind = getIndent(indentLevel)
+    local className = obj.ClassName
+
+    -- Instance creation
+    table.insert(lines, ind .. string.format('local %s = Instance.new("%s")', varName, className))
+
+    -- Gather property list for this class
+    local propList = CLASS_PROPERTY_MAP[className]
+    if not propList then
+        -- Generic fallback for unknown classes: try common props
+        propList = {"Name","Archivable"}
+    end
+
+    local props = readProperties(obj, propList)
+    for _, entry in ipairs(props) do
+        table.insert(lines, ind .. string.format('%s.%s = %s', varName, entry.name, entry.value))
+    end
+
+    -- Parent assignment (at end)
+    if parentVar then
+        table.insert(lines, ind .. string.format('%s.Parent = %s', varName, parentVar))
+    end
+
+    table.insert(lines, "")
+    return lines
+end
+
+-- ============================================================
+-- MAIN EXPORT LOGIC
+-- ============================================================
+
+local function exportMorph(source)
+    local outputLines = {}
+
+    -- Header
+    table.insert(outputLines, "--[[")
+    table.insert(outputLines, "    MeshRipper Export")
+    table.insert(outputLines, "    Source: " .. source:GetFullName())
+    table.insert(outputLines, "    Generated: " .. os.date("%Y-%m-%d %H:%M:%S"))
+    table.insert(outputLines, "    NOTE: Position data excluded intentionally.")
+    table.insert(outputLines, "--]]")
+    table.insert(outputLines, "")
+
+    -- RecoveredData folder setup
+    table.insert(outputLines, "-- Setup RecoveredData folder")
+    table.insert(outputLines, 'local RecoveredData = workspace:FindFirstChild("RecoveredData")')
+    table.insert(outputLines, "if not RecoveredData then")
+    table.insert(outputLines, '    RecoveredData = Instance.new("Folder")')
+    table.insert(outputLines, '    RecoveredData.Name = "RecoveredData"')
+    table.insert(outputLines, "    RecoveredData.Parent = workspace")
+    table.insert(outputLines, "end")
+    table.insert(outputLines, "")
+
+    -- Counter for unique variable names
+    local varCounter = 0
+    local function newVar(prefix)
+        varCounter = varCounter + 1
+        return (prefix or "obj") .. "_" .. varCounter
+    end
+
+    -- Recursively export an object
+    local function exportObject(obj, parentVar, depth)
+        local className = obj.ClassName
+        local varName = newVar(className)
+
+        -- Generate code for this object
+        local lines = generateInstanceCode(obj, varName, parentVar, 0)
+        for _, line in ipairs(lines) do
+            table.insert(outputLines, line)
+        end
+
+        -- Recurse into children
+        local children = obj:GetChildren()
+        for _, child in ipairs(children) do
+            -- Skip scripts and non-visual/structural instances
+            local skip = (
+                child:IsA("Script") or
+                child:IsA("LocalScript") or
+                child:IsA("ModuleScript") or
+                child:IsA("RemoteEvent") or
+                child:IsA("RemoteFunction") or
+                child:IsA("BindableEvent") or
+                child:IsA("BindableFunction")
+            )
+            if not skip then
+                exportObject(child, varName, depth + 1)
+            end
+        end
+
+        return varName
+    end
+
+    -- Export the source and all its children into RecoveredData
+    table.insert(outputLines, "-- Reconstructed objects")
+    exportObject(source, "RecoveredData", 0)
+
+    return table.concat(outputLines, "\n")
+end
+
+-- ============================================================
+-- ENTRY POINT
+-- ============================================================
+
+if not TARGET_PATH then
+    warn("[MeshRipper] Target not found: workspace.Pghlego194827.UserMorph")
+    warn("[MeshRipper] Make sure the path exists and the character is loaded.")
+else
+    print("[MeshRipper] Starting export of: " .. TARGET_PATH:GetFullName())
+
+    -- Create RecoveredData folder locally for reference
+    local recoverFolder = workspace:FindFirstChild(RECOVER_FOLDER_NAME)
+    if not recoverFolder then
+        recoverFolder = Instance.new("Folder")
+        recoverFolder.Name = RECOVER_FOLDER_NAME
+        recoverFolder.Parent = workspace
+        print("[MeshRipper] Created RecoveredData folder in workspace.")
+    end
+
+    -- Run the export
+    local success, result = pcall(exportMorph, TARGET_PATH)
+
+    if success then
+        -- Copy to clipboard
+        if setclipboard then
+            setclipboard(result)
+            print("[MeshRipper] Export complete! Script copied to clipboard.")
+            print("[MeshRipper] Paste into a Script and run to reconstruct.")
+        else
+            -- Fallback: print to output if setclipboard unavailable
+            warn("[MeshRipper] setclipboard not available in this environment.")
+            print("=== BEGIN EXPORT ===")
+            print(result)
+            print("=== END EXPORT ===")
+        end
+    else
+        warn("[MeshRipper] Export failed: " .. tostring(result))
+    end
+end
